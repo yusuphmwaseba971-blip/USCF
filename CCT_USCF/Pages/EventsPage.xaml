@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.EventsPage"
+    Title="Events"
+    BackgroundColor="#F8FAFC">
+
+    <VerticalStackLayout
+        Padding="24"
+        Spacing="18">
+
+        <Label
+            Text="⛪ Events"
+            FontSize="30"
+            FontAttributes="Bold"
+            TextColor="#1E40AF" />
+
+        <Label
+            Text="Upcoming church activities and service opportunities."
+            FontSize="16"
+            TextColor="#64748B" />
+
+        <Border
+            BackgroundColor="White"
+            Padding="20"
+            StrokeThickness="0"
+            StrokeShape="RoundRectangle 20">
+
+            <VerticalStackLayout Spacing="10">
+                <Label
+                    Text="Sunday Worship Service"
+                    FontSize="22"
+                    FontAttributes="Bold" />
+                <Label
+                    Text="Sunday • 09:00 AM • Main Church"
+                    FontSize="14"
+                    TextColor="#64748B" />
+            </VerticalStackLayout>
+
+        </Border>
+
+        <Button
+            Text="Back"
+            Clicked="OnBackClicked" />
+
+    </VerticalStackLayout>
+
+</ContentPage>

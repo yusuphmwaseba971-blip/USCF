@@ -19,7 +19,7 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Application information -->
-		<ApplicationTitle>CCT by USCF</ApplicationTitle>
+		<ApplicationTitle>USCF</ApplicationTitle>
 		<ApplicationId>com.uscf.cct</ApplicationId>
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>

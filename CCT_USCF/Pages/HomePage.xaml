@@ -73,6 +73,10 @@
                             StrokeThickness="0"
                             StrokeShape="RoundRectangle 17">
 
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OpenWelcome" />
+                            </Border.GestureRecognizers>
+
                             <VerticalStackLayout Spacing="5">
 
                                 <Label
@@ -98,6 +102,10 @@
                             Stroke="#F4D59A"
                             StrokeThickness="1"
                             StrokeShape="RoundRectangle 17">
+
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OpenBible" />
+                            </Border.GestureRecognizers>
 
                             <VerticalStackLayout Spacing="5">
 
@@ -291,6 +299,10 @@
                     StrokeThickness="0"
                     StrokeShape="RoundRectangle 22">
 
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OpenWelcome" />
+                    </Border.GestureRecognizers>
+
                     <VerticalStackLayout Spacing="6">
 
                         <Label
@@ -325,6 +337,10 @@
                         Stroke="#E2E8F0"
                         StrokeThickness="1"
                         StrokeShape="RoundRectangle 20">
+
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OpenBible" />
+                        </Border.GestureRecognizers>
 
                         <VerticalStackLayout Spacing="10">
 
@@ -376,6 +392,10 @@
                                 StrokeThickness="1"
                                 StrokeShape="RoundRectangle 18">
 
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OpenBible" />
+                                </Border.GestureRecognizers>
+
                                 <VerticalStackLayout Spacing="8">
 
                                     <Label
@@ -404,6 +424,10 @@
                                 Stroke="#E2E8F0"
                                 StrokeThickness="1"
                                 StrokeShape="RoundRectangle 18">
+
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OpenPrayer" />
+                                </Border.GestureRecognizers>
 
                                 <VerticalStackLayout Spacing="8">
 
@@ -434,6 +458,10 @@
                                 StrokeThickness="1"
                                 StrokeShape="RoundRectangle 18">
 
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OpenSermons" />
+                                </Border.GestureRecognizers>
+
                                 <VerticalStackLayout Spacing="8">
 
                                     <Label
@@ -462,6 +490,10 @@
                                 Stroke="#E2E8F0"
                                 StrokeThickness="1"
                                 StrokeShape="RoundRectangle 18">
+
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OpenGiving" />
+                                </Border.GestureRecognizers>
 
                                 <VerticalStackLayout Spacing="8">
 
@@ -497,6 +529,10 @@
                     Stroke="#E2E8F0"
                     StrokeThickness="1"
                     StrokeShape="RoundRectangle 20">
+
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OpenEvents" />
+                    </Border.GestureRecognizers>
 
                     <Grid
                         ColumnDefinitions="Auto,*"
@@ -557,6 +593,10 @@
                         BackgroundColor="#102F59"
                         StrokeThickness="0"
                         StrokeShape="RoundRectangle 22">
+
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OpenSermons" />
+                        </Border.GestureRecognizers>
 
                         <Grid>
 
@@ -653,6 +693,10 @@
                         StrokeThickness="0"
                         StrokeShape="RoundRectangle 18">
 
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OpenPrayer" />
+                        </Border.GestureRecognizers>
+
                         <VerticalStackLayout Spacing="7">
 
                             <Label
@@ -680,6 +724,10 @@
                         BackgroundColor="#FFF3E6"
                         StrokeThickness="0"
                         StrokeShape="RoundRectangle 18">
+
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OpenGiving" />
+                        </Border.GestureRecognizers>
 
                         <VerticalStackLayout Spacing="7">
 

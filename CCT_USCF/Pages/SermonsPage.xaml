@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.SermonsPage"
+    Title="Sermons"
+    BackgroundColor="#F8FAFC">
+
+    <VerticalStackLayout
+        Padding="24"
+        Spacing="18">
+
+        <Label
+            Text="🎥 Sermons"
+            FontSize="30"
+            FontAttributes="Bold"
+            TextColor="#1E40AF" />
+
+        <Label
+            Text="Recent messages and teachings from CCT by USCF."
+            FontSize="16"
+            TextColor="#64748B" />
+
+        <Border
+            BackgroundColor="White"
+            Padding="20"
+            StrokeThickness="0"
+            StrokeShape="RoundRectangle 20">
+
+            <VerticalStackLayout Spacing="10">
+                <Label
+                    Text="Walking in Faith"
+                    FontSize="22"
+                    FontAttributes="Bold" />
+                <Label
+                    Text="A recent sermon"
+                    FontSize="14"
+                    TextColor="#64748B" />
+            </VerticalStackLayout>
+
+        </Border>
+
+        <Button
+            Text="Back"
+            Clicked="OnBackClicked" />
+
+    </VerticalStackLayout>
+
+</ContentPage>
