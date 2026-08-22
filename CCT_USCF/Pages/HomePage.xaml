@@ -4,28 +4,709 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.HomePage"
-    Title="Home"
-    BackgroundColor="White">
+    BackgroundColor="#FF7C91AC"
+    Title="Home">
 
-    <VerticalStackLayout
-        Padding="30"
-        VerticalOptions="Center"
-        HorizontalOptions="Center"
-        Spacing="20">
+    <Grid RowDefinitions="Auto,*">
 
-        <Label
-            Text="CCT BY USCF"
-            FontSize="30"
-            FontAttributes="Bold"
-            TextColor="Black"
-            HorizontalOptions="Center" />
+        <!-- FLOATING TOP HEADER -->
+        <Border
+            Grid.Row="0"
+            Margin="12,10,12,8"
+            Padding="16,14"
+            BackgroundColor="#FF756E6E"
+            Stroke="#FF76869B"
+            StrokeThickness="1"
+            StrokeShape="RoundRectangle 22">
 
-        <Label
-            Text="HOME PAGE IS WORKING"
-            FontSize="20"
-            TextColor="DarkBlue"
-            HorizontalOptions="Center" />
+            <VerticalStackLayout Spacing="12">
 
-    </VerticalStackLayout>
+                <!-- BRAND -->
+                <Grid ColumnDefinitions="*,Auto">
+
+                    <VerticalStackLayout Spacing="2">
+
+                        <Label
+                            Text="CCT BY USCF"
+                            FontSize="23"
+                            FontAttributes="Bold"
+                            TextColor="#123B73" />
+
+                        <Label
+                            Text="Christian Community &amp; Fellowship"
+                            FontSize="12"
+                            TextColor="#64748B" />
+
+                    </VerticalStackLayout>
+
+                    <Border
+                        Grid.Column="1"
+                        WidthRequest="42"
+                        HeightRequest="42"
+                        BackgroundColor="#EEF4FC"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 21">
+
+                        <Label
+                            Text="🔔"
+                            FontSize="19"
+                            HorizontalOptions="Center"
+                            VerticalOptions="Center" />
+
+                    </Border>
+
+                </Grid>
+
+
+                <!-- FLOATING FEATURES -->
+                <ScrollView
+                    Orientation="Horizontal"
+                    HorizontalScrollBarVisibility="Never">
+
+                    <HorizontalStackLayout Spacing="10">
+
+                        <!-- WELCOME -->
+                        <Border
+                            WidthRequest="105"
+                            Padding="12"
+                            BackgroundColor="#123B73"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="👋"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Welcome"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="White" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- BIBLE VERSE -->
+                        <Border
+                            WidthRequest="115"
+                            Padding="12"
+                            BackgroundColor="#FFA78E61"
+                            Stroke="#F4D59A"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="📖"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Today's Verse"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="#92400E" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- QUICK ACTIONS -->
+                        <Border
+                            WidthRequest="115"
+                            Padding="12"
+                            BackgroundColor="#FF13BE7D"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="⚡"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Quick Actions"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="#166534" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- SERVICE -->
+                        <Border
+                            WidthRequest="115"
+                            Padding="12"
+                            BackgroundColor="#FF82A3CE"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="⛪"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Service"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="#123B73" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- SERMON -->
+                        <Border
+                            WidthRequest="110"
+                            Padding="12"
+                            BackgroundColor="#FF37363A"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="🎥"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Sermon"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="#5B21B6" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- ANNOUNCEMENT -->
+                        <Border
+                            WidthRequest="115"
+                            Padding="12"
+                            BackgroundColor="#FFF1F2"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="📢"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Announcement"
+                                    FontSize="13"
+                                    FontAttributes="Bold"
+                                    TextColor="#9F1239" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- PRAYER -->
+                        <Border
+                            WidthRequest="100"
+                            Padding="12"
+                            BackgroundColor="#ECFDF5"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="🙏"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Prayer"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="#166534" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+
+                        <!-- GIVING -->
+                        <Border
+                            WidthRequest="100"
+                            Padding="12"
+                            BackgroundColor="#FFF7ED"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 17">
+
+                            <VerticalStackLayout Spacing="5">
+
+                                <Label
+                                    Text="💰"
+                                    FontSize="22" />
+
+                                <Label
+                                    Text="Giving"
+                                    FontSize="14"
+                                    FontAttributes="Bold"
+                                    TextColor="#9A3412" />
+
+                            </VerticalStackLayout>
+
+                        </Border>
+
+                    </HorizontalStackLayout>
+
+                </ScrollView>
+
+            </VerticalStackLayout>
+
+        </Border>
+
+
+        <!-- MAIN CONTENT -->
+        <ScrollView
+            Grid.Row="1"
+            VerticalScrollBarVisibility="Never">
+
+            <VerticalStackLayout
+                Padding="14,8,14,30"
+                Spacing="18">
+
+
+                <!-- WELCOME MESSAGE -->
+                <Border
+                    BackgroundColor="#123B73"
+                    Padding="20"
+                    StrokeThickness="0"
+                    StrokeShape="RoundRectangle 22">
+
+                    <VerticalStackLayout Spacing="6">
+
+                        <Label
+                            Text="Welcome to CCT by USCF 👋"
+                            FontSize="24"
+                            FontAttributes="Bold"
+                            TextColor="White" />
+
+                        <Label
+                            Text="Grow in faith. Connect with others. Walk together in Christ."
+                            FontSize="14"
+                            TextColor="#DCE8F7"
+                            LineHeight="1.25" />
+
+                    </VerticalStackLayout>
+
+                </Border>
+
+
+                <!-- TODAY'S BIBLE VERSE -->
+                <VerticalStackLayout Spacing="9">
+
+                    <Label
+                        Text="Today's Bible Verse"
+                        FontSize="21"
+                        FontAttributes="Bold"
+                        TextColor="#172033" />
+
+                    <Border
+                        BackgroundColor="White"
+                        Padding="20"
+                        Stroke="#E2E8F0"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 20">
+
+                        <VerticalStackLayout Spacing="10">
+
+                            <Label
+                                Text="📖 SCRIPTURE OF THE DAY"
+                                FontSize="11"
+                                FontAttributes="Bold"
+                                TextColor="#D97706" />
+
+                            <Label
+                                Text="Your word is a lamp to my feet and a light to my path."
+                                FontSize="19"
+                                FontAttributes="Bold"
+                                TextColor="#172033"
+                                LineHeight="1.25" />
+
+                            <Label
+                                Text="Psalm 119:105"
+                                FontSize="14"
+                                TextColor="#64748B" />
+
+                        </VerticalStackLayout>
+
+                    </Border>
+
+                </VerticalStackLayout>
+
+
+                <!-- QUICK ACTIONS -->
+                <VerticalStackLayout Spacing="9">
+
+                    <Label
+                        Text="Quick Actions"
+                        FontSize="21"
+                        FontAttributes="Bold"
+                        TextColor="#172033" />
+
+                    <ScrollView
+                        Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Never">
+
+                        <HorizontalStackLayout Spacing="12">
+
+                            <Border
+                                WidthRequest="125"
+                                Padding="16"
+                                BackgroundColor="White"
+                                Stroke="#E2E8F0"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 18">
+
+                                <VerticalStackLayout Spacing="8">
+
+                                    <Label
+                                        Text="📖"
+                                        FontSize="28" />
+
+                                    <Label
+                                        Text="Bible"
+                                        FontSize="16"
+                                        FontAttributes="Bold" />
+
+                                    <Label
+                                        Text="Read Scripture"
+                                        FontSize="12"
+                                        TextColor="#64748B" />
+
+                                </VerticalStackLayout>
+
+                            </Border>
+
+
+                            <Border
+                                WidthRequest="125"
+                                Padding="16"
+                                BackgroundColor="White"
+                                Stroke="#E2E8F0"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 18">
+
+                                <VerticalStackLayout Spacing="8">
+
+                                    <Label
+                                        Text="🙏"
+                                        FontSize="28" />
+
+                                    <Label
+                                        Text="Prayer"
+                                        FontSize="16"
+                                        FontAttributes="Bold" />
+
+                                    <Label
+                                        Text="Send a request"
+                                        FontSize="12"
+                                        TextColor="#64748B" />
+
+                                </VerticalStackLayout>
+
+                            </Border>
+
+
+                            <Border
+                                WidthRequest="125"
+                                Padding="16"
+                                BackgroundColor="White"
+                                Stroke="#E2E8F0"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 18">
+
+                                <VerticalStackLayout Spacing="8">
+
+                                    <Label
+                                        Text="🎥"
+                                        FontSize="28" />
+
+                                    <Label
+                                        Text="Sermons"
+                                        FontSize="16"
+                                        FontAttributes="Bold" />
+
+                                    <Label
+                                        Text="Watch messages"
+                                        FontSize="12"
+                                        TextColor="#64748B" />
+
+                                </VerticalStackLayout>
+
+                            </Border>
+
+
+                            <Border
+                                WidthRequest="125"
+                                Padding="16"
+                                BackgroundColor="White"
+                                Stroke="#E2E8F0"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 18">
+
+                                <VerticalStackLayout Spacing="8">
+
+                                    <Label
+                                        Text="💰"
+                                        FontSize="28" />
+
+                                    <Label
+                                        Text="Giving"
+                                        FontSize="16"
+                                        FontAttributes="Bold" />
+
+                                    <Label
+                                        Text="Support ministry"
+                                        FontSize="12"
+                                        TextColor="#64748B" />
+
+                                </VerticalStackLayout>
+
+                            </Border>
+
+                        </HorizontalStackLayout>
+
+                    </ScrollView>
+
+                </VerticalStackLayout>
+
+
+                <!-- UPCOMING SERVICE -->
+                <Border
+                    BackgroundColor="White"
+                    Padding="18"
+                    Stroke="#E2E8F0"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 20">
+
+                    <Grid
+                        ColumnDefinitions="Auto,*"
+                        ColumnSpacing="15">
+
+                        <Border
+                            WidthRequest="58"
+                            HeightRequest="58"
+                            BackgroundColor="#EEF4FC"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 16">
+
+                            <Label
+                                Text="⛪"
+                                FontSize="28"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
+
+                        </Border>
+
+                        <VerticalStackLayout
+                            Grid.Column="1"
+                            Spacing="4">
+
+                            <Label
+                                Text="Upcoming Service"
+                                FontSize="12"
+                                TextColor="#64748B" />
+
+                            <Label
+                                Text="Sunday Worship Service"
+                                FontSize="17"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="Sunday • 09:00 AM • Main Church"
+                                FontSize="13"
+                                TextColor="#64748B" />
+
+                        </VerticalStackLayout>
+
+                    </Grid>
+
+                </Border>
+
+
+                <!-- LATEST SERMON -->
+                <VerticalStackLayout Spacing="9">
+
+                    <Label
+                        Text="Latest Sermon"
+                        FontSize="21"
+                        FontAttributes="Bold"
+                        TextColor="#172033" />
+
+                    <Border
+                        HeightRequest="230"
+                        BackgroundColor="#102F59"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 22">
+
+                        <Grid>
+
+                            <VerticalStackLayout
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center"
+                                Spacing="8">
+
+                                <Label
+                                    Text="▶"
+                                    FontSize="54"
+                                    TextColor="White"
+                                    HorizontalOptions="Center" />
+
+                                <Label
+                                    Text="RECENTLY POSTED"
+                                    FontSize="12"
+                                    FontAttributes="Bold"
+                                    TextColor="#DCE8F7"
+                                    HorizontalOptions="Center" />
+
+                                <Label
+                                    Text="Walking in Faith"
+                                    FontSize="20"
+                                    FontAttributes="Bold"
+                                    TextColor="White"
+                                    HorizontalOptions="Center" />
+
+                            </VerticalStackLayout>
+
+                        </Grid>
+
+                    </Border>
+
+                    <Label
+                        Text="The video feed will display recently posted church videos here."
+                        FontSize="13"
+                        TextColor="#64748B" />
+
+                </VerticalStackLayout>
+
+
+                <!-- CHURCH ANNOUNCEMENT -->
+                <VerticalStackLayout Spacing="9">
+
+                    <Label
+                        Text="Church Announcement"
+                        FontSize="21"
+                        FontAttributes="Bold"
+                        TextColor="#172033" />
+
+                    <Border
+                        BackgroundColor="#FFF7E8"
+                        Padding="18"
+                        Stroke="#F4D59A"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 20">
+
+                        <VerticalStackLayout Spacing="7">
+
+                            <Label
+                                Text="📢 IMPORTANT"
+                                FontSize="11"
+                                FontAttributes="Bold"
+                                TextColor="#B45309" />
+
+                            <Label
+                                Text="Stay connected with upcoming church activities, services and community events."
+                                FontSize="16"
+                                FontAttributes="Bold"
+                                TextColor="#172033" />
+
+                            <Label
+                                Text="New announcements will appear here."
+                                FontSize="13"
+                                TextColor="#64748B" />
+
+                        </VerticalStackLayout>
+
+                    </Border>
+
+                </VerticalStackLayout>
+
+
+                <!-- PRAYER & GIVING -->
+                <Grid
+                    ColumnDefinitions="*,*"
+                    ColumnSpacing="12">
+
+                    <Border
+                        Grid.Column="0"
+                        Padding="16"
+                        BackgroundColor="#EAF7F2"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 18">
+
+                        <VerticalStackLayout Spacing="7">
+
+                            <Label
+                                Text="🙏"
+                                FontSize="28" />
+
+                            <Label
+                                Text="Need Prayer?"
+                                FontSize="16"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="We're here to pray with you."
+                                FontSize="12"
+                                TextColor="#64748B" />
+
+                        </VerticalStackLayout>
+
+                    </Border>
+
+
+                    <Border
+                        Grid.Column="1"
+                        Padding="16"
+                        BackgroundColor="#FFF3E6"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 18">
+
+                        <VerticalStackLayout Spacing="7">
+
+                            <Label
+                                Text="💰"
+                                FontSize="28" />
+
+                            <Label
+                                Text="Give"
+                                FontSize="16"
+                                FontAttributes="Bold" />
+
+                            <Label
+                                Text="Support God's work."
+                                FontSize="12"
+                                TextColor="#64748B" />
+
+                        </VerticalStackLayout>
+
+                    </Border>
+
+                </Grid>
+
+            </VerticalStackLayout>
+
+        </ScrollView>
+
+    </Grid>
 
 </ContentPage>
