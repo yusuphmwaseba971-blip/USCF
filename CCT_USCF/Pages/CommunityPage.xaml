@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.CommunityPage"
+    Title="Community"
+    BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="20">
+
+            <Label
+                Text="👥 Community"
+                FontSize="30"
+                FontAttributes="Bold"
+                TextColor="#1E40AF" />
+
+            <Label
+                Text="Connect, encourage and grow together."
+                FontSize="17"
+                TextColor="#64748B" />
+
+            <Button
+                Text="✏️ Create a Post" />
+
+            <Border
+                BackgroundColor="White"
+                Padding="20"
+                StrokeThickness="0">
+
+                <VerticalStackLayout Spacing="12">
+
+                    <Label
+                        Text="Church Community"
+                        FontSize="20"
+                        FontAttributes="Bold" />
+
+                    <Label
+                        Text="Welcome to the CCT community. Share encouragement, Bible verses and testimonies."
+                        FontSize="16" />
+
+                    <HorizontalStackLayout Spacing="15">
+
+                        <Button
+                            Text="❤️ Like" />
+
+                        <Button
+                            Text="💬 Comment" />
+
+                    </HorizontalStackLayout>
+
+                </VerticalStackLayout>
+
+            </Border>
+
+            <Button
+                Text="🙏 Prayer Requests" />
+
+            <Button
+                Text="📢 Church Announcements" />
+
+            <Button
+                Text="👥 Church Groups" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

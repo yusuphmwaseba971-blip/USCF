@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-android</TargetFramework>
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>CCT_USCF</RootNamespace>
+
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+		<AndroidSdkDirectory>C:\Users\Yusuph\AppData\Local\Android\Sdk</AndroidSdkDirectory>
+		<JavaSdkDirectory>C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot</JavaSdkDirectory>
+
+		<!-- XAML source generation -->
+		<MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+		<!-- Application information -->
+		<ApplicationTitle>CCT by USCF</ApplicationTitle>
+		<ApplicationId>com.uscf.cct</ApplicationId>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<!-- Android minimum version -->
+		<SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
+
+		<!-- Disable Windows packaging -->
+		<WindowsPackageType>None</WindowsPackageType>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)' == 'Debug|net10.0-android'">
+		<RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+	</PropertyGroup>
+
+	<ItemGroup>
+
+		<!-- Application Icon -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg"
+		          ForegroundFile="Resources\AppIcon\appiconfg.svg"
+		          Color="#512BD4" />
+
+		<!-- Splash Screen -->
+		<MauiSplashScreen Include="Resources\Splash\splash.svg"
+		                  Color="#512BD4"
+		                  BaseSize="128,128" />
+
+		<!-- Images -->
+		<MauiImage Include="Resources\Images\*" />
+
+		<!-- Fonts -->
+		<MauiFont Include="Resources\Fonts\*" />
+
+		<!-- Raw Assets -->
+		<MauiAsset Include="Resources\Raw\**"
+		           LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+
+	</ItemGroup>
+
+	<ItemGroup>
+
+		<!-- .NET MAUI -->
+		<PackageReference Include="Microsoft.Maui.Controls"
+		                  Version="$(MauiVersion)" />
+
+		<!-- Logging -->
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug"
+		                  Version="10.0.0" />
+
+	</ItemGroup>
+
+</Project>

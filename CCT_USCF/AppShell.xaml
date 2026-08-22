@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<Shell
+    x:Class="CCT_USCF.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:pages="clr-namespace:CCT_USCF.Pages"
+    Title="CCT BY USCF">
+
+    <TabBar>
+
+        <ShellContent
+            Title="Home"
+            Route="home"
+            ContentTemplate="{DataTemplate pages:HomePage}" />
+
+        <ShellContent
+            Title="Bible"
+            Route="bible"
+            ContentTemplate="{DataTemplate pages:BiblePage}" />
+
+        <ShellContent
+            Title="Prayer"
+            Route="prayer"
+            ContentTemplate="{DataTemplate pages:PrayerPage}" />
+
+        <ShellContent
+            Title="Community"
+            Route="community"
+            ContentTemplate="{DataTemplate pages:CommunityPage}" />
+
+        <ShellContent
+            Title="Profile"
+            Route="profile"
+            ContentTemplate="{DataTemplate pages:ProfilePage}" />
+
+    </TabBar>
+
+</Shell>

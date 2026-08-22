@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.ProfilePage"
+    Title="Profile"
+    BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="20">
+
+            <Label
+                Text="👤 My Profile"
+                FontSize="30"
+                FontAttributes="Bold"
+                TextColor="#1E40AF" />
+
+            <Border
+                BackgroundColor="White"
+                Padding="25"
+                StrokeThickness="0">
+
+                <VerticalStackLayout
+                    Spacing="10"
+                    HorizontalOptions="Center">
+
+                    <Label
+                        Text="👤"
+                        FontSize="60"
+                        HorizontalOptions="Center" />
+
+                    <Label
+                        Text="CCT Member"
+                        FontSize="22"
+                        FontAttributes="Bold"
+                        HorizontalOptions="Center" />
+
+                    <Label
+                        Text="Welcome to CCT by USCF"
+                        TextColor="#64748B"
+                        HorizontalOptions="Center" />
+
+                </VerticalStackLayout>
+
+            </Border>
+
+            <Button
+                Text="📖 Saved Bible Verses" />
+
+            <Button
+                Text="🙏 My Prayer Requests" />
+
+            <Button
+                Text="🎥 Saved Sermons" />
+
+            <Button
+                Text="📅 My Events" />
+
+            <Button
+                Text="⚙️ Settings" />
+
+            <Button
+                Text="🚪 Logout" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
