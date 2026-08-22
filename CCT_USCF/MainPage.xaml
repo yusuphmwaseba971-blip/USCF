@@ -1,34 +1,56 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.MainPage"
-    BackgroundColor="White">
+    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource UscfBackgroundDark}}">
 
     <Grid>
-
         <VerticalStackLayout
             VerticalOptions="Center"
             HorizontalOptions="Center"
-            Spacing="20">
+            Spacing="18">
 
-            <Image
-                Source="icon.jpeg"
-                WidthRequest="180"
-                HeightRequest="180"
-                Aspect="AspectFit"
-                HorizontalOptions="Center" />
+            <Border
+                WidthRequest="150"
+                HeightRequest="150"
+                BackgroundColor="White"
+                Stroke="#009E2C"
+                StrokeThickness="8"
+                StrokeShape="RoundRectangle 75">
+
+                <VerticalStackLayout
+                    VerticalOptions="Center"
+                    HorizontalOptions="Center"
+                    Spacing="0">
+
+                    <Label
+                        Text="✚"
+                        FontSize="52"
+                        FontAttributes="Bold"
+                        TextColor="#009E2C"
+                        HorizontalOptions="Center" />
+
+                    <Label
+                        Text="USCF"
+                        FontSize="18"
+                        FontAttributes="Bold"
+                        TextColor="#009E2C"
+                        HorizontalOptions="Center" />
+
+                </VerticalStackLayout>
+
+            </Border>
 
             <Label
-                Text="CCT by USCF"
-                FontSize="28"
+                Text="USCF"
+                FontSize="30"
                 FontAttributes="Bold"
-                HorizontalOptions="Center"
-                TextColor="Black" />
+                TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                HorizontalOptions="Center" />
 
         </VerticalStackLayout>
-
     </Grid>
 
 </ContentPage>

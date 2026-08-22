@@ -1,4 +1,15 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="0" width="456" height="456" fill="#512BD4" />
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" fill="#FFFFFF"/>
+  <circle cx="128" cy="128" r="110" fill="#FFFFFF" stroke="#009E2C" stroke-width="10"/>
+  <circle cx="128" cy="128" r="90" fill="#FFFFFF" stroke="#009E2C" stroke-width="4"/>
+
+  <path d="M128 62V194M82 128H174" stroke="#009E2C" stroke-width="12" stroke-linecap="round"/>
+
+  <path d="M89 149 L111 149 L111 171 L146 171 L146 149 L168 149 L168 114 L146 114 L146 92 L111 92 L111 114 L89 114 Z" fill="#009E2C" opacity="0.9"/>
+
+  <path d="M68 150 L93 150 L110 134 L128 150 L145 134 L162 150 L188 150 L188 170 L68 170 Z" fill="#009E2C"/>
+  <path d="M76 88 L98 88 L110 100 L122 88 L144 88 L156 100 L168 88 L191 88 L168 122 L147 106 L128 136 L109 106 L88 122 Z" fill="#009E2C" opacity="0.95"/>
+
+  <path d="M88 78L110 99L128 86L146 99L168 78L168 63L88 63Z" fill="#009E2C"/>
+  <text x="128" y="190" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#009E2C">USCF</text>
 </svg>

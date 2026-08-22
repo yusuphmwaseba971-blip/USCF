@@ -5,35 +5,21 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:CCT_USCF.Pages"
-    Title="CCT BY USCF">
+    Title="USCF"
+    Shell.BackgroundColor="{AppThemeBinding Light={StaticResource UscfGreen}, Dark={StaticResource UscfBackgroundDark}}"
+    Shell.ForegroundColor="{StaticResource White}"
+    Shell.TitleColor="{StaticResource White}"
+    TabBarBackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource UscfBackgroundDark}}"
+    TabBarForegroundColor="{StaticResource UscfGreen}"
+    TabBarTitleColor="{StaticResource UscfGreen}"
+    TabBarUnselectedColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}">
 
     <TabBar>
-
-        <ShellContent
-            Title="Home"
-            Route="home"
-            ContentTemplate="{DataTemplate pages:HomePage}" />
-
-        <ShellContent
-            Title="Bible"
-            Route="bible"
-            ContentTemplate="{DataTemplate pages:BiblePage}" />
-
-        <ShellContent
-            Title="Prayer"
-            Route="prayer"
-            ContentTemplate="{DataTemplate pages:PrayerPage}" />
-
-        <ShellContent
-            Title="Community"
-            Route="community"
-            ContentTemplate="{DataTemplate pages:CommunityPage}" />
-
-        <ShellContent
-            Title="Profile"
-            Route="profile"
-            ContentTemplate="{DataTemplate pages:ProfilePage}" />
-
+        <ShellContent Title="Home" Route="home" ContentTemplate="{DataTemplate pages:HomePage}" />
+        <ShellContent Title="Bible" Route="bible" ContentTemplate="{DataTemplate pages:BiblePage}" />
+        <ShellContent Title="Prayer" Route="prayer" ContentTemplate="{DataTemplate pages:PrayerPage}" />
+        <ShellContent Title="Community" Route="community" ContentTemplate="{DataTemplate pages:CommunityPage}" />
+        <ShellContent Title="Profile" Route="profile" ContentTemplate="{DataTemplate pages:ProfilePage}" />
     </TabBar>
 
 </Shell>

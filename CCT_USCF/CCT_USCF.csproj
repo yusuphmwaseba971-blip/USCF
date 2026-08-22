@@ -40,11 +40,11 @@
 		<!-- Application Icon -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg"
 		          ForegroundFile="Resources\AppIcon\appiconfg.svg"
-		          Color="#512BD4" />
+		          Color="#009E2C" />
 
 		<!-- Splash Screen -->
 		<MauiSplashScreen Include="Resources\Splash\splash.svg"
-		                  Color="#512BD4"
+		                  Color="#009E2C"
 		                  BaseSize="128,128" />
 
 		<!-- Images -->
@@ -69,6 +69,13 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug"
 		                  Version="10.0.0" />
 
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Remove="USCF.Backend\**\*.cs" />
+		<EmbeddedResource Remove="USCF.Backend\**\*" />
+		<MauiAsset Remove="USCF.Backend\**\*" />
+		<None Remove="USCF.Backend\**\*" />
 	</ItemGroup>
 
 </Project>

@@ -1,0 +1,6 @@
+@USCF.Backend_HostAddress = http://localhost:5140
+
+GET {{USCF.Backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
