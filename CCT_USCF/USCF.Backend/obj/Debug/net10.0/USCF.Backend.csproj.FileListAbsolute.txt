@@ -214,3 +214,4 @@ D:\Projects\CCT_USCF\USCF.Backend\obj\Debug\net10.0\refint\USCF.Backend.dll
 D:\Projects\CCT_USCF\USCF.Backend\obj\Debug\net10.0\USCF.Backend.pdb
 D:\Projects\CCT_USCF\USCF.Backend\obj\Debug\net10.0\USCF.Backend.genruntimeconfig.cache
 D:\Projects\CCT_USCF\USCF.Backend\obj\Debug\net10.0\ref\USCF.Backend.dll
+D:\Projects\CCT_USCF\USCF.Backend\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll

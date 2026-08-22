@@ -16,4 +16,15 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(nameof(EventsPage), typeof(EventsPage));
 		Routing.RegisterRoute(nameof(GivingPage), typeof(GivingPage));
 	}
+
+	private async void OnLoginClicked(object sender, EventArgs e)
+	{
+		await Shell.Current.GoToAsync(nameof(Pages.LoginPage));
+	}
+
+	private async void OnCreateAccountClicked(object sender, EventArgs e)
+	{
+		await Shell.Current.GoToAsync(nameof(Pages.RegisterPage));
+	}
 }
+

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.LoginPage"
+             Title="Login to USCF">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+            <Label Text="Login to USCF" FontAttributes="Bold" FontSize="24" HorizontalOptions="Center" />
+
+            <Entry x:Name="UsernameEntry" Placeholder="Email or Username" />
+            <Entry x:Name="PasswordEntry" IsPassword="True" Placeholder="Password" />
+
+            <Button Text="LOGIN" Clicked="OnLoginClicked" BackgroundColor="#009E2C" TextColor="White" />
+
+            <HorizontalStackLayout HorizontalOptions="Center">
+                <Label Text="Don't have an account?" />
+                <Button Text="Create Account" Clicked="OnCreateAccountClicked" BackgroundColor="Transparent" />
+            </HorizontalStackLayout>
+
+            <Label x:Name="MessageLabel" TextColor="Red" IsVisible="False" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

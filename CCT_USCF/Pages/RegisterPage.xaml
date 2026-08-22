@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.RegisterPage"
+    Title="Create USCF Account">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="14">
+
+            <Label
+                Text="Create Your USCF Account"
+                FontSize="26"
+                FontAttributes="Bold"
+                HorizontalOptions="Center"
+                TextColor="#009E2C"/>
+
+            <Label
+                Text="Join the University Students' Christian Fellowship"
+                FontSize="14"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center"/>
+
+            <!-- ACCOUNT TYPE -->
+
+            <Label
+                Text="What type of USCF member are you?"
+                FontAttributes="Bold"
+                Margin="0,15,0,0"/>
+
+            <Picker
+                x:Name="RolePicker"
+                Title="Select account type"
+                SelectedIndexChanged="OnRoleChanged">
+
+                <Picker.Items>
+                    <x:String>USCF Member</x:String>
+                    <x:String>USCF Leader</x:String>
+                    <x:String>Pastor</x:String>
+                </Picker.Items>
+
+            </Picker>
+
+            <!-- BASIC INFORMATION -->
+
+            <Entry
+                x:Name="FullNameEntry"
+                Placeholder="Full Name"/>
+
+            <Entry
+                x:Name="UsernameEntry"
+                Placeholder="Username"/>
+
+            <Entry
+                x:Name="EmailEntry"
+                Placeholder="Email"
+                Keyboard="Email"/>
+
+            <Entry
+                x:Name="PhoneEntry"
+                Placeholder="Phone Number"
+                Keyboard="Telephone"/>
+
+            <Entry
+                x:Name="PasswordEntry"
+                Placeholder="Password"
+                IsPassword="True"/>
+
+            <Entry
+                x:Name="ConfirmPasswordEntry"
+                Placeholder="Confirm Password"
+                IsPassword="True"/>
+
+            <!-- LEADER / PASTOR LEVEL -->
+
+            <VerticalStackLayout
+                x:Name="LeadershipSection"
+                IsVisible="False"
+                Spacing="10">
+
+                <Label
+                    Text="Leadership / Ministry Level"
+                    FontAttributes="Bold"/>
+
+                <Picker
+                    x:Name="LevelPicker"
+                    Title="Select level"
+                    SelectedIndexChanged="OnLevelChanged">
+
+                    <Picker.Items>
+                        <x:String>National</x:String>
+                        <x:String>Regional</x:String>
+                        <x:String>District</x:String>
+                        <x:String>Branch / Local</x:String>
+                    </Picker.Items>
+
+                </Picker>
+
+            </VerticalStackLayout>
+
+            <!-- LOCATION -->
+
+            <VerticalStackLayout
+                x:Name="LocationSection"
+                IsVisible="True"
+                Spacing="10">
+
+                <Label
+                    Text="Your USCF Location"
+                    FontAttributes="Bold"/>
+
+                <Picker
+                    x:Name="RegionPicker"
+                    Title="Select Region"/>
+
+                <Picker
+                    x:Name="DistrictPicker"
+                    Title="Select District"
+                    IsVisible="False"/>
+
+                <Picker
+                    x:Name="BranchPicker"
+                    Title="Select Branch / Local Fellowship"
+                    IsVisible="False"/>
+
+            </VerticalStackLayout>
+
+            <Button
+                x:Name="CreateAccountButton"
+                Text="CREATE ACCOUNT"
+                Clicked="OnCreateAccountClicked"
+                BackgroundColor="#009E2C"
+                TextColor="White"
+                CornerRadius="10"
+                HeightRequest="52"/>
+
+            <HorizontalStackLayout HorizontalOptions="Center">
+
+                <Label
+                    Text="Already have an account?"
+                    VerticalOptions="Center"/>
+
+                <Button
+                    Text="Login"
+                    Clicked="OnLoginClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="#009E2C"/>
+
+            </HorizontalStackLayout>
+
+            <ActivityIndicator
+                x:Name="LoadingIndicator"
+                IsVisible="False"
+                IsRunning="False"
+                Color="#009E2C"/>
+
+            <Label
+                x:Name="MessageLabel"
+                TextColor="Red"
+                IsVisible="False"
+                HorizontalTextAlignment="Center"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
