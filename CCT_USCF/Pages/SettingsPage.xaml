@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.SettingsPage"
+    Title="Settings"
+    BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="18">
+
+            <Label Text="Account Settings" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+
+            <Frame BackgroundColor="White" Padding="12">
+                <VerticalStackLayout Spacing="12">
+                    <Entry x:Name="FullNameEntry" Placeholder="Full name" />
+                    <Entry x:Name="UsernameEntry" Placeholder="Username" />
+                    <Entry x:Name="EmailEntry" Placeholder="Email" Keyboard="Email" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Label Text="Change Password" FontSize="18" FontAttributes="Bold" />
+            <Frame BackgroundColor="White" Padding="12">
+                <VerticalStackLayout Spacing="12">
+                    <Entry x:Name="CurrentPasswordEntry" Placeholder="Current password" IsPassword="True" />
+                    <Entry x:Name="NewPasswordEntry" Placeholder="New password" IsPassword="True" />
+                    <Entry x:Name="ConfirmPasswordEntry" Placeholder="Confirm new password" IsPassword="True" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

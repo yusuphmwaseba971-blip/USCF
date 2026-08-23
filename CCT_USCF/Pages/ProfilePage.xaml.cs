@@ -45,10 +45,38 @@ public partial class ProfilePage : ContentPage
     private async void OnLogoutClicked(object sender, EventArgs e)
     {
         // Remove token and clear current user
-            try { Microsoft.Maui.Storage.SecureStorage.Default.Remove("uscf_token"); } catch {}
+        try { Microsoft.Maui.Storage.SecureStorage.Default.Remove("uscf_token"); } catch {}
         MauiProgram.SetCurrentUser(null);
         // Notify UI
         MauiProgram.NotifyAuthChanged();
         await Shell.Current.GoToAsync("//home");
+    }
+
+    private async void OnSettingsClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(Pages.SettingsPage));
+    }
+
+    private async void OnSavedVersesClicked(object sender, EventArgs e)
+    {
+        // Navigate to a Saved Verses page (placeholder)
+        await Shell.Current.GoToAsync(nameof(Pages.SavedVersesPage));
+    }
+
+    private async void OnPrayerRequestsClicked(object sender, EventArgs e)
+    {
+        // Navigate to user's prayer requests
+        await Shell.Current.GoToAsync(nameof(Pages.MyPrayerRequestsPage));
+    }
+
+    private async void OnEventsClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(Pages.EventsPage));
+    }
+
+    private async void OnSavedSermonsClicked(object sender, EventArgs e)
+    {
+        // Placeholder navigation
+        await Shell.Current.GoToAsync(nameof(Pages.SavedSermonsPage));
     }
 }

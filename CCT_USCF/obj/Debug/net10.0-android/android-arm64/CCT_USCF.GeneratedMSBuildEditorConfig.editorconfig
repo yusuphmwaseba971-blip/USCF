@@ -117,6 +117,16 @@ build_metadata.AdditionalFiles.NoWarn =
 build_metadata.AdditionalFiles.EnableDiagnostics = 
 build_metadata.AdditionalFiles.LineInfo = 
 
+[D:/Projects/CCT_USCF/Pages/MyPrayerRequestsPage.xaml]
+build_metadata.AdditionalFiles.GenKind = Xaml
+build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.MyPrayerRequestsPage.xaml
+build_metadata.AdditionalFiles.TargetPath = Pages\MyPrayerRequestsPage.xaml
+build_metadata.AdditionalFiles.RelativePath = Pages\MyPrayerRequestsPage.xaml
+build_metadata.AdditionalFiles.Inflator = SourceGen
+build_metadata.AdditionalFiles.NoWarn = 
+build_metadata.AdditionalFiles.EnableDiagnostics = 
+build_metadata.AdditionalFiles.LineInfo = 
+
 [D:/Projects/CCT_USCF/Pages/PrayerPage.xaml]
 build_metadata.AdditionalFiles.GenKind = Xaml
 build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.PrayerPage.xaml
@@ -147,11 +157,41 @@ build_metadata.AdditionalFiles.NoWarn =
 build_metadata.AdditionalFiles.EnableDiagnostics = 
 build_metadata.AdditionalFiles.LineInfo = 
 
+[D:/Projects/CCT_USCF/Pages/SavedSermonsPage.xaml]
+build_metadata.AdditionalFiles.GenKind = Xaml
+build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.SavedSermonsPage.xaml
+build_metadata.AdditionalFiles.TargetPath = Pages\SavedSermonsPage.xaml
+build_metadata.AdditionalFiles.RelativePath = Pages\SavedSermonsPage.xaml
+build_metadata.AdditionalFiles.Inflator = SourceGen
+build_metadata.AdditionalFiles.NoWarn = 
+build_metadata.AdditionalFiles.EnableDiagnostics = 
+build_metadata.AdditionalFiles.LineInfo = 
+
+[D:/Projects/CCT_USCF/Pages/SavedVersesPage.xaml]
+build_metadata.AdditionalFiles.GenKind = Xaml
+build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.SavedVersesPage.xaml
+build_metadata.AdditionalFiles.TargetPath = Pages\SavedVersesPage.xaml
+build_metadata.AdditionalFiles.RelativePath = Pages\SavedVersesPage.xaml
+build_metadata.AdditionalFiles.Inflator = SourceGen
+build_metadata.AdditionalFiles.NoWarn = 
+build_metadata.AdditionalFiles.EnableDiagnostics = 
+build_metadata.AdditionalFiles.LineInfo = 
+
 [D:/Projects/CCT_USCF/Pages/SermonsPage.xaml]
 build_metadata.AdditionalFiles.GenKind = Xaml
 build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.SermonsPage.xaml
 build_metadata.AdditionalFiles.TargetPath = Pages\SermonsPage.xaml
 build_metadata.AdditionalFiles.RelativePath = Pages\SermonsPage.xaml
+build_metadata.AdditionalFiles.Inflator = SourceGen
+build_metadata.AdditionalFiles.NoWarn = 
+build_metadata.AdditionalFiles.EnableDiagnostics = 
+build_metadata.AdditionalFiles.LineInfo = 
+
+[D:/Projects/CCT_USCF/Pages/SettingsPage.xaml]
+build_metadata.AdditionalFiles.GenKind = Xaml
+build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.SettingsPage.xaml
+build_metadata.AdditionalFiles.TargetPath = Pages\SettingsPage.xaml
+build_metadata.AdditionalFiles.RelativePath = Pages\SettingsPage.xaml
 build_metadata.AdditionalFiles.Inflator = SourceGen
 build_metadata.AdditionalFiles.NoWarn = 
 build_metadata.AdditionalFiles.EnableDiagnostics = 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.SavedVersesPage"
+    Title="Saved Verses"
+    BackgroundColor="#F8FAFC">
+
+    <VerticalStackLayout Padding="20" Spacing="12">
+        <Label Text="Saved Bible Verses" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+        <Label Text="Your saved verses will appear here." TextColor="#64748B" />
+        <Button Text="Back" Clicked="OnBackClicked" />
+    </VerticalStackLayout>
+
+</ContentPage>

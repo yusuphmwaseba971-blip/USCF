@@ -153,4 +153,38 @@ public async Task<List<LocationItem>> GetBranchesAsync(int districtId)
         }) ?? new List<LocationItem>();
 }
 
+// Update current user's profile (FullName, Username, Email, optional password change)
+public async Task<CCT_USCF.Models.CurrentUser?> UpdateProfileAsync(string? fullName, string? username, string? email, string? currentPassword, string? newPassword, string? confirmNewPassword)
+{
+    var token = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("uscf_token");
+    if (string.IsNullOrEmpty(token)) throw new Exception("Not authenticated");
+
+    var payload = new
+    {
+        FullName = fullName,
+        Username = username,
+        Email = email,
+        CurrentPassword = currentPassword,
+        NewPassword = newPassword,
+        ConfirmNewPassword = confirmNewPassword
+    };
+
+    var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+    using var req = new HttpRequestMessage(HttpMethod.Put, $"{_baseUrl}/api/auth/update") { Content = content };
+    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+    var res = await _http.SendAsync(req);
+    if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        throw new Exception("Unauthorized");
+
+    var txt = await res.Content.ReadAsStringAsync();
+    if (!res.IsSuccessStatusCode)
+    {
+        throw new Exception(txt);
+    }
+
+    var user = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(txt, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    return user;
+}
+
 }

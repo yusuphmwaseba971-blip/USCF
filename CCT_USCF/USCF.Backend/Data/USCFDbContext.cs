@@ -15,6 +15,10 @@ public class USCFDbContext : DbContext
     public DbSet<District> Districts => Set<District>();
     public DbSet<Branch> Branches => Set<Branch>();
 
+    // Community
+    public DbSet<Post> Posts => Set<Post>();
+    public DbSet<PostMedia> PostMedias => Set<PostMedia>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -145,6 +145,101 @@ public class AuthController : ControllerBase
         return Ok(dto);
     }
 
+    [Authorize]
+    [HttpPut("update")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest req)
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(sub)) return Unauthorized();
+        if (!Guid.TryParse(sub, out var userId)) return Unauthorized();
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user == null) return Unauthorized();
+
+        // Validate and apply changes. Only update provided fields.
+        if (!string.IsNullOrWhiteSpace(req.Username) && req.Username != user.Username)
+        {
+            var newUsername = req.Username.Trim();
+            if (await _db.Users.AnyAsync(u => u.Username == newUsername && u.Id != user.Id))
+                return BadRequest(new { message = "Username already taken" });
+            user.Username = newUsername;
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.Email) && req.Email != user.Email)
+        {
+            var newEmail = req.Email.Trim().ToLowerInvariant();
+            if (await _db.Users.AnyAsync(u => u.Email == newEmail && u.Id != user.Id))
+                return BadRequest(new { message = "Email already registered" });
+            user.Email = newEmail;
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.FullName) && req.FullName != user.FullName)
+        {
+            user.FullName = req.FullName.Trim();
+        }
+
+        // Password change (optional)
+        if (!string.IsNullOrEmpty(req.NewPassword) || !string.IsNullOrEmpty(req.ConfirmNewPassword) || !string.IsNullOrEmpty(req.CurrentPassword))
+        {
+            if (string.IsNullOrEmpty(req.CurrentPassword))
+                return BadRequest(new { message = "Current password is required to change password." });
+
+            if (!_hasher.Verify(req.CurrentPassword, user.PasswordHash))
+                return BadRequest(new { message = "Current password is incorrect." });
+
+            if (string.IsNullOrEmpty(req.NewPassword) || string.IsNullOrEmpty(req.ConfirmNewPassword))
+                return BadRequest(new { message = "New password and confirm password are required." });
+
+            if (req.NewPassword != req.ConfirmNewPassword)
+                return BadRequest(new { message = "New password and confirmation do not match." });
+
+            user.PasswordHash = _hasher.HashPassword(req.NewPassword);
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        // Return updated user dto (similar to Me)
+        string? regionName2 = null;
+        string? districtName2 = null;
+        string? branchName2 = null;
+
+        if (user.RegionId.HasValue)
+        {
+            regionName2 = await _db.Regions.Where(r => r.Id == user.RegionId.Value)
+                .Select(r => r.Name).FirstOrDefaultAsync();
+        }
+        if (user.DistrictId.HasValue)
+        {
+            districtName2 = await _db.Districts.Where(d => d.Id == user.DistrictId.Value)
+                .Select(d => d.Name).FirstOrDefaultAsync();
+        }
+        if (user.BranchId.HasValue)
+        {
+            branchName2 = await _db.Branches.Where(b => b.Id == user.BranchId.Value)
+                .Select(b => b.Name).FirstOrDefaultAsync();
+        }
+
+        var outDto = new UserDto
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Username = user.Username,
+            Email = user.Email,
+            ProfileImageUrl = user.ProfileImageUrl,
+            Role = user.Role,
+            CreatedAt = user.CreatedAt,
+            RegionId = user.RegionId,
+            Region = regionName2,
+            DistrictId = user.DistrictId,
+            District = districtName2,
+            BranchId = user.BranchId,
+            Branch = branchName2
+        };
+
+        return Ok(outDto);
+    }
+
     private string GenerateToken(User user)
     {
         var key = _config["Authentication:JwtSigningKey"] ?? throw new InvalidOperationException("JwtSigningKey not configured");

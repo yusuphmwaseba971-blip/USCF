@@ -85,22 +85,34 @@
             </Border>
 
             <Button
-                Text="📖 Saved Bible Verses" />
+                x:Name="SavedVersesButton"
+                Text="📖 Saved Bible Verses"
+                Clicked="OnSavedVersesClicked" />
 
             <Button
-                Text="🙏 My Prayer Requests" />
+                x:Name="PrayerRequestsButton"
+                Text="🙏 My Prayer Requests"
+                Clicked="OnPrayerRequestsClicked" />
 
             <Button
-                Text="🎥 Saved Sermons" />
+                x:Name="SavedSermonsButton"
+                Text="🎥 Saved Sermons"
+                Clicked="OnSavedSermonsClicked" />
 
             <Button
-                Text="📅 My Events" />
+                x:Name="EventsButton"
+                Text="📅 My Events"
+                Clicked="OnEventsClicked" />
 
             <Button
-                Text="⚙️ Settings" />
+                x:Name="SettingsButton"
+                Text="⚙️ Settings"
+                Clicked="OnSettingsClicked" />
 
             <Button
-                Text="🚪 Logout" />
+                x:Name="LogoutButtonBottom"
+                Text="🚪 Logout"
+                Clicked="OnLogoutClicked" />
 
         </VerticalStackLayout>
     </ScrollView>

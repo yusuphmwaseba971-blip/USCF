@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.MyPrayerRequestsPage"
+    Title="My Prayer Requests"
+    BackgroundColor="#F8FAFC">
+
+    <VerticalStackLayout Padding="20" Spacing="12">
+        <Label Text="My Prayer Requests" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+        <Label Text="Your prayer requests will appear here." TextColor="#64748B" />
+        <Button Text="Back" Clicked="OnBackClicked" />
+    </VerticalStackLayout>
+
+</ContentPage>

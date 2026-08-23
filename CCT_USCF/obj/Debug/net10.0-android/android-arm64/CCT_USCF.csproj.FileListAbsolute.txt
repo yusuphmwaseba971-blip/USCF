@@ -1,3 +1,11 @@
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.runtimeconfig.json
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.dll
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.pdb
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct.apk
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct.aab
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct-Signed.aab
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct-Signed.apk
+D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct-Signed.apk.idsig
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\.NETCoreApp,Version=v10.0.AssemblyAttributes.cs
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\build.props
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\adb.props
@@ -114,14 +122,6 @@ D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\CCT_USCF.GeneratedM
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\CCT_USCF.AssemblyInfoInputs.cache
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\CCT_USCF.AssemblyInfo.cs
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\CCT_USCF.csproj.CoreCompileInputs.cache
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.runtimeconfig.json
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.dll
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.pdb
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct.apk
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct.aab
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct-Signed.aab
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct-Signed.apk
-D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\com.uscf.cct-Signed.apk.idsig
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\XamlC.stamp
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\CCT_USCF.dll
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\CCT_USCF.pdb

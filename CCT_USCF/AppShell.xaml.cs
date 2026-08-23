@@ -19,6 +19,12 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(nameof(EventsPage), typeof(EventsPage));
 		Routing.RegisterRoute(nameof(GivingPage), typeof(GivingPage));
 
+		// Settings and profile-related pages
+		Routing.RegisterRoute(nameof(Pages.SettingsPage), typeof(Pages.SettingsPage));
+		Routing.RegisterRoute(nameof(Pages.SavedVersesPage), typeof(Pages.SavedVersesPage));
+		Routing.RegisterRoute(nameof(Pages.MyPrayerRequestsPage), typeof(Pages.MyPrayerRequestsPage));
+		Routing.RegisterRoute(nameof(Pages.SavedSermonsPage), typeof(Pages.SavedSermonsPage));
+
 		// Ensure login/register routes available under both the type name and short names used elsewhere
 		Routing.RegisterRoute(nameof(Pages.LoginPage), typeof(Pages.LoginPage));
 		Routing.RegisterRoute(nameof(Pages.RegisterPage), typeof(Pages.RegisterPage));
