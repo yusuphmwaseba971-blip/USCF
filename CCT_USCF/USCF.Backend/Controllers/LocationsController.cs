@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using CCT_USCF.USCF.Backend.Data;
+using USCF.Backend.Data;
 
-namespace CCT_USCF.USCF.Backend.Controllers;
+namespace USCF.Backend.Controllers;
 
 [ApiController]
 [Route("api/locations")]

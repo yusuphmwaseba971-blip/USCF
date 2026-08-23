@@ -1,67 +1,60 @@
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using USCF.Backend.Data;
+using USCF.Backend.Models;
 
-namespace USCF.Backend.Controllers;
+namespace USCF.Backend.Data;
 
-[ApiController]
-[Route("api/locations")]
-public class LocationsController : ControllerBase
+public class USCFDbContext : DbContext
 {
-    private readonly USCFDbContext _db;
-
-    public LocationsController(USCFDbContext db)
+    public USCFDbContext(DbContextOptions<USCFDbContext> options)
+        : base(options)
     {
-        _db = db;
     }
 
-    [HttpGet("regions")]
-    public async Task<IActionResult> GetRegions()
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Region> Regions => Set<Region>();
+    public DbSet<District> Districts => Set<District>();
+    public DbSet<Branch> Branches => Set<Branch>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        var regions = await _db.Regions
-            .AsNoTracking()
-            .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name
-            })
-            .ToListAsync();
+        base.OnModelCreating(modelBuilder);
 
-        return Ok(regions);
-    }
+        modelBuilder.Entity<Region>()
+            .HasMany(r => r.Districts)
+            .WithOne(d => d.Region)
+            .HasForeignKey(d => d.RegionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-    [HttpGet("districts/{regionId:int}")]
-    public async Task<IActionResult> GetDistricts(int regionId)
-    {
-        var districts = await _db.Districts
-            .AsNoTracking()
-            .Where(x => x.RegionId == regionId)
-            .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name
-            })
-            .ToListAsync();
+        modelBuilder.Entity<District>()
+            .HasMany(d => d.Branches)
+            .WithOne(b => b.District)
+            .HasForeignKey(b => b.DistrictId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-        return Ok(districts);
-    }
+        modelBuilder.Entity<User>()
+            .HasOne<Region>()
+            .WithMany()
+            .HasForeignKey(u => u.RegionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-    [HttpGet("branches/{districtId:int}")]
-    public async Task<IActionResult> GetBranches(int districtId)
-    {
-        var branches = await _db.Branches
-            .AsNoTracking()
-            .Where(x => x.DistrictId == districtId)
-            .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name
-            })
-            .ToListAsync();
+        modelBuilder.Entity<User>()
+            .HasOne<District>()
+            .WithMany()
+            .HasForeignKey(u => u.DistrictId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-        return Ok(branches);
+        modelBuilder.Entity<User>()
+            .HasOne<Branch>()
+            .WithMany()
+            .HasForeignKey(u => u.BranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Username)
+            .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique();
     }
 }
