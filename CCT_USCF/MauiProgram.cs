@@ -27,7 +27,7 @@ public static class MauiProgram
 #endif
 
 		// register HttpClient and AuthService for pages
-		builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://10.0.2.2:5140") });
+		builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://192.168.139.213:5140") });
 		builder.Services.AddSingleton<CCT_USCF.Services.AuthService>();
 
 		var app = builder.Build();
