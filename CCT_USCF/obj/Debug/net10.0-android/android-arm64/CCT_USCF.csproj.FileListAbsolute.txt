@@ -132,6 +132,7 @@ D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\android\bin\base.zi
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\android\bin\com.uscf.cct.aab
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\android\bin\com.uscf.cct.apks
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\res\values\colors.xml
+D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\res\xml\network_security_config.xml
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\uploadflags.txt
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resolvedassemblies.hash
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\android\assets\arm64-v8a\ar\Microsoft.Maui.Controls.resources.dll

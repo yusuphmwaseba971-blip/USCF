@@ -31,6 +31,8 @@ public partial class LoginPage : ContentPage
         {
             var token = await _authService.LoginAsync(username, password);
             await SecureStorage.Default.SetAsync("uscf_token", token);
+            // notify shell to update authentication UI
+            MauiProgram.NotifyAuthChanged();
             // navigate back to home
             await Shell.Current.GoToAsync("//home");
         }

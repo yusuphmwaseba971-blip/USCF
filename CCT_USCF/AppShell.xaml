@@ -22,9 +22,16 @@
         <ShellContent Title="Profile" Route="profile" ContentTemplate="{DataTemplate pages:ProfilePage}" />
     </TabBar>
 
-    <Shell.ToolbarItems>
-        <ToolbarItem Text="Login" Order="Secondary" Priority="0" Clicked="OnLoginClicked" />
-        <ToolbarItem Text="Create Account" Order="Secondary" Priority="1" Clicked="OnCreateAccountClicked" />
-    </Shell.ToolbarItems>
+    <Shell.TitleView>
+        <Grid Padding="8,0,8,0">
+            <Button x:Name="SignUpLoginButton"
+                    Text="Sign Up / Login"
+                    SemanticProperties.Hint="Open authentication actions"
+                    HorizontalOptions="End"
+                    VerticalOptions="Center"
+                    Clicked="OnSignUpLoginClicked"
+                    IsVisible="False" />
+        </Grid>
+    </Shell.TitleView>
 
 </Shell>

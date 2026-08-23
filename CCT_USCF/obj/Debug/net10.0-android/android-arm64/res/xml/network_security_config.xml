@@ -1,0 +1,1 @@
+<network-security-config><!-- Allow cleartext HTTP only for the development backend IP --><domain-config cleartextTrafficPermitted="true"><domain includeSubdomains="false">192.168.139.213</domain></domain-config><!-- Deny cleartext by default for all other domains --><base-config cleartextTrafficPermitted="false" /></network-security-config>
