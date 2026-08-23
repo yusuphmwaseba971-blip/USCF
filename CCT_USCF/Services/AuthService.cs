@@ -80,6 +80,40 @@ public async Task<List<LocationItem>> GetRegionsAsync()
         }) ?? new List<LocationItem>();
 }
 
+    // New: Get current authenticated user
+    public async Task<CCT_USCF.Models.CurrentUser?> GetCurrentUserAsync()
+    {
+        try
+        {
+            // Read token from secure storage
+            var token = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("uscf_token");
+            if (string.IsNullOrEmpty(token)) return null;
+
+            // Create request with Authorization header
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/auth/me");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var res = await _http.SendAsync(req);
+            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                return null;
+
+            res.EnsureSuccessStatusCode();
+
+            var json = await res.Content.ReadAsStringAsync();
+            var user = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return user;
+        }
+        catch (HttpRequestException)
+        {
+            // network issue
+            throw;
+        }
+        catch (Exception)
+        {
+            // any other issue treat as not authenticated
+            return null;
+        }
+    }
 public async Task<List<LocationItem>> GetDistrictsAsync(int regionId)
 {
     var response = await _http.GetAsync(

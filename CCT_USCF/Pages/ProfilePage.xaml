@@ -32,16 +32,53 @@
                         FontSize="60"
                         HorizontalOptions="Center" />
 
-                    <Label
-                        Text="CCT Member"
-                        FontSize="22"
-                        FontAttributes="Bold"
-                        HorizontalOptions="Center" />
+                            <Label
+                                x:Name="FullNameLabel"
+                                Text="Full Name"
+                                FontSize="18"
+                                FontAttributes="Bold"
+                                HorizontalOptions="Start" />
 
-                    <Label
-                        Text="Welcome to CCT by USCF"
-                        TextColor="#64748B"
-                        HorizontalOptions="Center" />
+                            <Label
+                                x:Name="UsernameLabel"
+                                Text="Username"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Label
+                                x:Name="EmailLabel"
+                                Text="Email"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Label
+                                x:Name="RoleLabel"
+                                Text="Role"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Label
+                                x:Name="RegionLabel"
+                                Text="Region"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Label
+                                x:Name="DistrictLabel"
+                                Text="District"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Label
+                                x:Name="BranchLabel"
+                                Text="USCF Branch"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Button
+                                x:Name="LogoutButton"
+                                Text="🚪 Logout"
+                                Clicked="OnLogoutClicked" />
 
                 </VerticalStackLayout>
 

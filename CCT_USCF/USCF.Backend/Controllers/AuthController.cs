@@ -102,6 +102,29 @@ public class AuthController : ControllerBase
         var user = await _db.Users.FindAsync(userId);
         if (user == null) return Unauthorized();
 
+        // Resolve region/district/branch names if available
+        string? regionName = null;
+        string? districtName = null;
+        string? branchName = null;
+
+        if (user.RegionId.HasValue)
+        {
+            regionName = await _db.Regions.Where(r => r.Id == user.RegionId.Value)
+                .Select(r => r.Name).FirstOrDefaultAsync();
+        }
+
+        if (user.DistrictId.HasValue)
+        {
+            districtName = await _db.Districts.Where(d => d.Id == user.DistrictId.Value)
+                .Select(d => d.Name).FirstOrDefaultAsync();
+        }
+
+        if (user.BranchId.HasValue)
+        {
+            branchName = await _db.Branches.Where(b => b.Id == user.BranchId.Value)
+                .Select(b => b.Name).FirstOrDefaultAsync();
+        }
+
         var dto = new UserDto
         {
             Id = user.Id,
@@ -110,7 +133,13 @@ public class AuthController : ControllerBase
             Email = user.Email,
             ProfileImageUrl = user.ProfileImageUrl,
             Role = user.Role,
-            CreatedAt = user.CreatedAt
+            CreatedAt = user.CreatedAt,
+            RegionId = user.RegionId,
+            Region = regionName,
+            DistrictId = user.DistrictId,
+            District = districtName,
+            BranchId = user.BranchId,
+            Branch = branchName
         };
 
         return Ok(dto);

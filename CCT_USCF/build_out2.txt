@@ -1,0 +1,41 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  XAML source generation is enabled (MauiXamlInflator=SourceGen). This generates C# code from XAML at compile time for better performance. To disable, remove the MauiXamlInflator line from your .csproj file (reverts to configuration-based defaults: Runtime in Debug, XamlC in Release).
+  CCT_USCF -> D:\Projects\CCT_USCF\bin\Debug\net10.0-android\android-arm64\CCT_USCF.dll
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: Command 'C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE --add-section payload=obj\Debug\net10.0-android\android-arm64\android\assets\arm64-v8a\System.Linq.AsyncEnumerable.dll obj\Debug\net10.0-android\android-arm64\android-arm64\wrapped\lib_System.Linq.AsyncEnumerable.dll.so' failed.\n [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: stderr | C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE: error: permission denied [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: Command 'C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE --set-section-flags payload=readonly,data --set-section-alignment payload=16384 obj\Debug\net10.0-android\android-arm64\android-arm64\wrapped\lib_Xamarin.AndroidX.CustomView.dll.so' failed.\n [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: stderr | C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE: error: permission denied [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: Command 'C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE --set-section-flags payload=readonly,data --set-section-alignment payload=16384 obj\Debug\net10.0-android\android-arm64\android-arm64\wrapped\lib_Xamarin.KotlinX.Coroutines.Core.pdb.so' failed.\n [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: stderr | C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE: error: permission denied [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+
+Build FAILED.
+
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: Command 'C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE --add-section payload=obj\Debug\net10.0-android\android-arm64\android\assets\arm64-v8a\System.Linq.AsyncEnumerable.dll obj\Debug\net10.0-android\android-arm64\android-arm64\wrapped\lib_System.Linq.AsyncEnumerable.dll.so' failed.\n [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: stderr | C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE: error: permission denied [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: Command 'C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE --set-section-flags payload=readonly,data --set-section-alignment payload=16384 obj\Debug\net10.0-android\android-arm64\android-arm64\wrapped\lib_Xamarin.AndroidX.CustomView.dll.so' failed.\n [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: stderr | C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE: error: permission denied [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: Command 'C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE --set-section-flags payload=readonly,data --set-section-alignment payload=16384 obj\Debug\net10.0-android\android-arm64\android-arm64\wrapped\lib_Xamarin.KotlinX.Coroutines.Core.pdb.so' failed.\n [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142: stderr | C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\binutils\bin\llvm-objcopy.EXE: error: permission denied [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\Xamarin.Android.Common.targets(2378,3): error XA0142:  [D:\Projects\CCT_USCF\CCT_USCF.csproj]
+    0 Warning(s)
+    3 Error(s)
+
+Time Elapsed 00:09:43.31

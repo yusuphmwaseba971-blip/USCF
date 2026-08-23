@@ -24,7 +24,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(nameof(Pages.RegisterPage), typeof(Pages.RegisterPage));
 		Routing.RegisterRoute("login", typeof(Pages.LoginPage));
 		Routing.RegisterRoute("register", typeof(Pages.RegisterPage));
-		// Subscribe for authentication state changes (sent by LoginPage after successful login)
+		// Subscribe for authentication state changes (sent by LoginPage after successful login/logout)
 		MauiProgram.AuthStateChanged += async () => await UpdateAuthUIAsync();
 		// Initial UI update
 		_ = UpdateAuthUIAsync();
@@ -41,15 +41,47 @@ public partial class AppShell : Shell
 		try
 		{
 			var token = await SecureStorage.Default.GetAsync("uscf_token");
-			// Show Sign Up / Login only when not authenticated
-			SignUpLoginButton.IsVisible = string.IsNullOrEmpty(token);
+			if (string.IsNullOrEmpty(token))
+			{
+				// Not authenticated
+				SignUpLoginButton.IsVisible = true;
+				AuthProfileButton.IsVisible = false;
+				MauiProgram.SetCurrentUser(null);
+				return;
+			}
+			// Try to load current user from backend
+			var auth = MauiProgram.CreateAuthServiceForPages();
+			try
+			{
+				var user = await auth.GetCurrentUserAsync();
+				if (user == null)
+				{
+					// invalid token - clear it and treat as logged out
+										try { SecureStorage.Default.Remove("uscf_token"); } catch {}
+					SignUpLoginButton.IsVisible = true;
+					AuthProfileButton.IsVisible = false;
+					MauiProgram.SetCurrentUser(null);
+					return;
+				}
+				// Authenticated
+				MauiProgram.SetCurrentUser(user);
+				SignUpLoginButton.IsVisible = false;
+				AuthProfileButton.IsVisible = true;
+			}
+			catch (Exception ex)
+			{
+				// Show auth button and display nothing else — do not crash the shell
+				SignUpLoginButton.IsVisible = true;
+				AuthProfileButton.IsVisible = false;
+				MauiProgram.SetCurrentUser(null);
+				System.Diagnostics.Debug.WriteLine($"UpdateAuthUIAsync error: {ex}");
+			}
 		}
 		catch
 		{
 			// If SecureStorage fails for any reason, default to showing the auth button
 			SignUpLoginButton.IsVisible = true;
-		}
-	}
+		}	}
 
 	private async void OnSignUpLoginClicked(object sender, EventArgs e)
 	{
@@ -62,6 +94,22 @@ public partial class AppShell : Shell
 				break;
 			case "Create Account":
 				await Shell.Current.GoToAsync(nameof(Pages.RegisterPage));
+				break;
+		}
+	}
+	private async void OnAuthProfileClicked(object sender, EventArgs e)
+	{
+		var choice = await this.DisplayActionSheet("Account", "Cancel", null, "Profile", "Logout");
+		switch (choice)
+		{
+			case "Profile":
+				await Shell.Current.GoToAsync(nameof(Pages.ProfilePage));
+				break;
+			case "Logout":
+				try { SecureStorage.Default.Remove("uscf_token"); } catch {}
+				MauiProgram.SetCurrentUser(null);
+				MauiProgram.NotifyAuthChanged();
+				await Shell.Current.GoToAsync("//home");
 				break;
 		}
 	}

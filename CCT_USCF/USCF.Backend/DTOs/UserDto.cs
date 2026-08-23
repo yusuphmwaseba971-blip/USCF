@@ -9,4 +9,12 @@ public class UserDto
     public string? ProfileImageUrl { get; set; }
     public string Role { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+
+    // Location info
+    public int? RegionId { get; set; }
+    public string? Region { get; set; }
+    public int? DistrictId { get; set; }
+    public string? District { get; set; }
+    public int? BranchId { get; set; }
+    public string? Branch { get; set; }
 }
