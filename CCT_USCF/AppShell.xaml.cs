@@ -24,6 +24,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(nameof(Pages.SavedVersesPage), typeof(Pages.SavedVersesPage));
 		Routing.RegisterRoute(nameof(Pages.MyPrayerRequestsPage), typeof(Pages.MyPrayerRequestsPage));
 		Routing.RegisterRoute(nameof(Pages.SavedSermonsPage), typeof(Pages.SavedSermonsPage));
+		Routing.RegisterRoute(nameof(Pages.CreateHolyWordPage), typeof(Pages.CreateHolyWordPage));
 
 		// Ensure login/register routes available under both the type name and short names used elsewhere
 		Routing.RegisterRoute(nameof(Pages.LoginPage), typeof(Pages.LoginPage));
@@ -46,7 +47,7 @@ public partial class AppShell : Shell
 	{
 		try
 		{
-			var token = await SecureStorage.Default.GetAsync("uscf_token");
+			var token = await CCT_USCF.Services.TokenStorage.GetTokenAsync();
 			if (string.IsNullOrEmpty(token))
 			{
 				// Not authenticated
@@ -62,25 +63,33 @@ public partial class AppShell : Shell
 				var user = await auth.GetCurrentUserAsync();
 				if (user == null)
 				{
-					// invalid token - clear it and treat as logged out
-										try { SecureStorage.Default.Remove("uscf_token"); } catch {}
+					// token invalid - clear it and treat as logged out
+					try { SecureStorage.Default.Remove("uscf_token"); } catch {}
 					SignUpLoginButton.IsVisible = true;
 					AuthProfileButton.IsVisible = false;
 					MauiProgram.SetCurrentUser(null);
 					return;
 				}
-				// Authenticated
+
+				// Authenticated
 				MauiProgram.SetCurrentUser(user);
 				SignUpLoginButton.IsVisible = false;
 				AuthProfileButton.IsVisible = true;
 			}
-			catch (Exception ex)
+			catch (HttpRequestException httpEx)
 			{
-				// Show auth button and display nothing else — do not crash the shell
+				// Network/server problem - do NOT remove token. Keep the stored token and show unauthenticated UI.
+				System.Diagnostics.Debug.WriteLine($"UpdateAuthUIAsync network error: {httpEx.Message}");
 				SignUpLoginButton.IsVisible = true;
 				AuthProfileButton.IsVisible = false;
-				MauiProgram.SetCurrentUser(null);
+				// Keep MauiProgram.CurrentUser as-is (do not set to null here to avoid accidental erase), but show sign-in option
+			}
+			catch (Exception ex)
+			{
+				// Unexpected error - show auth UI but do not delete token here unless explicitly unauthorized earlier
 				System.Diagnostics.Debug.WriteLine($"UpdateAuthUIAsync error: {ex}");
+				SignUpLoginButton.IsVisible = true;
+				AuthProfileButton.IsVisible = false;
 			}
 		}
 		catch

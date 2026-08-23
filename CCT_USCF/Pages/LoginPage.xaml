@@ -10,7 +10,7 @@
             <Entry x:Name="UsernameEntry" Placeholder="Email or Username" />
             <Entry x:Name="PasswordEntry" IsPassword="True" Placeholder="Password" />
 
-            <Button Text="LOGIN" Clicked="OnLoginClicked" BackgroundColor="#009E2C" TextColor="White" />
+            <Button x:Name="LoginButton" Text="LOGIN" Clicked="OnLoginClicked" BackgroundColor="#009E2C" TextColor="White" />
 
             <HorizontalStackLayout HorizontalOptions="Center">
                 <Label Text="Don't have an account?" />

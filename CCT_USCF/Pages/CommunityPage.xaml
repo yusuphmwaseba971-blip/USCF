@@ -24,7 +24,9 @@
                 TextColor="#64748B" />
 
             <Button
-                Text="✏️ Create a Post" />
+                x:Name="CreatePostButton"
+                Text="+ Create Post"
+                Clicked="OnCreatePostClicked" />
 
             <Border
                 BackgroundColor="White"

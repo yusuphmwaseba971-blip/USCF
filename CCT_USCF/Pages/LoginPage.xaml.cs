@@ -27,22 +27,60 @@ public partial class LoginPage : ContentPage
             return;
         }
 
+        LoginButton.IsEnabled = false;
         try
         {
-            var token = await _authService.LoginAsync(username, password);
-            await SecureStorage.Default.SetAsync("uscf_token", token);
-            // After login, load current user and notify shell
-            var user = await _authService.GetCurrentUserAsync();
+            var result = await _authService.LoginAsync(username, password);
+            if (!result.Success)
+            {
+                MessageLabel.Text = result.Error ?? "Login failed";
+                MessageLabel.IsVisible = true;
+                return;
+            }
+
+            // Save token securely and verify
+            try
+            {
+                await TokenStorage.SaveTokenAsync(result.Token!);
+            }
+            catch (Exception ex)
+            {
+                MessageLabel.Text = ex.Message;
+                MessageLabel.IsVisible = true;
+                return;
+            }
+
+            // Call /api/auth/me to verify and obtain current user
+            CCT_USCF.Models.CurrentUser? user = null;
+            try
+            {
+                user = await _authService.GetCurrentUserAsync();
+            }
+            catch (HttpRequestException hre)
+            {
+                // network/server issue — keep token but inform the user
+                MessageLabel.Text = "Logged in, but unable to contact server to verify session. Please check your connection.";
+                MessageLabel.IsVisible = true;
+                // do not remove token here; allow user to retry
+                return;
+            }
+
+            if (user == null)
+            {
+                // token appears invalid
+                await TokenStorage.RemoveTokenAsync();
+                MessageLabel.Text = "Login failed: server rejected the token.";
+                MessageLabel.IsVisible = true;
+                return;
+            }
+
             MauiProgram.SetCurrentUser(user);
-            // notify shell to update authentication UI
             MauiProgram.NotifyAuthChanged();
-            // navigate back to home
             await Shell.Current.GoToAsync("//home");
         }
-        catch (Exception ex)
+        finally
         {
-            MessageLabel.Text = ex.Message;
-            MessageLabel.IsVisible = true;
+            LoginButton.IsEnabled = true;
         }
     }
 

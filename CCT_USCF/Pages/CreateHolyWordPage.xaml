@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.CreateHolyWordPage"
+    Title="Create Holy Word"
+    BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Label Text="Create Holy Word" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+
+            <Label Text="📖 Holy Word (required)" />
+            <Editor x:Name="HolyWordEditor" HeightRequest="120" Placeholder="Write a Bible verse or holy message..." />
+
+            <Label Text="🎵 Gospel Song" />
+            <HorizontalStackLayout Spacing="12">
+                <Button x:Name="ChooseSongButton" Text="[ Choose Song ]" Clicked="OnChooseSongClicked" />
+                <Label x:Name="SongNameLabel" Text="No song selected" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <!-- Audio selection and basic trim inputs (playback may not be available on all devices) -->
+            <Label x:Name="AudioNoteLabel" Text="" TextColor="#64748B" />
+
+            <HorizontalStackLayout Spacing="12">
+                <Button x:Name="PlayPauseButton" Text="Play" Clicked="OnPlayPauseClicked" IsEnabled="False" />
+                <Slider x:Name="ProgressSlider" Minimum="0" Maximum="1" ValueChanged="OnProgressSliderChanged" IsEnabled="False" HorizontalOptions="FillAndExpand" />
+                <Label x:Name="PositionLabel" Text="00:00" VerticalOptions="Center" />
+                <Label x:Name="DurationLabel" Text="/ 00:00" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <Label Text="Trim Audio" />
+            <HorizontalStackLayout Spacing="12">
+                <Label Text="Start:" VerticalOptions="Center" />
+                <Label x:Name="StartLabel" Text="00:00" VerticalOptions="Center" />
+                <Label Text="End:" VerticalOptions="Center" />
+                <Label x:Name="EndLabel" Text="00:00" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="12">
+                <Slider x:Name="StartSlider" Minimum="0" Maximum="1" ValueChanged="OnStartSliderChanged" IsEnabled="False" HorizontalOptions="FillAndExpand" />
+                <Slider x:Name="EndSlider" Minimum="0" Maximum="1" ValueChanged="OnEndSliderChanged" IsEnabled="False" HorizontalOptions="FillAndExpand" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="12">
+                <Button x:Name="PreviewTrimButton" Text="[ Preview ]" Clicked="OnPreviewTrimClicked" IsEnabled="False" />
+                <Button x:Name="AttachButton" Text="[ Attach ]" Clicked="OnAttachClicked" IsEnabled="False" />
+            </HorizontalStackLayout>
+
+            <Label Text="Caption (optional)" />
+            <Editor x:Name="CaptionEditor" HeightRequest="80" Placeholder="Add a short caption (optional)..." />
+
+            <Border BackgroundColor="White" Padding="12">
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="PosterNameLabel" Text="" FontAttributes="Bold" />
+                    <Label x:Name="PosterBranchLabel" Text="" FontSize="12" TextColor="#64748B" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button x:Name="PostButton" Text="POST" BackgroundColor="#1E40AF" TextColor="White" Clicked="OnPostClicked" />
+
+            <Button Text="Cancel" Clicked="OnCancelClicked" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

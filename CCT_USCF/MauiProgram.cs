@@ -39,8 +39,14 @@ builder
 #endif
 
 // register HttpClient and AuthService for pages
-builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://192.168.136.4:5140") });
+// Use centralized API base URL from ApiConfig
+builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri(CCT_USCF.Services.ApiConfig.BaseUrl) });
 builder.Services.AddSingleton<CCT_USCF.Services.AuthService>();
+
+#if ANDROID
+// Register Android audio player implementation for platform-specific playback
+builder.Services.AddSingleton<CCT_USCF.Services.IAudioPlayer, CCT_USCF.Services.AndroidAudioPlayer>();
+#endif
 		var app = builder.Build();
 // expose the service provider for simple page-level access
 Services = app.Services;

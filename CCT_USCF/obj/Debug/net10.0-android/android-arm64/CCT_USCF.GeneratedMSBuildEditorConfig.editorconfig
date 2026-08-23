@@ -77,6 +77,16 @@ build_metadata.AdditionalFiles.NoWarn =
 build_metadata.AdditionalFiles.EnableDiagnostics = 
 build_metadata.AdditionalFiles.LineInfo = 
 
+[D:/Projects/CCT_USCF/Pages/CreateHolyWordPage.xaml]
+build_metadata.AdditionalFiles.GenKind = Xaml
+build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.CreateHolyWordPage.xaml
+build_metadata.AdditionalFiles.TargetPath = Pages\CreateHolyWordPage.xaml
+build_metadata.AdditionalFiles.RelativePath = Pages\CreateHolyWordPage.xaml
+build_metadata.AdditionalFiles.Inflator = SourceGen
+build_metadata.AdditionalFiles.NoWarn = 
+build_metadata.AdditionalFiles.EnableDiagnostics = 
+build_metadata.AdditionalFiles.LineInfo = 
+
 [D:/Projects/CCT_USCF/Pages/EventsPage.xaml]
 build_metadata.AdditionalFiles.GenKind = Xaml
 build_metadata.AdditionalFiles.ManifestResourceName = CCT_USCF.Pages.EventsPage.xaml
