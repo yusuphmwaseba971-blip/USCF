@@ -1,4 +1,4 @@
-<api type="debug" assembly-name="CCT_USCF" mvid="156191c2166747708e252f58aabddfc8">
+<api type="debug" assembly-name="CCT_USCF" mvid="1a7fb00775ee445c9528c7c51d300bff">
   <java-to-managed>
     <entry java-name="crc64e1f0e09bff82605c/MainActivity" managed-name="CCT_USCF.MainActivity, CCT_USCF" managed-type-token-id="33554443" />
     <entry java-name="crc64e1f0e09bff82605c/MainApplication" managed-name="CCT_USCF.MainApplication, CCT_USCF" managed-type-token-id="33554444" />

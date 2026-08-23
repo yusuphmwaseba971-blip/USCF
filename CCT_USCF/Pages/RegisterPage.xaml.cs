@@ -102,7 +102,7 @@ public partial class RegisterPage : ContentPage
         }
         catch (Exception ex)
         {
-            ShowError($"Unable to load regions: {ex.Message}");
+            ShowError($"Unable to load regions: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -128,7 +128,7 @@ public partial class RegisterPage : ContentPage
         }
         catch (Exception ex)
         {
-            ShowError($"Unable to load districts: {ex.Message}");
+            ShowError($"Unable to load districts: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -151,7 +151,7 @@ public partial class RegisterPage : ContentPage
         }
         catch (Exception ex)
         {
-            ShowError($"Unable to load branches: {ex.Message}");
+            ShowError($"Unable to load branches: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

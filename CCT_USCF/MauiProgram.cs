@@ -25,14 +25,16 @@ builder
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
-		#if DEBUG
+
+		#if DEBUG
 		builder.Logging.AddDebug();
 #endif
 
 // register HttpClient and AuthService for pages
-builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://192.168.139.213:5140") });
+builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://192.168.136.4:5140") });
 builder.Services.AddSingleton<CCT_USCF.Services.AuthService>();
-		var app = builder.Build();
+
+		var app = builder.Build();
 // expose the service provider for simple page-level access
 Services = app.Services;
 return app;

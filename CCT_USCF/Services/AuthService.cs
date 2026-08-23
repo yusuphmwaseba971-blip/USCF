@@ -12,7 +12,7 @@ public class AuthService
     public AuthService(HttpClient http)
     {
         _http = http;
-        _baseUrl = http.BaseAddress?.ToString().TrimEnd('/') ?? "http://192.168.139.213:5140";
+        _baseUrl = http.BaseAddress?.ToString().TrimEnd('/') ?? "http://192.168.136.4:5140";
     }
 
     public async Task<string> LoginAsync(string usernameOrEmail, string password)
