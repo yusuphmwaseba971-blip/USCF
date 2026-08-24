@@ -17,70 +17,99 @@ public partial class LoginPage : ContentPage
 
     private async void OnLoginClicked(object sender, EventArgs e)
     {
-        MessageLabel.IsVisible = false;
-        var username = UsernameEntry.Text?.Trim() ?? string.Empty;
-        var password = PasswordEntry.Text ?? string.Empty;
-
-        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
-        {
-            MessageLabel.Text = "Please enter username/email and password.";
+            System.Diagnostics.Debug.WriteLine("[LOGIN] OnLoginClicked invoked");
             MessageLabel.IsVisible = true;
-            return;
-        }
+            MessageLabel.Text = "Attempting to login...";
+            var username = UsernameEntry.Text?.Trim() ?? string.Empty;
+            var password = PasswordEntry.Text ?? string.Empty;
 
-        LoginButton.IsEnabled = false;
-        try
-        {
-            var result = await _authService.LoginAsync(username, password);
-            if (!result.Success)
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
-                MessageLabel.Text = result.Error ?? "Login failed";
+                MessageLabel.Text = "Please enter username/email and password.";
                 MessageLabel.IsVisible = true;
+                System.Diagnostics.Debug.WriteLine("[LOGIN] Validation failed: empty username or password");
                 return;
             }
 
-            // Save the authenticated session securely and verify it
+            LoginButton.IsEnabled = false;
             try
             {
-                await TokenStorage.SaveSessionAsync(result.Token!, result.RefreshToken, result.ExpiresAtUtc ?? DateTime.UtcNow.AddHours(8));
+                System.Diagnostics.Debug.WriteLine("[LOGIN] Sending LoginAsync request");
+                var result = await _authService.LoginAsync(username, password);
+                System.Diagnostics.Debug.WriteLine($"[LOGIN] LoginAsync completed: Success={result.Success} Status={result.StatusCode}");
+
+                if (!result.Success)
+                {
+                    MessageLabel.Text = result.Error ?? "Login failed";
+                    MessageLabel.IsVisible = true;
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Login failed: {result.Error}");
+                    return;
+            }
+
+                // Save the authenticated session securely and verify it
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine("[LOGIN] Saving session to secure storage");
+                    await TokenStorage.SaveSessionAsync(result.Token!, result.RefreshToken, result.ExpiresAtUtc ?? DateTime.UtcNow.AddHours(8));
+                }
+                catch (Exception ex)
+                {
+                    MessageLabel.Text = ex.Message;
+                    MessageLabel.IsVisible = true;
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Error saving session: {ex}");
+                    return;
+                }
+
+                CCT_USCF.Models.CurrentUser? user = null;
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine("[LOGIN] Calling GetCurrentUserAsync to verify token");
+                    user = await _authService.GetCurrentUserAsync();
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] GetCurrentUserAsync returned user: {(user != null ? user.Username : "null")}");
+                }
+                catch (HttpRequestException httpEx)
+                {
+                    // network/server issue — keep the persisted session so the app can recover later
+                    MessageLabel.Text = "Logged in, but the server could not be reached to verify the session yet. Please try again when your connection is available.";
+                    MessageLabel.IsVisible = true;
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Network error verifying session: {httpEx.Message}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Unexpected error verifying session: {ex}");
+                    MessageLabel.Text = "An unexpected error occurred verifying the session.";
+                    MessageLabel.IsVisible = true;
+                    return;
+                }
+
+                if (user == null)
+                {
+                    await TokenStorage.ClearSessionAsync();
+                    MessageLabel.Text = "Login failed: server rejected the token.";
+                    MessageLabel.IsVisible = true;
+                    System.Diagnostics.Debug.WriteLine("[LOGIN] Server rejected token (user==null)");
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine("[LOGIN] Login successful, navigating to home");
+                MauiProgram.SetCurrentUser(user);
+                MauiProgram.NotifyAuthChanged();
+                await Shell.Current.GoToAsync("//home");
             }
             catch (Exception ex)
             {
-                MessageLabel.Text = ex.Message;
+                // Catch any unexpected exceptions to avoid crashing the app
+                System.Diagnostics.Debug.WriteLine($"[LOGIN] Unhandled exception in OnLoginClicked: {ex}");
+                MessageLabel.Text = "An error occurred during login. Please try again.";
                 MessageLabel.IsVisible = true;
-                return;
             }
-
-            CCT_USCF.Models.CurrentUser? user = null;
-            try
+            finally
             {
-                user = await _authService.GetCurrentUserAsync();
+                LoginButton.IsEnabled = true;
+                System.Diagnostics.Debug.WriteLine("[LOGIN] OnLoginClicked finished");
             }
-            catch (HttpRequestException)
-            {
-                // network/server issue — keep the persisted session so the app can recover later
-                MessageLabel.Text = "Logged in, but the server could not be reached to verify the session yet. Please try again when your connection is available.";
-                MessageLabel.IsVisible = true;
-                return;
-            }
-
-            if (user == null)
-            {
-                await TokenStorage.ClearSessionAsync();
-                MessageLabel.Text = "Login failed: server rejected the token.";
-                MessageLabel.IsVisible = true;
-                return;
-            }
-
-            MauiProgram.SetCurrentUser(user);
-            MauiProgram.NotifyAuthChanged();
-            await Shell.Current.GoToAsync("//home");
         }
-        finally
-        {
-            LoginButton.IsEnabled = true;
-        }
-    }
 
     private async void OnCreateAccountClicked(object sender, EventArgs e)
     {

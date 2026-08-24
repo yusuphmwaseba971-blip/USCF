@@ -31,44 +31,69 @@ public class AuthService
         var payload = new { UsernameOrEmail = usernameOrEmail, Password = password };
         var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-        using var res = await _http.PostAsync($"{_baseUrl}/api/auth/login", content);
-        var body = await res.Content.ReadAsStringAsync();
-
-        if (!res.IsSuccessStatusCode)
-        {
-            string err = body;
-            if (string.IsNullOrWhiteSpace(err)) err = res.ReasonPhrase ?? "Login failed";
-            return new AuthResult { Success = false, Error = err, StatusCode = (int)res.StatusCode };
-        }
-
         try
         {
-            var j = JsonDocument.Parse(body);
-            if (!j.RootElement.TryGetProperty("token", out var tokenEl))
+            using var res = await _http.PostAsync($"{_baseUrl}/api/auth/login", content);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
             {
-                return new AuthResult { Success = false, Error = "Login response missing token.", StatusCode = (int)res.StatusCode };
+                string err = body;
+                if (string.IsNullOrWhiteSpace(err)) err = res.ReasonPhrase ?? "Login failed";
+                System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync server returned non-success: {(int)res.StatusCode} - {err}");
+                return new AuthResult { Success = false, Error = err, StatusCode = (int)res.StatusCode };
             }
 
-            var token = tokenEl.GetString();
-            if (string.IsNullOrEmpty(token))
-                return new AuthResult { Success = false, Error = "Empty token received from server.", StatusCode = (int)res.StatusCode };
-
-            var refreshToken = j.RootElement.TryGetProperty("refreshToken", out var refreshEl) ? refreshEl.GetString() : null;
-            DateTime? expiresAtUtc = null;
-            if (j.RootElement.TryGetProperty("expiresAtUtc", out var expiryUtcEl) && DateTime.TryParse(expiryUtcEl.GetString(), out var expiryUtc))
+            try
             {
-                expiresAtUtc = expiryUtc;
-            }
-            else if (j.RootElement.TryGetProperty("expiresAt", out var expiresEl) && DateTime.TryParse(expiresEl.GetString(), out var expires))
-            {
-                expiresAtUtc = expires;
-            }
+                var j = JsonDocument.Parse(body);
+                if (!j.RootElement.TryGetProperty("token", out var tokenEl))
+                {
+                    Console.WriteLine("[LOGIN] LoginAsync response missing token property");
+                    return new AuthResult { Success = false, Error = "Login response missing token.", StatusCode = (int)res.StatusCode };
+                }
 
-            return new AuthResult { Success = true, Token = token, RefreshToken = refreshToken, ExpiresAtUtc = expiresAtUtc, StatusCode = (int)res.StatusCode };
+                var token = tokenEl.GetString();
+                if (string.IsNullOrEmpty(token))
+                {
+                    Console.WriteLine("[LOGIN] LoginAsync received empty token");
+                    return new AuthResult { Success = false, Error = "Empty token received from server.", StatusCode = (int)res.StatusCode };
+                }
+
+                var refreshToken = j.RootElement.TryGetProperty("refreshToken", out var refreshEl) ? refreshEl.GetString() : null;
+                DateTime? expiresAtUtc = null;
+                if (j.RootElement.TryGetProperty("expiresAtUtc", out var expiryUtcEl) && DateTime.TryParse(expiryUtcEl.GetString(), out var expiryUtc))
+                {
+                    expiresAtUtc = expiryUtc;
+                }
+                else if (j.RootElement.TryGetProperty("expiresAt", out var expiresEl) && DateTime.TryParse(expiresEl.GetString(), out var expires))
+                {
+                    expiresAtUtc = expires;
+                }
+
+                Console.WriteLine("[LOGIN] LoginAsync succeeded, token received");
+                return new AuthResult { Success = true, Token = token, RefreshToken = refreshToken, ExpiresAtUtc = expiresAtUtc, StatusCode = (int)res.StatusCode };
+            }
+            catch (JsonException je)
+            {
+                Console.WriteLine($"[LOGIN] LoginAsync JSON parse error: {je}");
+                return new AuthResult { Success = false, Error = "Invalid response from server.", StatusCode = (int)res.StatusCode };
+            }
         }
-        catch (JsonException)
+        catch (HttpRequestException hre)
         {
-            return new AuthResult { Success = false, Error = "Invalid response from server.", StatusCode = (int)res.StatusCode };
+            Console.WriteLine($"[LOGIN] LoginAsync HTTP request error: {hre.Message}");
+            return new AuthResult { Success = false, Error = "Network error while contacting authentication server.", StatusCode = 0 };
+        }
+        catch (OperationCanceledException oce)
+        {
+            Console.WriteLine($"[LOGIN] LoginAsync canceled: {oce.Message}");
+            return new AuthResult { Success = false, Error = "Login canceled.", StatusCode = 0 };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LOGIN] LoginAsync unexpected error: {ex}");
+            return new AuthResult { Success = false, Error = "Unexpected error during login.", StatusCode = 0 };
         }
     }
 
