@@ -1,10 +1,10 @@
-<api type="debug" assembly-name="CCT_USCF" mvid="2c6d2f10ca334ef8b042b618844eedb9">
+<api type="debug" assembly-name="CCT_USCF" mvid="c53bf8b3098945fb8278dcf9f45cef46">
   <java-to-managed>
-    <entry java-name="crc64e1f0e09bff82605c/MainActivity" managed-name="CCT_USCF.MainActivity, CCT_USCF" managed-type-token-id="33554444" />
-    <entry java-name="crc64e1f0e09bff82605c/MainApplication" managed-name="CCT_USCF.MainApplication, CCT_USCF" managed-type-token-id="33554445" />
+    <entry java-name="crc64e1f0e09bff82605c/MainActivity" managed-name="CCT_USCF.MainActivity, CCT_USCF" managed-type-token-id="33554445" />
+    <entry java-name="crc64e1f0e09bff82605c/MainApplication" managed-name="CCT_USCF.MainApplication, CCT_USCF" managed-type-token-id="33554446" />
   </java-to-managed>
   <managed-to-java>
-    <entry java-name="crc64e1f0e09bff82605c/MainActivity" managed-name="CCT_USCF.MainActivity, CCT_USCF" managed-type-token-id="33554444" />
-    <entry java-name="crc64e1f0e09bff82605c/MainApplication" managed-name="CCT_USCF.MainApplication, CCT_USCF" managed-type-token-id="33554445" />
+    <entry java-name="crc64e1f0e09bff82605c/MainActivity" managed-name="CCT_USCF.MainActivity, CCT_USCF" managed-type-token-id="33554445" />
+    <entry java-name="crc64e1f0e09bff82605c/MainApplication" managed-name="CCT_USCF.MainApplication, CCT_USCF" managed-type-token-id="33554446" />
   </managed-to-java>
 </api>

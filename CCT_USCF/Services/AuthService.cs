@@ -20,6 +20,8 @@ public class AuthService
     {
         public bool Success { get; set; }
         public string? Token { get; set; }
+        public string? RefreshToken { get; set; }
+        public DateTime? ExpiresAtUtc { get; set; }
         public string? Error { get; set; }
         public int StatusCode { get; set; }
     }
@@ -34,7 +36,6 @@ public class AuthService
 
         if (!res.IsSuccessStatusCode)
         {
-            // Return structured failure with server message if present
             string err = body;
             if (string.IsNullOrWhiteSpace(err)) err = res.ReasonPhrase ?? "Login failed";
             return new AuthResult { Success = false, Error = err, StatusCode = (int)res.StatusCode };
@@ -52,11 +53,115 @@ public class AuthService
             if (string.IsNullOrEmpty(token))
                 return new AuthResult { Success = false, Error = "Empty token received from server.", StatusCode = (int)res.StatusCode };
 
-            return new AuthResult { Success = true, Token = token, StatusCode = (int)res.StatusCode };
+            var refreshToken = j.RootElement.TryGetProperty("refreshToken", out var refreshEl) ? refreshEl.GetString() : null;
+            DateTime? expiresAtUtc = null;
+            if (j.RootElement.TryGetProperty("expiresAtUtc", out var expiryUtcEl) && DateTime.TryParse(expiryUtcEl.GetString(), out var expiryUtc))
+            {
+                expiresAtUtc = expiryUtc;
+            }
+            else if (j.RootElement.TryGetProperty("expiresAt", out var expiresEl) && DateTime.TryParse(expiresEl.GetString(), out var expires))
+            {
+                expiresAtUtc = expires;
+            }
+
+            return new AuthResult { Success = true, Token = token, RefreshToken = refreshToken, ExpiresAtUtc = expiresAtUtc, StatusCode = (int)res.StatusCode };
         }
         catch (JsonException)
         {
             return new AuthResult { Success = false, Error = "Invalid response from server.", StatusCode = (int)res.StatusCode };
+        }
+    }
+
+    public async Task<bool> LogoutAsync()
+    {
+        var token = await TokenStorage.GetTokenAsync();
+        if (string.IsNullOrEmpty(token))
+        {
+            await TokenStorage.ClearSessionAsync();
+            return true;
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/api/auth/logout");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var res = await _http.SendAsync(req);
+            if (res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await TokenStorage.ClearSessionAsync();
+                return true;
+            }
+
+            return false;
+        }
+        catch (HttpRequestException)
+        {
+            await TokenStorage.ClearSessionAsync();
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            await TokenStorage.ClearSessionAsync();
+            return true;
+        }
+    }
+
+    public async Task<bool> RefreshTokenAsync()
+    {
+        var refreshToken = await TokenStorage.GetRefreshTokenAsync();
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            await TokenStorage.ClearSessionAsync();
+            return false;
+        }
+
+        var payload = new { refreshToken };
+        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        try
+        {
+            using var res = await _http.PostAsync($"{_baseUrl}/api/auth/refresh", content);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await TokenStorage.ClearSessionAsync();
+                return false;
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Refresh failed: {(int)res.StatusCode} - {body}");
+            }
+
+            var j = JsonDocument.Parse(body);
+            if (!j.RootElement.TryGetProperty("token", out var tokenEl) || !j.RootElement.TryGetProperty("refreshToken", out var refreshedTokenEl))
+            {
+                return false;
+            }
+
+            var newToken = tokenEl.GetString();
+            var newRefreshToken = refreshedTokenEl.GetString();
+            var expiresAt = j.RootElement.TryGetProperty("expiresAtUtc", out var expiryUtcEl) && DateTime.TryParse(expiryUtcEl.GetString(), out var expiryUtc)
+                ? expiryUtc
+                : (j.RootElement.TryGetProperty("expiresAt", out var expiryEl) && DateTime.TryParse(expiryEl.GetString(), out var expiry) ? expiry : DateTime.UtcNow.AddHours(8));
+
+            if (string.IsNullOrWhiteSpace(newToken) || string.IsNullOrWhiteSpace(newRefreshToken))
+            {
+                await TokenStorage.ClearSessionAsync();
+                return false;
+            }
+
+            await TokenStorage.SaveSessionAsync(newToken, newRefreshToken, expiresAt);
+            return true;
+        }
+        catch (HttpRequestException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
     }
 
@@ -113,30 +218,107 @@ public async Task<List<LocationItem>> GetRegionsAsync()
     // New: Get current authenticated user
     public async Task<CCT_USCF.Models.CurrentUser?> GetCurrentUserAsync()
     {
-        // Use token storage wrapper which throws on secure storage failures
         var token = await TokenStorage.GetTokenAsync();
         if (string.IsNullOrEmpty(token)) return null;
+
+        var expiresAtUtc = TokenStorage.GetAccessTokenExpirationUtc();
+        if (expiresAtUtc.HasValue && DateTime.UtcNow >= expiresAtUtc.Value)
+        {
+            var refreshed = false;
+            try
+            {
+                refreshed = await RefreshTokenAsync();
+            }
+            catch (HttpRequestException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+
+            if (!refreshed)
+            {
+                await TokenStorage.ClearSessionAsync();
+                return null;
+            }
+
+            token = await TokenStorage.GetTokenAsync();
+            if (string.IsNullOrEmpty(token)) return null;
+        }
 
         using var req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/auth/me");
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        var res = await _http.SendAsync(req);
-        if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        try
         {
-            // token invalid
-            return null;
-        }
+            var res = await _http.SendAsync(req);
 
-        if (!res.IsSuccessStatusCode)
+            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                var refreshToken = await TokenStorage.GetRefreshTokenAsync();
+                if (!string.IsNullOrWhiteSpace(refreshToken))
+                {
+                    try
+                    {
+                        var refreshed = await RefreshTokenAsync();
+                        if (refreshed)
+                        {
+                            token = await TokenStorage.GetTokenAsync();
+                            if (string.IsNullOrEmpty(token)) return null;
+
+                            using var retryReq = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/auth/me");
+                            retryReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                            var retryRes = await _http.SendAsync(retryReq);
+                            if (retryRes.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                            {
+                                await TokenStorage.ClearSessionAsync();
+                                return null;
+                            }
+                            if (!retryRes.IsSuccessStatusCode)
+                            {
+                                var txt = await retryRes.Content.ReadAsStringAsync();
+                                throw new HttpRequestException($"Unexpected status code from /api/auth/me after refresh: {(int)retryRes.StatusCode} - {txt}");
+                            }
+
+                            var retryJson = await retryRes.Content.ReadAsStringAsync();
+                            var retryUser = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(retryJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            return retryUser;
+                        }
+                    }
+                    catch (HttpRequestException)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                }
+
+                await TokenStorage.ClearSessionAsync();
+                return null;
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var txt = await res.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"Unexpected status code from /api/auth/me: {(int)res.StatusCode} - {txt}");
+            }
+
+            var json = await res.Content.ReadAsStringAsync();
+            var user = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return user;
+        }
+        catch (HttpRequestException)
         {
-            // network/server issue - throw so caller can distinguish
-            var txt = await res.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Unexpected status code from /api/auth/me: {(int)res.StatusCode} - {txt}");
+            throw;
         }
-
-        var json = await res.Content.ReadAsStringAsync();
-        var user = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        return user;
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
     }
 public async Task<List<LocationItem>> GetDistrictsAsync(int regionId)
 {

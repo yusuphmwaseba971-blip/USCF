@@ -1,3 +1,4 @@
+using CCT_USCF.Services;
 using Microsoft.Maui.Storage;
 using System.Text.Json;
 using System.Text;
@@ -38,10 +39,10 @@ public partial class LoginPage : ContentPage
                 return;
             }
 
-            // Save token securely and verify
+            // Save the authenticated session securely and verify it
             try
             {
-                await TokenStorage.SaveTokenAsync(result.Token!);
+                await TokenStorage.SaveSessionAsync(result.Token!, result.RefreshToken, result.ExpiresAtUtc ?? DateTime.UtcNow.AddHours(8));
             }
             catch (Exception ex)
             {
@@ -50,25 +51,22 @@ public partial class LoginPage : ContentPage
                 return;
             }
 
-            // Call /api/auth/me to verify and obtain current user
             CCT_USCF.Models.CurrentUser? user = null;
             try
             {
                 user = await _authService.GetCurrentUserAsync();
             }
-            catch (HttpRequestException hre)
+            catch (HttpRequestException)
             {
-                // network/server issue — keep token but inform the user
-                MessageLabel.Text = "Logged in, but unable to contact server to verify session. Please check your connection.";
+                // network/server issue — keep the persisted session so the app can recover later
+                MessageLabel.Text = "Logged in, but the server could not be reached to verify the session yet. Please try again when your connection is available.";
                 MessageLabel.IsVisible = true;
-                // do not remove token here; allow user to retry
                 return;
             }
 
             if (user == null)
             {
-                // token appears invalid
-                await TokenStorage.RemoveTokenAsync();
+                await TokenStorage.ClearSessionAsync();
                 MessageLabel.Text = "Login failed: server rejected the token.";
                 MessageLabel.IsVisible = true;
                 return;

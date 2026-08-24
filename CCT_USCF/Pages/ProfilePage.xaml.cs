@@ -44,10 +44,16 @@ public partial class ProfilePage : ContentPage
 
     private async void OnLogoutClicked(object sender, EventArgs e)
     {
-        // Remove token and clear current user
-        try { Microsoft.Maui.Storage.SecureStorage.Default.Remove("uscf_token"); } catch {}
+        try
+        {
+            await _authService.LogoutAsync();
+        }
+        catch
+        {
+        }
+
+        await CCT_USCF.Services.TokenStorage.ClearSessionAsync();
         MauiProgram.SetCurrentUser(null);
-        // Notify UI
         MauiProgram.NotifyAuthChanged();
         await Shell.Current.GoToAsync("//home");
     }

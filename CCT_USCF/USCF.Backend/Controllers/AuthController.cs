@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -85,9 +86,83 @@ public class AuthController : ControllerBase
         if (!_hasher.Verify(req.Password, user.PasswordHash))
             return Unauthorized(new { message = "Invalid username/email or password." });
 
-        var token = GenerateToken(user);
+        if (!user.IsActive)
+            return Unauthorized(new { message = "This account is disabled." });
 
-        return Ok(new { token });
+        var accessToken = GenerateToken(user);
+        var refreshToken = CreateRefreshToken();
+        var refreshTokenExpiry = DateTime.UtcNow.AddDays(30);
+
+        user.RefreshTokenHash = HashToken(refreshToken);
+        user.RefreshTokenExpiresAt = refreshTokenExpiry;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            token = accessToken,
+            refreshToken,
+            expiresAtUtc = DateTime.UtcNow.AddHours(8)
+        });
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.RefreshToken))
+            return Unauthorized(new { message = "Refresh token is required." });
+
+        var now = DateTime.UtcNow;
+        var user = await _db.Users
+            .Where(u => u.RefreshTokenHash != null && u.RefreshTokenExpiresAt != null && u.RefreshTokenExpiresAt > now)
+            .ToListAsync();
+
+        foreach (var candidate in user)
+        {
+            if (candidate.RefreshTokenHash == HashToken(req.RefreshToken))
+            {
+                if (!candidate.IsActive)
+                    return Unauthorized(new { message = "This account is disabled." });
+
+                var newAccessToken = GenerateToken(candidate);
+                var newRefreshToken = CreateRefreshToken();
+                var newRefreshExpiry = now.AddDays(30);
+
+                candidate.RefreshTokenHash = HashToken(newRefreshToken);
+                candidate.RefreshTokenExpiresAt = newRefreshExpiry;
+                candidate.UpdatedAt = now;
+                await _db.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    token = newAccessToken,
+                    refreshToken = newRefreshToken,
+                    expiresAtUtc = now.AddHours(8)
+                });
+            }
+        }
+
+        return Unauthorized(new { message = "Refresh token is invalid or expired." });
+    }
+
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
+            return Unauthorized();
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user == null)
+            return Unauthorized();
+
+        user.RefreshTokenHash = null;
+        user.RefreshTokenExpiresAt = null;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { message = "Logged out." });
     }
 
     [Authorize]
@@ -240,6 +315,18 @@ public class AuthController : ControllerBase
         return Ok(outDto);
     }
 
+    private static string CreateRefreshToken()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(64);
+        return Convert.ToBase64String(bytes);
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(bytes);
+    }
+
     private string GenerateToken(User user)
     {
         var key = _config["Authentication:JwtSigningKey"] ?? throw new InvalidOperationException("JwtSigningKey not configured");
@@ -267,4 +354,9 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+}
+
+public class RefreshTokenRequest
+{
+    public string RefreshToken { get; set; } = string.Empty;
 }

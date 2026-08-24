@@ -15,9 +15,8 @@ public static class MauiProgram
 
 	public static void SetCurrentUser(CCT_USCF.Models.CurrentUser? user)
 	{
-CurrentUser = user;
-NotifyAuthChanged();
-	}
+	CurrentUser = user;
+}
 
 	public static CCT_USCF.Services.AuthService CreateAuthServiceForPages()
 	{

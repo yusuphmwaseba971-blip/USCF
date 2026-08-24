@@ -18,6 +18,7 @@ public class USCFDbContext : DbContext
     // Community
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedias => Set<PostMedia>();
+    public DbSet<BibleVerse> BibleVerses => Set<BibleVerse>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,6 +60,13 @@ public class USCFDbContext : DbContext
 
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)
+            .IsUnique();
+
+        modelBuilder.Entity<PostMedia>()
+            .HasIndex(m => new { m.PostId, m.CreatedAt });
+
+        modelBuilder.Entity<BibleVerse>()
+            .HasIndex(v => new { v.Book, v.Chapter, v.VerseNumber })
             .IsUnique();
     }
 }

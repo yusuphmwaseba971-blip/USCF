@@ -1,64 +1,79 @@
 <?xml version="1.0" encoding="utf-8" ?>
-
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.BiblePage"
-    Title="Bible"
-    BackgroundColor="#F8FAFC">
+    Title="Bible">
 
-    <ScrollView>
-        <VerticalStackLayout
-            Padding="20"
-            Spacing="20">
+    <ContentPage.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#CFE7FF" Offset="0"/>
+            <GradientStop Color="#F8FAFC" Offset="1"/>
+        </LinearGradientBrush>
+    </ContentPage.Background>
 
-            <Label
-                Text="📖 Holy Bible"
-                FontSize="30"
-                FontAttributes="Bold"
-                TextColor="#1E40AF" />
+    <Grid>
+        <Border x:Name="BackgroundPanel"
+                StrokeThickness="0"
+                Background="Transparent">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#CFE7FF" Offset="0"/>
+                    <GradientStop Color="#F8FAFC" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
 
-            <Label
-                Text="Read and explore God's Word."
-                FontSize="17"
-                TextColor="#64748B" />
+        <ScrollView>
+            <VerticalStackLayout Padding="20" Spacing="16">
+                <Frame BackgroundColor="#FFFFFFAA" CornerRadius="20" Padding="16" HasShadow="False">
+                    <VerticalStackLayout Spacing="10">
+                        <Label x:Name="LeaderStatusLabel" Text="Leader publishing status" FontSize="16" FontAttributes="Bold" TextColor="#0F172A" />
+                        <Label x:Name="LeaderQuotaLabel" Text="Images today: 0 / 5    Videos today: 0 / 3" FontSize="14" TextColor="#475569" />
+                        <Label Text="Bible Reading" FontSize="24" FontAttributes="Bold" TextColor="#0F172A" />
 
-            <SearchBar
-                Placeholder="Search the Bible..." />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Picker x:Name="BookPicker" Title="Book" SelectedIndexChanged="OnBookChanged" />
+                            <Picker x:Name="ChapterPicker" Title="Chapter" SelectedIndexChanged="OnChapterChanged" Grid.Column="1" />
+                        </Grid>
 
-            <Button
-                Text="Old Testament"
-                FontSize="18" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Picker x:Name="VersePicker" Title="Verse" SelectedIndexChanged="OnVerseChanged" />
+                            <Picker x:Name="FontStylePicker" Title="Font style" SelectedIndexChanged="OnFontStyleChanged" Grid.Column="1" />
+                        </Grid>
 
-            <Button
-                Text="New Testament"
-                FontSize="18" />
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                            <Label Text="Text size" VerticalOptions="Center" TextColor="#334155" />
+                            <Button x:Name="DecreaseFontButton" Text="A-" Grid.Column="1" Clicked="DecreaseFontClicked" />
+                            <Button x:Name="IncreaseFontButton" Text="A+" Grid.Column="2" Clicked="IncreaseFontClicked" />
+                            <CheckBox x:Name="MotionToggle" Grid.Column="3" CheckedChanged="OnMotionToggled" />
+                        </Grid>
 
-            <Border
-                BackgroundColor="White"
-                Padding="20"
-                StrokeThickness="0">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Picker x:Name="BackgroundPicker" Title="Background" SelectedIndexChanged="OnBackgroundChanged" />
+                            <Picker x:Name="BackgroundColorPicker" Title="Background color" SelectedIndexChanged="OnBackgroundColorChanged" Grid.Column="1" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Frame>
 
-                <VerticalStackLayout Spacing="10">
+                <Border BackgroundColor="#FFFFFFCC" StrokeThickness="0" Padding="20" StrokeShape="RoundRectangle 24">
+                    <VerticalStackLayout Spacing="14">
+                        <Label x:Name="VerseHeading" Text="JOHN 3:16" FontAttributes="Bold" FontSize="22" TextColor="#0F172A" />
+                        <Label x:Name="VerseText" Text="For God so loved the world..." FontSize="28" LineHeight="1.4" TextColor="#111827" />
 
-                    <Label
-                        Text="📌 Featured Verse"
-                        FontSize="20"
-                        FontAttributes="Bold" />
+                        <HorizontalStackLayout Spacing="12" HorizontalOptions="Center">
+                            <Button x:Name="PlayButton" Text="▶ Play" Clicked="OnPlayPauseClicked" />
+                            <Button x:Name="StopButton" Text="Stop" Clicked="OnStopAudioClicked" />
+                        </HorizontalStackLayout>
 
-                    <Label
-                        Text="For God so loved the world..."
-                        FontSize="17" />
-
-                    <Label
-                        Text="John 3:16"
-                        TextColor="#64748B" />
-
-                </VerticalStackLayout>
-
-            </Border>
-
-        </VerticalStackLayout>
-    </ScrollView>
-
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <Label x:Name="AudioTimeLabel" Text="0:00" VerticalOptions="Center" TextColor="#475569" />
+                            <Slider x:Name="AudioProgress" Grid.Column="1" Minimum="0" Maximum="30" ValueChanged="OnAudioProgressChanged" />
+                            <Label x:Name="AudioDurationLabel" Text="0:30" VerticalOptions="Center" TextColor="#475569" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
 </ContentPage>

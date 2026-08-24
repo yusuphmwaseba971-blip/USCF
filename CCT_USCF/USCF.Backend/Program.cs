@@ -1,8 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using USCF.Backend.Data;
-using System.Threading.Tasks;
+using USCF.Backend.Options;
+using USCF.Backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.SectionName));
+builder.Services.Configure<UserRetentionOptions>(builder.Configuration.GetSection(UserRetentionOptions.SectionName));
 
 builder.Services.AddDbContext<USCFDbContext>(options =>
     options.UseSqlServer(
@@ -12,12 +16,17 @@ builder.Services.AddDbContext<USCFDbContext>(options =>
 // register services
 builder.Services.AddSingleton<USCF.Backend.Services.IPasswordHasher, USCF.Backend.Services.PasswordHasher>();
 builder.Services.AddScoped<USCF.Backend.Services.IUserService, USCF.Backend.Services.UserService>();
+builder.Services.AddScoped<LeaderMediaPolicyService>();
+builder.Services.AddScoped<MediaStorageService>();
+builder.Services.AddScoped<UserRetentionCleanupService>();
+builder.Services.AddScoped<MediaCleanupService>();
+builder.Services.AddHostedService<MediaCleanupHostedService>();
+builder.Services.AddHostedService<UserRetentionHostedService>();
 
 // Authentication (JWT)
 var jwtKey = builder.Configuration["Authentication:JwtSigningKey"];
 if (string.IsNullOrEmpty(jwtKey))
 {
-    // For development only - require the env or appsettings to be configured in production
     builder.Configuration["Authentication:JwtSigningKey"] = "replace_this_dev_key_change_in_prod_please";
     jwtKey = builder.Configuration["Authentication:JwtSigningKey"];
 }
@@ -41,12 +50,10 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtKey))
     };
 
-    // Diagnostic logging for token validation events (development)
     options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
         {
-            // Log failure reason without logging token
             Console.WriteLine($"[JWT] Authentication failed: {context.Exception.GetType().Name}: {context.Exception.Message}");
             return Task.CompletedTask;
         },
@@ -82,6 +89,12 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<USCF.Backend.Data.USCFDbContext>();
+    db.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment())
 {

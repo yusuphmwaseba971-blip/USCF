@@ -22,6 +22,53 @@ namespace USCF.Backend.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("USCF.Backend.Models.BibleVerse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("AudioDurationSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("AudioFileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("AudioMimeType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AudioReference")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Book")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Chapter")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("VerseNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Book", "Chapter", "VerseNumber")
+                        .IsUnique();
+
+                    b.ToTable("BibleVerses");
+                });
+
             modelBuilder.Entity("USCF.Backend.Models.Branch", b =>
                 {
                     b.Property<int>("Id")
@@ -68,6 +115,93 @@ namespace USCF.Backend.Data.Migrations
                     b.ToTable("Districts");
                 });
 
+            modelBuilder.Entity("USCF.Backend.Models.Post", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Caption")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Posts");
+                });
+
+            modelBuilder.Entity("USCF.Backend.Models.PostMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double?>("Duration")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsTemporary")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("StoragePath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double?>("TrimEnd")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("TrimStart")
+                        .HasColumnType("float");
+
+                    b.Property<Guid?>("UploadedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostId", "CreatedAt");
+
+                    b.ToTable("PostMedias");
+                });
+
             modelBuilder.Entity("USCF.Backend.Models.Region", b =>
                 {
                     b.Property<int>("Id")
@@ -82,8 +216,6 @@ namespace USCF.Backend.Data.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Name");
 
                     b.ToTable("Regions");
                 });
@@ -101,9 +233,7 @@ namespace USCF.Backend.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETUTCDATE()");
+                        .HasColumnType("datetime2");
 
                     b.Property<int?>("DistrictId")
                         .HasColumnType("int");
@@ -135,6 +265,13 @@ namespace USCF.Backend.Data.Migrations
                     b.Property<string>("ProfileImageUrl")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("RefreshTokenExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
                     b.Property<int?>("RegionId")
                         .HasColumnType("int");
 
@@ -149,9 +286,7 @@ namespace USCF.Backend.Data.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETUTCDATE()");
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -160,8 +295,14 @@ namespace USCF.Backend.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("DistrictId");
+
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("RegionId");
 
                     b.HasIndex("Username")
                         .IsUnique();
@@ -191,9 +332,43 @@ namespace USCF.Backend.Data.Migrations
                     b.Navigation("Region");
                 });
 
+            modelBuilder.Entity("USCF.Backend.Models.PostMedia", b =>
+                {
+                    b.HasOne("USCF.Backend.Models.Post", "Post")
+                        .WithMany("Media")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Post");
+                });
+
+            modelBuilder.Entity("USCF.Backend.Models.User", b =>
+                {
+                    b.HasOne("USCF.Backend.Models.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("USCF.Backend.Models.District", null)
+                        .WithMany()
+                        .HasForeignKey("DistrictId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("USCF.Backend.Models.Region", null)
+                        .WithMany()
+                        .HasForeignKey("RegionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("USCF.Backend.Models.District", b =>
                 {
                     b.Navigation("Branches");
+                });
+
+            modelBuilder.Entity("USCF.Backend.Models.Post", b =>
+                {
+                    b.Navigation("Media");
                 });
 
             modelBuilder.Entity("USCF.Backend.Models.Region", b =>

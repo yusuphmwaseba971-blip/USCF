@@ -43,6 +43,11 @@ public class User
 
     public bool IsActive { get; set; } = true;
 
+    [MaxLength(512)]
+    public string? RefreshTokenHash { get; set; }
+
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+
     [MaxLength(50)]
     public string RoleVerificationStatus { get; set; } = "Pending";
 }

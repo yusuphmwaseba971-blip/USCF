@@ -1,0 +1,14 @@
+  Determining projects to restore...
+D:\Projects\CCT_USCF\USCF.Backend\USCF.Backend.csproj : warning NU1903: Package 'Microsoft.OpenApi' 2.3.2 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc
+  All projects are up-to-date for restore.
+D:\Projects\CCT_USCF\USCF.Backend\USCF.Backend.csproj : warning NU1903: Package 'Microsoft.OpenApi' 2.3.2 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc
+  USCF.Backend -> D:\Projects\CCT_USCF\USCF.Backend\bin\Debug\net10.0\USCF.Backend.dll
+
+Build succeeded.
+
+D:\Projects\CCT_USCF\USCF.Backend\USCF.Backend.csproj : warning NU1903: Package 'Microsoft.OpenApi' 2.3.2 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc
+D:\Projects\CCT_USCF\USCF.Backend\USCF.Backend.csproj : warning NU1903: Package 'Microsoft.OpenApi' 2.3.2 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc
+    2 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.70

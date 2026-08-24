@@ -48,8 +48,8 @@ D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\mipma
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\mipmap-xhdpi\appicon_background.png
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\mipmap-hdpi\appicon_background.png
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\mipmap-mdpi\appicon_background.png
-D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\drawable\dotnet_bot.png
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\drawable\icon.jpeg
+D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\resizetizer\r\drawable\dotnet_bot.png
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\mauiimage.stamp
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\mauiimage.outputs
 D:\Projects\CCT_USCF\obj\Debug\net10.0-android\android-arm64\_AndroidResolvedResources.hash
