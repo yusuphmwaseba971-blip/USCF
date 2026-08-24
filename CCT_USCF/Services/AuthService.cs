@@ -31,10 +31,15 @@ public class AuthService
         var payload = new { UsernameOrEmail = usernameOrEmail, Password = password };
         var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
+        var requestUrl = $"{_baseUrl}/api/auth/login";
+        System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync starting request to: {requestUrl}");
+
         try
         {
-            using var res = await _http.PostAsync($"{_baseUrl}/api/auth/login", content);
+            using var res = await _http.PostAsync(requestUrl, content);
             var body = await res.Content.ReadAsStringAsync();
+
+            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync received HTTP {(int)res.StatusCode}");
 
             if (!res.IsSuccessStatusCode)
             {
@@ -49,14 +54,14 @@ public class AuthService
                 var j = JsonDocument.Parse(body);
                 if (!j.RootElement.TryGetProperty("token", out var tokenEl))
                 {
-                    Console.WriteLine("[LOGIN] LoginAsync response missing token property");
+                    System.Diagnostics.Debug.WriteLine("[AUTH] LoginAsync response missing token property");
                     return new AuthResult { Success = false, Error = "Login response missing token.", StatusCode = (int)res.StatusCode };
                 }
 
                 var token = tokenEl.GetString();
                 if (string.IsNullOrEmpty(token))
                 {
-                    Console.WriteLine("[LOGIN] LoginAsync received empty token");
+                    System.Diagnostics.Debug.WriteLine("[AUTH] LoginAsync received empty token");
                     return new AuthResult { Success = false, Error = "Empty token received from server.", StatusCode = (int)res.StatusCode };
                 }
 
@@ -71,28 +76,28 @@ public class AuthService
                     expiresAtUtc = expires;
                 }
 
-                Console.WriteLine("[LOGIN] LoginAsync succeeded, token received");
+                System.Diagnostics.Debug.WriteLine("[AUTH] LoginAsync succeeded, token received");
                 return new AuthResult { Success = true, Token = token, RefreshToken = refreshToken, ExpiresAtUtc = expiresAtUtc, StatusCode = (int)res.StatusCode };
             }
             catch (JsonException je)
             {
-                Console.WriteLine($"[LOGIN] LoginAsync JSON parse error: {je}");
+                System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync JSON parse error: {je}");
                 return new AuthResult { Success = false, Error = "Invalid response from server.", StatusCode = (int)res.StatusCode };
             }
         }
         catch (HttpRequestException hre)
         {
-            Console.WriteLine($"[LOGIN] LoginAsync HTTP request error: {hre.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync HTTP request error: {hre.Message}");
             return new AuthResult { Success = false, Error = "Network error while contacting authentication server.", StatusCode = 0 };
         }
         catch (OperationCanceledException oce)
         {
-            Console.WriteLine($"[LOGIN] LoginAsync canceled: {oce.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync canceled: {oce.Message}");
             return new AuthResult { Success = false, Error = "Login canceled.", StatusCode = 0 };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[LOGIN] LoginAsync unexpected error: {ex}");
+            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync unexpected error: {ex}");
             return new AuthResult { Success = false, Error = "Unexpected error during login.", StatusCode = 0 };
         }
     }

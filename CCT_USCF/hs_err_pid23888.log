@@ -1,0 +1,234 @@
+#
+# There is insufficient memory for the Java Runtime Environment to continue.
+# Native memory allocation (malloc) failed to allocate 1048576 bytes. Error detail: AllocateHeap
+# Possible reasons:
+#   The system is out of physical RAM or swap space
+#   This process is running with CompressedOops enabled, and the Java Heap may be blocking the growth of the native heap
+# Possible solutions:
+#   Reduce memory load on the system
+#   Increase physical memory or swap space
+#   Check if swap backing store is full
+#   Decrease Java heap size (-Xmx/-Xms)
+#   Decrease number of Java threads
+#   Decrease Java thread stack sizes (-Xss)
+#   Set larger code cache with -XX:ReservedCodeCacheSize=
+#   JVM is running with Unscaled Compressed Oops mode in which the Java heap is
+#     placed in the first 4GB address space. The Java Heap base address is the
+#     maximum limit for the native heap growth. Please use -XX:HeapBaseMinAddress
+#     to set the Java Heap base and to place the Java Heap above 4GB virtual address.
+# This output file may be truncated or incomplete.
+#
+#  Out of Memory Error (allocation.cpp:44), pid=23888, tid=22640
+#
+# JRE version:  (21.0.12+8) (build )
+# Java VM: OpenJDK 64-Bit Server VM (21.0.12+8-LTS, mixed mode, sharing, tiered, compressed oops, compressed class ptrs, g1 gc, windows-amd64)
+# No core dump will be written. Minidumps are not enabled by default on client versions of Windows
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: -Xmx1G com.android.tools.r8.D8 --debug --min-api 21 --output obj\Debug\net10.0-android\android-arm64\android\bin\ --lib C:\Users\Yusuph\AppData\Local\Android\Sdk\platforms\android-36\android.jar obj\Debug\net10.0-android\android-arm64\android\bin\classes.zip C:\Program Files\dotnet\packs\Microsoft.Android.Ref.36\36.1.69\ref\net10.0\mono.android.jar C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\\java_runtime_net6.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.annotation.jvm\1.9.1.5\buildTransitive\net10.0-android35.0\..\..\jar\androidx.annotation.annotation-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.collection.jvm\1.5.0.3\buildTransitive\net10.0-android35.0\..\..\jar\androidx.collection.collection-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.annotation\1.9.1.5\buildTransitive\net10.0-android35.0\..\..\jar\androidx.annotation.annotation.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.collection\1.5.0.3\buildTransitive\net10.0-android35.0\..\..\jar\androidx.collection.collection.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.concurrent.futures\1.3.0.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.concurrent.concurrent-futures.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.lifecycle.common.jvm\2.9.2.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.lifecycle.lifecycle-common-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.lifecycle.common\2.9.2.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.lifecycle.lifecycle-common.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.arch.core.common\2.2.0.18\buildTransitive\net10.0-android35.0\..\..\jar\androidx.arch.core.core-common.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.resourceinspection.annotation\1.0.1.22\buildTransitive\net10.0-android35.0\..\..\jar\androidx.resourceinspection.resourceinspection-annotation.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.constraintlayout.core\1.1.1.3\buildTransitive\net10.0-android35.0\..\..\jar\androidx.constraintlayout.constraintlayout-core.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.window.windowcore.jvm\1.4.0.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.window.window-core-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.window.windowcore\1.4.0.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.window.window-core.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.collection.ktx\1.5.0.3\buildTransitive\net10.0-android35.0\..\..\jar\androidx.collection.collection-ktx.jar C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Runtime.Mono.android-arm64\10.0.10\runtimes\android-arm64\native\libSystem.Security.Cryptography.Native.Android.jar obj\Debug\net10.0-android\android-arm64\lp\98\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\99\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\101\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\102\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\103\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\104\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\105\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\107\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\108\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\109\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\110\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\111\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\112\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\113\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\115\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\116\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\117\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\119\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\120\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\121\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\123\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\124\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\125\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\126\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\127\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\128\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\129\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\130\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\131\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\131\jl\libs\repackaged.jar obj\Debug\net10.0-android\android-arm64\lp\132\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\133\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\134\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\135\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\136\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\137\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\138\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\139\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\140\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\141\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\142\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\143\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\144\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\145\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\146\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\148\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\149\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\151\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\152\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\154\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\155\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\156\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\157\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\158\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\159\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\160\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\161\jl\libs\ED64959F88B22E6D.jar obj\Debug\net10.0-android\android-arm64\lp\162\jl\libs\2E7FD15AFA9B216B.jar obj\Debug\net10.0-android\android-arm64\lp\164\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\167\jl\libs\659D48BEBA477FDD.jar obj\Debug\net10.0-android\android-arm64\lp\168\jl\libs\95D547F40BE4687C.jar obj\Debug\net10.0-android\android-arm64\lp\169\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\170\jl\classes.jar obj\Debug\net10.0-android\android-arm64\lp\171\jl\libs\F975D0960055A5E3.jar obj\Debug\net10.0-android\android-arm64\lp\172\jl\libs\B71CFF5D5A0B3AEB.jar obj\Debug\net10.0-android\android-arm64\lp\173\jl\libs\8956669C0037225B.jar obj\Debug\net10.0-android\android-arm64\lp\174\jl\libs\05D34BA5CA8637CF.jar obj\Debug\net10.0-android\android-arm64\lp\175\jl\libs\DCFB018199B59345.jar obj\Debug\net10.0-android\android-arm64\lp\176\jl\libs\F91D79B39A269A7E.jar obj\Debug\net10.0-android\android-arm64\lp\177\jl\libs\F01C7EADE990A004.jar obj\Debug\net10.0-android\android-arm64\lp\178\jl\libs\F6DB49E0CC905A9A.jar obj\Debug\net10.0-android\android-arm64\lp\179\jl\libs\A1A754E9E8693F85.jar obj\Debug\net10.0-android\android-arm64\lp\180\jl\libs\B7446A23346A729D.jar obj\Debug\net10.0-android\android-arm64\lp\181\jl\libs\623E6E29E2058512.jar --map-diagnostics warning info
+
+Host: Intel(R) Core(TM) i5-8265U CPU @ 1.60GHz, 8 cores, 7G,  Windows 11 , 64 bit Build 26100 (10.0.26100.8972)
+Time: Mon Aug 24 18:27:47 2026 E. Africa Standard Time elapsed time: 2.088137 seconds (0d 0h 0m 2s)
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x000001578e22eda0):  JavaThread "Unknown thread" [_thread_in_vm, id=22640, stack(0x0000000f5d700000,0x0000000f5d800000) (1024K)]
+
+Stack: [0x0000000f5d700000,0x0000000f5d800000]
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+V  [jvm.dll+0x6e0c09]  (no source info available)
+V  [jvm.dll+0x8c0e1b]  (no source info available)
+V  [jvm.dll+0x8c33ad]  (no source info available)
+V  [jvm.dll+0x8c3a83]  (no source info available)
+V  [jvm.dll+0x28ac66]  (no source info available)
+V  [jvm.dll+0xc3d77]  (no source info available)
+V  [jvm.dll+0x3391c5]  (no source info available)
+V  [jvm.dll+0x88b312]  (no source info available)
+V  [jvm.dll+0x3ce861]  (no source info available)
+V  [jvm.dll+0x87423c]  (no source info available)
+V  [jvm.dll+0x462471]  (no source info available)
+V  [jvm.dll+0x4640b1]  (no source info available)
+C  [jli.dll+0x52f8]  (no source info available)
+C  [ucrtbase.dll+0x2cd30]  (no source info available)
+C  [KERNEL32.DLL+0x2ccb7]  (no source info available)
+C  [ntdll.dll+0xaad6c]  (no source info available)
+
+
+---------------  P R O C E S S  ---------------
+
+Threads class SMR info:
+_java_thread_list=0x00007fff0e7d8288, length=0, elements={
+}
+
+Java Threads: ( => current thread )
+Total: 0
+
+Other Threads:
+
+=>0x000001578e22eda0 (exited) JavaThread "Unknown thread"    [_thread_in_vm, id=22640, stack(0x0000000f5d700000,0x0000000f5d800000) (1024K)]
+Total: 1
+
+Threads with active compile tasks:
+Total: 0
+
+VM state: not at safepoint (not fully initialized)
+
+VM Mutex/Monitor currently owned by a thread: None
+
+Heap address: 0x0000000000000000, size: 0 MB, Compressed Oops mode: 32-bit
+
+CDS archive(s) mapped at: [0x0000000000000000-0x0000000000000000-0x0000000000000000), size 0, SharedBaseAddress: 0x0000000800000000, ArchiveRelocationMode: 1.
+Narrow klass base: 0x0000000000000000, Narrow klass shift: 0, Narrow klass range: 0x0
+
+GC Precious Log:
+ CardTable entry size: 512
+ Card Set container configuration: InlinePtr #cards 5 size 8 Array Of Cards #cards 12 size 40 Howl #buckets 4 coarsen threshold 1843 Howl Bitmap #cards 512 size 80 coarsen threshold 460 Card regions per heap region 1 cards per card region 2048
+
+GC Heap History (0 events):
+No events
+
+Dll operation events (2 events):
+Event: 0.039 Attempting to load shared library C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\java.dll
+Event: 0.040 Loaded shared library C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\java.dll
+
+Deoptimization events (0 events):
+No events
+
+Classes loaded (0 events):
+No events
+
+Classes unloaded (0 events):
+No events
+
+Classes redefined (0 events):
+No events
+
+Internal exceptions (0 events):
+No events
+
+ZGC Phase Switch (0 events):
+No events
+
+VM Operations (0 events):
+No events
+
+Memory protections (0 events):
+No events
+
+Nmethod flushes (0 events):
+No events
+
+Events (0 events):
+No events
+
+
+Dynamic libraries:
+0x00007ff7f9940000 - 0x00007ff7f994e000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\java.exe
+0x00007ffff9360000 - 0x00007ffff95c6000 	C:\WINDOWS\SYSTEM32\ntdll.dll
+0x00007ffff84e0000 - 0x00007ffff85a9000 	C:\WINDOWS\System32\KERNEL32.DLL
+0x00007ffff6790000 - 0x00007ffff6b8f000 	C:\WINDOWS\System32\KERNELBASE.dll
+0x00007ffff6570000 - 0x00007ffff66bc000 	C:\WINDOWS\System32\ucrtbase.dll
+0x00007fffd5af0000 - 0x00007fffd5b08000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\jli.dll
+0x00007fffd4ad0000 - 0x00007fffd4aee000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\VCRUNTIME140.dll
+0x00007ffff7ae0000 - 0x00007ffff7ca6000 	C:\WINDOWS\System32\USER32.dll
+0x00007fffe19d0000 - 0x00007fffe1c61000 	C:\WINDOWS\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.26100.8972_none_3e0da176e32f9d4b\COMCTL32.dll
+0x00007ffff7e50000 - 0x00007ffff7ef9000 	C:\WINDOWS\System32\msvcrt.dll
+0x00007ffff6ba0000 - 0x00007ffff6bc7000 	C:\WINDOWS\System32\win32u.dll
+0x00007ffff7990000 - 0x00007ffff79bb000 	C:\WINDOWS\System32\GDI32.dll
+0x00007ffff6bd0000 - 0x00007ffff6cf9000 	C:\WINDOWS\System32\gdi32full.dll
+0x00007ffff6d00000 - 0x00007ffff6da3000 	C:\WINDOWS\System32\msvcp_win.dll
+0x00007ffff84a0000 - 0x00007ffff84d2000 	C:\WINDOWS\System32\IMM32.DLL
+0x00007ffff0950000 - 0x00007ffff095c000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\vcruntime140_1.dll
+0x00007fff52bc0000 - 0x00007fff52c49000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\msvcp140.dll
+0x00007fff0db80000 - 0x00007fff0e92f000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\server\jvm.dll
+0x00007ffff7d70000 - 0x00007ffff7e2c000 	C:\WINDOWS\System32\ADVAPI32.dll
+0x00007ffff9270000 - 0x00007ffff9319000 	C:\WINDOWS\System32\sechost.dll
+0x00007ffff79c0000 - 0x00007ffff7ad8000 	C:\WINDOWS\System32\RPCRT4.dll
+0x00007ffff8410000 - 0x00007ffff8492000 	C:\WINDOWS\System32\WS2_32.dll
+0x00007ffff63f0000 - 0x00007ffff644e000 	C:\WINDOWS\SYSTEM32\POWRPROF.dll
+0x00007fffd9bd0000 - 0x00007fffd9c06000 	C:\WINDOWS\SYSTEM32\WINMM.dll
+0x00007fffdda50000 - 0x00007fffdda5b000 	C:\WINDOWS\SYSTEM32\VERSION.dll
+0x00007ffff63d0000 - 0x00007ffff63e5000 	C:\WINDOWS\SYSTEM32\UMPDC.dll
+0x00007ffff5220000 - 0x00007ffff523b000 	C:\WINDOWS\SYSTEM32\kernel.appcore.dll
+0x00007fff86830000 - 0x00007fff8683a000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\jimage.dll
+0x00007ffff3aa0000 - 0x00007ffff3ce2000 	C:\WINDOWS\SYSTEM32\DBGHELP.DLL
+0x00007ffff8e60000 - 0x00007ffff91e5000 	C:\WINDOWS\System32\combase.dll
+0x00007ffff82d0000 - 0x00007ffff83a9000 	C:\WINDOWS\System32\OLEAUT32.dll
+0x00007fffe2430000 - 0x00007fffe246b000 	C:\WINDOWS\SYSTEM32\dbgcore.DLL
+0x00007ffff6e40000 - 0x00007ffff6eec000 	C:\WINDOWS\System32\bcryptPrimitives.dll
+0x00007fff55630000 - 0x00007fff55651000 	C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\java.dll
+
+JVMTI agents: none
+
+dbghelp: loaded successfully - version: 4.0.5 - missing functions: none
+symbol engine: initialized successfully - sym options: 0x614 - pdb path: .;C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin;C:\WINDOWS\SYSTEM32;C:\WINDOWS\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.26100.8972_none_3e0da176e32f9d4b;C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin\server
+
+VM Arguments:
+jvm_args: -Xmx1G 
+java_command: com.android.tools.r8.D8 --debug --min-api 21 --output obj\Debug\net10.0-android\android-arm64\android\bin\ --lib C:\Users\Yusuph\AppData\Local\Android\Sdk\platforms\android-36\android.jar obj\Debug\net10.0-android\android-arm64\android\bin\classes.zip C:\Program Files\dotnet\packs\Microsoft.Android.Ref.36\36.1.69\ref\net10.0\mono.android.jar C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\\java_runtime_net6.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.annotation.jvm\1.9.1.5\buildTransitive\net10.0-android35.0\..\..\jar\androidx.annotation.annotation-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.collection.jvm\1.5.0.3\buildTransitive\net10.0-android35.0\..\..\jar\androidx.collection.collection-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.annotation\1.9.1.5\buildTransitive\net10.0-android35.0\..\..\jar\androidx.annotation.annotation.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.collection\1.5.0.3\buildTransitive\net10.0-android35.0\..\..\jar\androidx.collection.collection.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.concurrent.futures\1.3.0.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.concurrent.concurrent-futures.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.lifecycle.common.jvm\2.9.2.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.lifecycle.lifecycle-common-jvm.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.lifecycle.common\2.9.2.1\buildTransitive\net10.0-android35.0\..\..\jar\androidx.lifecycle.lifecycle-common.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.arch.core.common\2.2.0.18\buildTransitive\net10.0-android35.0\..\..\jar\androidx.arch.core.core-common.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.resourceinspection.annotation\1.0.1.22\buildTransitive\net10.0-android35.0\..\..\jar\androidx.resourceinspection.resourceinspection-annotation.jar C:\Users\Yusuph\.nuget\packages\xamarin.androidx.constraintlayout.core\1.1.1.3\buildTr
+java_class_path (initial): C:\Program Files\dotnet\packs\Microsoft.Android.Sdk.Windows\36.1.69\tools\r8.jar
+Launcher Type: SUN_STANDARD
+
+[Global flags]
+     intx CICompilerCount                          = 4                                         {product} {ergonomic}
+     uint ConcGCThreads                            = 2                                         {product} {ergonomic}
+     uint G1ConcRefinementThreads                  = 8                                         {product} {ergonomic}
+   size_t G1HeapRegionSize                         = 1048576                                   {product} {ergonomic}
+    uintx GCDrainStackTargetSize                   = 64                                        {product} {ergonomic}
+   size_t InitialHeapSize                          = 132120576                                 {product} {ergonomic}
+   size_t MarkStackSize                            = 4194304                                   {product} {ergonomic}
+   size_t MaxHeapSize                              = 1073741824                                {product} {command line}
+   size_t MinHeapDeltaBytes                        = 1048576                                   {product} {ergonomic}
+   size_t MinHeapSize                              = 8388608                                   {product} {ergonomic}
+    uintx NonNMethodCodeHeapSize                   = 5839372                                {pd product} {ergonomic}
+    uintx NonProfiledCodeHeapSize                  = 122909434                              {pd product} {ergonomic}
+    uintx ProfiledCodeHeapSize                     = 122909434                              {pd product} {ergonomic}
+    uintx ReservedCodeCacheSize                    = 251658240                              {pd product} {ergonomic}
+     bool SegmentedCodeCache                       = true                                      {product} {ergonomic}
+   size_t SoftMaxHeapSize                          = 1073741824                             {manageable} {ergonomic}
+     bool UseCompressedOops                        = true                           {product lp64_product} {ergonomic}
+     bool UseG1GC                                  = true                                      {product} {ergonomic}
+     bool UseLargePagesIndividualAllocation        = false                                  {pd product} {ergonomic}
+
+Logging:
+Log output configuration:
+ #0: stdout all=warning uptime,level,tags foldmultilines=false
+ #1: stderr all=off uptime,level,tags foldmultilines=false
+
+Release file:
+<release file has not been read>
+Environment Variables:
+JAVA_HOME=C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\
+PATH=C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.4.0_x64__8wekyb3d8bbwe;C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files\dotnet\;C:\Program Files (x86)\Microsoft SQL Server\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\180\Tools\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;D:\PROGRAM FILE\Git\cmd;C:\Program Files\Git\cmd;C:\Program Files\Process Lasso\;D:\Android\;C:\Users\Yusuph\AppData\Local\Microsoft\WindowsApps;D:\Android\Microsoft VS Code\bin;C:\Users\Yusuph\AppData\Local\GitHubDesktop\bin;C:\flutter\bin;C:\Users\Yusuph\.dotnet\tools;C:\Users\Yusuph\AppData\Roaming\npm;C:\Users\Yusuph\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\Yusuph\AppData\Local\Programs\Ollama;C:\Users\Yusuph\AppData\Local\Android\Sdk\platform-tools;C:\Users\Yusuph\AppData\Local\Android\Sdk\cmdline-tools\latest\bin;C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot\bin;c:\Users\Yusuph\AppData\Local\Programs\Microsoft VS Code\110a328ea5\resources\app\node_modules.asar.unpacked\@vscode\ripgrep-universal\bin\win32-x64
+USERNAME=Yusuph
+OS=Windows_NT
+PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 142 Stepping 12, GenuineIntel
+TMP=C:\Users\Yusuph\AppData\Local\Temp
+TEMP=C:\Users\Yusuph\AppData\Local\Temp
+
+
+
+
+Periodic native trim disabled
+
+---------------  S Y S T E M  ---------------
+
+OS:
+ Windows 11 , 64 bit Build 26100 (10.0.26100.8972)
+OS uptime: 0 days 20:25 hours
+Hyper-V role detected
+
+CPU: total 8 (initial active 8) (4 cores per cpu, 2 threads per core) family 6 model 142 stepping 12 microcode 0x100, cx8, cmov, fxsr, ht, mmx, 3dnowpref, sse, sse2, sse3, ssse3, sse4.1, sse4.2, popcnt, lzcnt, tsc, tscinvbit, avx, avx2, aes, erms, clmul, bmi1, bmi2, adx, fma, vzeroupper, clflush, clflushopt, hv, rdtscp, f16c
+Processor Information for the first 8 processors :
+  Max Mhz: 1800, Current Mhz: 1600, Mhz Limit: 1584
+
+Memory: 4k page, system-wide physical 8006M (310M free)
+TotalPageFile size 20820M (AvailPageFile size 18M)
+current process WorkingSet (physical memory assigned to process): 12M, peak: 12M
+current process commit charge ("private bytes"): 18M, peak: 19M
+
+vm_info: OpenJDK 64-Bit Server VM (21.0.12+8-LTS) for windows-amd64 JRE (21.0.12+8-LTS), built on 2026-07-14T17:50:36Z by "MicrosoftCorporation" with MS VC++ 17.14 (VS2022)
+
+END.
