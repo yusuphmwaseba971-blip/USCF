@@ -19,6 +19,7 @@ public class USCFDbContext : DbContext
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedias => Set<PostMedia>();
     public DbSet<BibleVerse> BibleVerses => Set<BibleVerse>();
+    public DbSet<PrayerRequest> PrayerRequests => Set<PrayerRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,5 +69,8 @@ public class USCFDbContext : DbContext
         modelBuilder.Entity<BibleVerse>()
             .HasIndex(v => new { v.Book, v.Chapter, v.VerseNumber })
             .IsUnique();
+
+        modelBuilder.Entity<PrayerRequest>()
+            .HasIndex(p => new { p.UserId, p.CreatedAtUtc });
     }
 }

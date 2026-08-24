@@ -41,6 +41,8 @@ builder
 // Use centralized API base URL from ApiConfig
 builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri(CCT_USCF.Services.ApiConfig.BaseUrl) });
 builder.Services.AddSingleton<CCT_USCF.Services.AuthService>();
+            // Community API for prayer requests and other community features
+            builder.Services.AddSingleton<CCT_USCF.Services.CommunityService>();
 
 #if ANDROID
 // Register Android audio player implementation for platform-specific playback

@@ -38,14 +38,18 @@
                         FontAttributes="Bold" />
 
                     <Entry
+                        x:Name="TitleEntry"
                         Placeholder="Prayer title" />
 
                     <Editor
+                        x:Name="DescriptionEditor"
                         Placeholder="Write your prayer request..."
                         HeightRequest="150" />
 
                     <Button
-                        Text="🙏 Submit Prayer Request" />
+                        x:Name="SubmitButton"
+                        Text="🙏 Submit Prayer Request"
+                        Clicked="OnSubmitClicked" />
 
                 </VerticalStackLayout>
 

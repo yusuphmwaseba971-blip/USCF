@@ -53,10 +53,16 @@ public partial class AppShell : Shell
             }
 
             var localUser = TryGetUserFromToken(token);
-            if (localUser != null)
+                        if (localUser == null)
             {
-                MauiProgram.SetCurrentUser(localUser);
-            }
+                            // try to restore cached user profile if JWT payload not available or token is opaque
+                            localUser = CCT_USCF.Services.TokenStorage.GetCachedUser();
+                        }
+
+                        if (localUser != null)
+                        {
+                            MauiProgram.SetCurrentUser(localUser);
+                        }
 
             var auth = MauiProgram.CreateAuthServiceForPages();
             try
@@ -64,14 +70,18 @@ public partial class AppShell : Shell
                 var user = await auth.GetCurrentUserAsync();
                 if (user == null)
                 {
-                    await CCT_USCF.Services.TokenStorage.ClearSessionAsync();
-                    ClearAuthenticatedState();
-                    return;
-                }
+                                    // Explicit rejection from server — clear session
+                                    await CCT_USCF.Services.TokenStorage.ClearSessionAsync();
+                                    ClearAuthenticatedState();
+                                    return;
+                                }
 
-                MauiProgram.SetCurrentUser(user);
-                ShowAuthenticatedState();
-                return;
+                                // Save server-returned user to cached profile for offline use
+                                await CCT_USCF.Services.TokenStorage.SaveCachedUserAsync(user);
+
+                                MauiProgram.SetCurrentUser(user);
+                                ShowAuthenticatedState();
+                                return;
             }
             catch (UnauthorizedAccessException)
             {
@@ -135,7 +145,7 @@ public partial class AppShell : Shell
         MauiProgram.SetCurrentUser(null);
     }
 
-    private static CCT_USCF.Models.CurrentUser? TryGetUserFromToken(string token)
+    public static CCT_USCF.Models.CurrentUser? TryGetUserFromToken(string token)
     {
         try
         {

@@ -6,7 +6,8 @@ namespace CCT_USCF.Services
 {
     public static class TokenStorage
     {
-        private const string AccessTokenKey = "uscf_access_token";
+        private const string AccessTokenKey = "uscf_token"; // primary key required by requirement
+        private const string LegacyAccessTokenKey = "uscf_access_token"; // fallback to migrate old installs
         private const string RefreshTokenKey = "uscf_refresh_token";
         private const string AccessTokenExpiresAtKey = "uscf_access_token_expires_at";
 
@@ -47,13 +48,27 @@ namespace CCT_USCF.Services
         {
             try
             {
-                return await SecureStorage.Default.GetAsync(AccessTokenKey);
-            }
-            catch (Exception)
-            {
-                throw new Exception("Unable to access secure storage on this device.");
-            }
-        }
+                        // Try primary key first
+                        var token = await SecureStorage.Default.GetAsync(AccessTokenKey);
+                        if (!string.IsNullOrEmpty(token)) return token;
+
+                        // Fallback: try legacy key and migrate if found
+                        var legacy = await SecureStorage.Default.GetAsync(LegacyAccessTokenKey);
+                        if (!string.IsNullOrEmpty(legacy))
+                        {
+                            // migrate to new key
+                            await SecureStorage.Default.SetAsync(AccessTokenKey, legacy);
+                            SecureStorage.Default.Remove(LegacyAccessTokenKey);
+                            return legacy;
+                        }
+
+                        return null;
+                    }
+                    catch (Exception)
+                    {
+                        throw new Exception("Unable to access secure storage on this device.");
+                    }
+                }
 
         public static async Task<string?> GetRefreshTokenAsync()
         {
@@ -87,19 +102,64 @@ namespace CCT_USCF.Services
             return !string.IsNullOrEmpty(t);
         }
 
+                private const string CachedUserKey = "uscf_user";
+
+                public static async Task SaveCachedUserAsync(CCT_USCF.Models.CurrentUser user)
+                {
+                    try
+                    {
+                        if (user == null) return;
+                        var json = System.Text.Json.JsonSerializer.Serialize(user);
+                        Preferences.Default.Set(CachedUserKey, json);
+                        await Task.CompletedTask;
+                    }
+                    catch
+                    {
+                        // swallow caching errors — caching is optional
+                    }
+                }
+
+                public static CCT_USCF.Models.CurrentUser? GetCachedUser()
+                {
+                    try
+                    {
+                        var json = Preferences.Default.Get(CachedUserKey, string.Empty);
+                        if (string.IsNullOrWhiteSpace(json)) return null;
+                        return System.Text.Json.JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(json);
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                }
+
+                public static void RemoveCachedUser()
+                {
+                    try
+                    {
+                        Preferences.Default.Remove(CachedUserKey);
+                    }
+                    catch
+                    {
+                    }
+                }
+
         public static async Task ClearSessionAsync()
         {
             try
             {
                 SecureStorage.Default.Remove(AccessTokenKey);
-                SecureStorage.Default.Remove(RefreshTokenKey);
-            }
-            catch
-            {
-            }
+                        SecureStorage.Default.Remove(LegacyAccessTokenKey);
+                        SecureStorage.Default.Remove(RefreshTokenKey);
+                    }
+                    catch
+                    {
+                    }
 
-            Preferences.Default.Remove(AccessTokenExpiresAtKey);
-        }
+                    Preferences.Default.Remove(AccessTokenExpiresAtKey);
+                    RemoveCachedUser();
+                    await Task.CompletedTask;
+                }
 
         public static Task RemoveTokenAsync()
         {
