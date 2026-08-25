@@ -20,6 +20,7 @@ public class USCFDbContext : DbContext
     public DbSet<PostMedia> PostMedias => Set<PostMedia>();
     public DbSet<BibleVerse> BibleVerses => Set<BibleVerse>();
     public DbSet<PrayerRequest> PrayerRequests => Set<PrayerRequest>();
+    public DbSet<USCF.Backend.Models.BiblePost> BiblePosts => Set<USCF.Backend.Models.BiblePost>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

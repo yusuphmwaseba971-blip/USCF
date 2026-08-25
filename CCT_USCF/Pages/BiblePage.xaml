@@ -71,6 +71,9 @@
                             <Slider x:Name="AudioProgress" Grid.Column="1" Minimum="0" Maximum="30" ValueChanged="OnAudioProgressChanged" />
                             <Label x:Name="AudioDurationLabel" Text="0:30" VerticalOptions="Center" TextColor="#475569" />
                         </Grid>
+                        <HorizontalStackLayout HorizontalOptions="Center" Spacing="12">
+                            <Button Text="📖 Post Bible Reading" Clicked="OnPostBibleClicked" />
+                        </HorizontalStackLayout>
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>

@@ -73,5 +73,52 @@ namespace CCT_USCF.Services
             using var res = await _http.SendAsync(req);
             return res.IsSuccessStatusCode;
         }
+
+        // Bible posts
+        public async Task<List<CCT_USCF.Models.BiblePostDto>> GetBiblePostsAsync(int limit = 50)
+        {
+            using var res = await _http.GetAsync($"{_baseUrl}/api/community/bible?limit={limit}");
+            if (!res.IsSuccessStatusCode) return new List<CCT_USCF.Models.BiblePostDto>();
+            var json = await res.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<List<CCT_USCF.Models.BiblePostDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CCT_USCF.Models.BiblePostDto>();
+        }
+
+        public async Task<CCT_USCF.Models.BiblePostDto?> CreateBiblePostAsync(CCT_USCF.Models.BiblePostCreateDto dto)
+        {
+            var token = await TokenStorage.GetTokenAsync();
+            if (string.IsNullOrEmpty(token)) throw new Exception("Not authenticated");
+            var content = new StringContent(JsonSerializer.Serialize(dto), Encoding.UTF8, "application/json");
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/api/community/bible") { Content = content };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var res = await _http.SendAsync(req);
+            var body = await res.Content.ReadAsStringAsync();
+            if (!res.IsSuccessStatusCode)
+            {
+                throw new Exception($"Failed to create bible post: {(int)res.StatusCode} - {body}");
+            }
+            return JsonSerializer.Deserialize<CCT_USCF.Models.BiblePostDto>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+
+        public async Task<List<CCT_USCF.Models.BiblePostDto>> GetMyBiblePostsAsync()
+        {
+            var token = await TokenStorage.GetTokenAsync();
+            if (string.IsNullOrEmpty(token)) return new List<CCT_USCF.Models.BiblePostDto>();
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/community/bible/mine");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var res = await _http.SendAsync(req);
+            if (!res.IsSuccessStatusCode) return new List<CCT_USCF.Models.BiblePostDto>();
+            var json = await res.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<List<CCT_USCF.Models.BiblePostDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CCT_USCF.Models.BiblePostDto>();
+        }
+
+        public async Task<bool> DeleteBiblePostAsync(System.Guid id)
+        {
+            var token = await TokenStorage.GetTokenAsync();
+            if (string.IsNullOrEmpty(token)) throw new Exception("Not authenticated");
+            using var req = new HttpRequestMessage(HttpMethod.Delete, $"{_baseUrl}/api/community/bible/{id}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var res = await _http.SendAsync(req);
+            return res.IsSuccessStatusCode;
+        }
     }
 }

@@ -40,13 +40,30 @@ public partial class BiblePage : ContentPage
         LoadPreferences();
         _ = LoadLeaderStatusAsync();
         UpdatePresentation();
+
+        // Load Bible data from local resource
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
+                await bs.InitializeAsync();
+                var books = await bs.GetBooksAsync();
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    BookPicker.ItemsSource = books;
+                    if (books.Count > 0) BookPicker.SelectedIndex = 0;
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Bible load failed: {ex.Message}");
+            }
+        });
     }
 
     private void InitializeSelections()
     {
-        BookPicker.ItemsSource = _books;
-        BookPicker.SelectedItem = "John";
-
         var defaultFontStyles = new[] { "Default", "Serif", "Sans Serif", "Reading", "Classic" };
         FontStylePicker.ItemsSource = defaultFontStyles;
         FontStylePicker.SelectedItem = "Default";
@@ -173,45 +190,59 @@ public partial class BiblePage : ContentPage
         };
     }
 
-    private void OnBookChanged(object? sender, EventArgs e)
+    private async void OnBookChanged(object? sender, EventArgs e)
     {
         var selectedBook = BookPicker.SelectedItem as string;
         if (string.IsNullOrWhiteSpace(selectedBook)) return;
 
-        var chapters = Enumerable.Range(1, _chapterCounts.GetValueOrDefault(selectedBook, 1)).ToList();
-        ChapterPicker.ItemsSource = chapters;
-        ChapterPicker.SelectedItem = 1;
-        UpdateVerseSelection();
+        try
+        {
+            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
+            var chapters = await bs.GetChaptersAsync(selectedBook);
+            ChapterPicker.ItemsSource = chapters;
+            if (chapters.Count > 0) ChapterPicker.SelectedItem = chapters[0];
+            else ChapterPicker.SelectedItem = 1;
+            UpdateVerseSelection();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"OnBookChanged error: {ex.Message}");
+        }
     }
 
     private void OnChapterChanged(object? sender, EventArgs e)
     {
-        UpdateVerseSelection();
+        _ = Task.Run(async () => await MainThread.InvokeOnMainThreadAsync(UpdateVerseSelection));
     }
 
     private void OnVerseChanged(object? sender, EventArgs e)
     {
-        UpdateVerseText();
+        _ = Task.Run(async () => await MainThread.InvokeOnMainThreadAsync(UpdateVerseText));
     }
 
-    private void UpdateVerseSelection()
+    private async Task UpdateVerseSelection()
     {
         var selectedBook = BookPicker.SelectedItem as string;
         var selectedChapter = (int?)ChapterPicker.SelectedItem ?? 1;
 
         if (string.IsNullOrWhiteSpace(selectedBook)) return;
 
-        var verseNumbers = _verses.GetValueOrDefault(selectedBook, new Dictionary<int, string[]>())
-            .GetValueOrDefault(selectedChapter, new[] { "For God so loved the world..." })
-            .Select((_, index) => index + 1)
-            .ToArray();
-
-        VersePicker.ItemsSource = verseNumbers;
-        VersePicker.SelectedItem = 1;
-        UpdateVerseText();
+        try
+        {
+            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
+            var verses = await bs.GetVersesAsync(selectedBook, selectedChapter);
+            var verseNumbers = Enumerable.Range(1, Math.Max(1, verses.Count)).ToArray();
+            VersePicker.ItemsSource = verseNumbers;
+            VersePicker.SelectedItem = 1;
+            await UpdateVerseText();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"UpdateVerseSelection error: {ex.Message}");
+        }
     }
 
-    private void UpdateVerseText()
+    private async Task UpdateVerseText()
     {
         var selectedBook = BookPicker.SelectedItem as string;
         var selectedChapter = (int?)ChapterPicker.SelectedItem ?? 1;
@@ -219,19 +250,20 @@ public partial class BiblePage : ContentPage
 
         if (string.IsNullOrWhiteSpace(selectedBook)) return;
 
-        var verseText = _verses.GetValueOrDefault(selectedBook, new Dictionary<int, string[]>())
-            .GetValueOrDefault(selectedChapter, new[] { "For God so loved the world..." })
-            .ElementAtOrDefault(selectedVerse - 1);
-
-        if (string.IsNullOrWhiteSpace(verseText))
+        try
         {
-            verseText = "For God so loved the world...";
+            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
+            var verseText = await bs.GetVerseAsync(selectedBook, selectedChapter, selectedVerse);
+            if (string.IsNullOrWhiteSpace(verseText)) verseText = "(Verse not found)";
+            VerseHeading.Text = $"{selectedBook.ToUpperInvariant()} {selectedChapter}:{selectedVerse}";
+            VerseText.Text = verseText;
+            AudioDurationLabel.Text = "0:30";
+            AudioProgress.Maximum = 30;
         }
-
-        VerseHeading.Text = $"{selectedBook.ToUpperInvariant()} {selectedChapter}:{selectedVerse}";
-        VerseText.Text = verseText;
-        AudioDurationLabel.Text = "0:30";
-        AudioProgress.Maximum = 30;
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"UpdateVerseText error: {ex.Message}");
+        }
     }
 
     private void IncreaseFontClicked(object? sender, EventArgs e)
@@ -295,6 +327,54 @@ public partial class BiblePage : ContentPage
         PlayButton.Text = "▶ Play";
         AudioProgress.Value = 0;
         AudioTimeLabel.Text = "0:00";
+    }
+
+    private async void OnPostBibleClicked(object? sender, EventArgs e)
+    {
+        var btn = sender as Button;
+        try
+        {
+            btn.IsEnabled = false;
+            var selectedBook = BookPicker.SelectedItem as string;
+            var chapter = (int?)ChapterPicker.SelectedItem ?? 1;
+            var verse = (int?)VersePicker.SelectedItem ?? 1;
+            if (string.IsNullOrWhiteSpace(selectedBook))
+            {
+                await DisplayAlert("Error", "Please select a book.", "OK");
+                return;
+            }
+            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
+            var abbrev = bs.GetAbbreviationForBook(selectedBook);
+            if (string.IsNullOrWhiteSpace(abbrev))
+            {
+                await DisplayAlert("Error", "Unable to determine book code.", "OK");
+                return;
+            }
+
+            var passageText = await bs.GetVerseAsync(selectedBook, chapter, verse);
+            var confirm = await DisplayAlert("Confirm Post", $"Post {selectedBook} {chapter}:{verse}\n\n{passageText}", "Post", "Cancel");
+            if (!confirm) return;
+
+            var community = (CCT_USCF.Services.CommunityService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.CommunityService))!;
+            var dto = new CCT_USCF.Models.BiblePostCreateDto { BookId = abbrev, ChapterNumber = chapter, VerseStart = verse, VerseEnd = verse };
+            var created = await community.CreateBiblePostAsync(dto);
+            if (created != null)
+            {
+                await DisplayAlert("Success", "Bible reading posted.", "OK");
+            }
+            else
+            {
+                await DisplayAlert("Error", "Failed to post bible reading.", "OK");
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Error", ex.Message, "OK");
+        }
+        finally
+        {
+            if (btn != null) btn.IsEnabled = true;
+        }
     }
 
     private void OnAudioProgressChanged(object? sender, ValueChangedEventArgs e)

@@ -368,6 +368,12 @@
 
                 </VerticalStackLayout>
 
+                <!-- BIBLE COMMUNITY FEED -->
+                <VerticalStackLayout Spacing="9">
+                    <Label Text="Bible Readings" FontSize="21" FontAttributes="Bold" TextColor="#172033" />
+                    <StackLayout x:Name="BibleFeedStack" Spacing="12" />
+                </VerticalStackLayout>
+
 
                 <!-- QUICK ACTIONS -->
                 <VerticalStackLayout Spacing="9">

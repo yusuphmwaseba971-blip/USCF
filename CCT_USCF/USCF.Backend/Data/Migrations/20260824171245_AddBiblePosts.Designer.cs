@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using USCF.Backend.Data;
 
@@ -11,9 +12,11 @@ using USCF.Backend.Data;
 namespace USCF.Backend.Data.Migrations
 {
     [DbContext(typeof(USCFDbContext))]
-    partial class USCFDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260824171245_AddBiblePosts")]
+    partial class AddBiblePosts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

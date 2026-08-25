@@ -43,6 +43,8 @@ builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri(CCT_U
 builder.Services.AddSingleton<CCT_USCF.Services.AuthService>();
             // Community API for prayer requests and other community features
             builder.Services.AddSingleton<CCT_USCF.Services.CommunityService>();
+            // Offline Bible service (loads kjv.json from app package)
+            builder.Services.AddSingleton<CCT_USCF.Services.BibleService>();
 
 #if ANDROID
 // Register Android audio player implementation for platform-specific playback
