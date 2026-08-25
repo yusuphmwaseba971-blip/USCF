@@ -17,52 +17,51 @@ public class HealthController : ControllerBase
     [HttpGet("/health")]
     public async Task<IActionResult> GetAsync()
     {
-        var databaseName = "unknown";
-
         try
         {
-            await _dbContext.Database.OpenConnectionAsync();
-            using var command = _dbContext.Database.GetDbConnection().CreateCommand();
-            command.CommandText = "SELECT DB_NAME()";
-            var result = await command.ExecuteScalarAsync();
-            databaseName = result?.ToString() ?? "unknown";
+            var canConnect = await _dbContext.Database.CanConnectAsync();
 
-            if (string.IsNullOrWhiteSpace(databaseName) || !string.Equals(databaseName, "USCF_DB", StringComparison.OrdinalIgnoreCase))
+            if (!canConnect)
             {
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, new
                 {
                     status = "degraded",
                     application = "USCF Backend",
-                    database = new
-                    {
-                        status = "unexpected_database",
-                        name = databaseName
-                    }
+                    database = new { status = "unavailable" }
                 });
+            }
+
+            // Try to obtain the current database name in a provider-agnostic way
+            string dbName = "unknown";
+            try
+            {
+                var conn = _dbContext.Database.GetDbConnection();
+                await _dbContext.Database.OpenConnectionAsync();
+                using var cmd = conn.CreateCommand();
+                // Try PostgreSQL function first
+                cmd.CommandText = "SELECT current_database()";
+                var result = await cmd.ExecuteScalarAsync();
+                dbName = result?.ToString() ?? "unknown";
+            }
+            catch
+            {
+                // ignore, leave dbName unknown
             }
 
             return Ok(new
             {
                 status = "ok",
                 application = "USCF Backend",
-                database = new
-                {
-                    status = "healthy",
-                    name = databaseName
-                }
+                database = new { status = "healthy", name = dbName }
             });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
             {
                 status = "degraded",
                 application = "USCF Backend",
-                database = new
-                {
-                    status = "unavailable",
-                    name = databaseName
-                }
+                error = ex.Message
             });
         }
     }

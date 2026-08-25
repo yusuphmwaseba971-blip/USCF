@@ -1,12 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY ["CCT_USCF/USCF.Backend/USCF.Backend.csproj", "CCT_USCF/USCF.Backend/"]
-RUN dotnet restore "CCT_USCF/USCF.Backend/USCF.Backend.csproj"
+# When the Docker build context is the project folder (CCT_USCF/USCF.Backend), copy the csproj and restore
+COPY ["USCF.Backend.csproj", "./"]
+RUN dotnet restore "./USCF.Backend.csproj"
 
+# Copy the rest of the project and publish
 COPY . .
-
-WORKDIR /src/CCT_USCF/USCF.Backend
 RUN dotnet publish "USCF.Backend.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
@@ -14,7 +14,9 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
-ENV ASPNETCORE_URLS=http://+:10000
+# Use the PORT environment variable provided by Render
+ENV ASPNETCORE_URLS=http://+:${PORT}
+# EXPOSE is informational; Render will use the PORT environment variable to route traffic
 EXPOSE 10000
 
 ENTRYPOINT ["dotnet", "USCF.Backend.dll"]

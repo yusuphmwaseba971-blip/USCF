@@ -9,10 +9,9 @@ builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaO
 builder.Services.Configure<UserRetentionOptions>(builder.Configuration.GetSection(UserRetentionOptions.SectionName));
 
 builder.Services.AddDbContext<USCFDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlServerOptions => sqlServerOptions.EnableRetryOnFailure()));
-
+ options.UseNpgsql(
+    builder.Configuration.GetConnectionString("DefaultConnection"),
+    npgsqlOptions => npgsqlOptions.EnableRetryOnFailure()));
 // register services
 builder.Services.AddSingleton<USCF.Backend.Services.IPasswordHasher, USCF.Backend.Services.PasswordHasher>();
 builder.Services.AddScoped<USCF.Backend.Services.IUserService, USCF.Backend.Services.UserService>();
@@ -27,8 +26,19 @@ builder.Services.AddHostedService<UserRetentionHostedService>();
 var jwtKey = builder.Configuration["Authentication:JwtSigningKey"];
 if (string.IsNullOrEmpty(jwtKey))
 {
-    builder.Configuration["Authentication:JwtSigningKey"] = "replace_this_dev_key_change_in_prod_please";
-    jwtKey = builder.Configuration["Authentication:JwtSigningKey"];
+    if (builder.Environment.IsDevelopment())
+    {
+        // Allow a development fallback key so local dev users don't need env setup.
+        builder.Configuration["Authentication:JwtSigningKey"] = "replace_this_dev_key_change_in_dev_only";
+        jwtKey = builder.Configuration["Authentication:JwtSigningKey"];
+        Console.WriteLine("[Startup] No JwtSigningKey configured; using development fallback key.");
+    }
+    else
+    {
+        // In production, fail fast and provide a clear log message.
+        Console.WriteLine("[Startup][ERROR] Authentication:JwtSigningKey is not configured. Set the Authentication__JwtSigningKey environment variable in production.");
+        throw new InvalidOperationException("Missing JWT signing key. Set Authentication__JwtSigningKey environment variable.");
+    }
 }
 
 builder.Services.AddAuthentication(options =>
@@ -93,7 +103,18 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<USCF.Backend.Data.USCFDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        db.Database.Migrate();
+        Console.WriteLine("[Startup] Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Startup][ERROR] Database migration failed: {ex.GetType().Name}: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+        // rethrow so the host fails fast with a clear log message
+        throw;
+    }
 }
 
 if (app.Environment.IsDevelopment())
