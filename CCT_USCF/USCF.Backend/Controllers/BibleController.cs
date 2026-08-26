@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using USCF.Backend.Data;
 using USCF.Backend.Models;
 using USCF.Backend.Options;
+using USCF.Backend.Services;
 
 namespace USCF.Backend.Controllers;
 
@@ -13,11 +14,13 @@ public class BibleController : ControllerBase
 {
     private readonly USCFDbContext _db;
     private readonly MediaOptions _mediaOptions;
+    private readonly MediaStorageService _mediaStorage;
 
-    public BibleController(USCFDbContext db, Microsoft.Extensions.Options.IOptions<MediaOptions> mediaOptions)
+    public BibleController(USCFDbContext db, Microsoft.Extensions.Options.IOptions<MediaOptions> mediaOptions, MediaStorageService mediaStorage)
     {
         _db = db;
         _mediaOptions = mediaOptions.Value;
+        _mediaStorage = mediaStorage;
     }
 
     [HttpGet("books")]
@@ -96,6 +99,41 @@ public class BibleController : ControllerBase
             return BadRequest(new { message = "Invalid audio format or MIME type." });
         }
 
-        return Ok(new { message = "Bible audio accepted. Duration validation and storage can be applied in the provider workflow." });
+        // Save the uploaded file to a temporary location so we can inspect duration.
+        var tempFileName = $"{Guid.NewGuid()}{extension}";
+        var tempPath = Path.Combine(Path.GetTempPath(), tempFileName);
+        await using (var fs = System.IO.File.Create(tempPath))
+        {
+            await audio.CopyToAsync(fs);
+        }
+
+        try
+        {
+            // Use TagLibSharp to read duration
+            var tfile = TagLib.File.Create(tempPath);
+            var durationSeconds = tfile.Properties.Duration.TotalSeconds;
+            tfile.Dispose();
+
+            if (durationSeconds > _mediaOptions.MaxBibleAudioDurationSeconds)
+            {
+                System.IO.File.Delete(tempPath);
+                return BadRequest(new { message = $"Audio duration exceeds maximum allowed {_mediaOptions.MaxBibleAudioDurationSeconds} seconds." });
+            }
+
+            // Move to uploads directory for now (provider storage integration can replace this later)
+            var uploadsDir = _mediaStorage.GetUploadsDirectory();
+            var destName = tempFileName;
+            var destPath = Path.Combine(uploadsDir, destName);
+            System.IO.File.Move(tempPath, destPath);
+
+            var url = $"/uploads/{destName}";
+
+            return Ok(new { message = "Bible audio uploaded.", url, durationSeconds });
+        }
+        catch (Exception ex)
+        {
+            if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath);
+            return BadRequest(new { message = "Failed to validate audio file.", detail = ex.Message });
+        }
     }
 }
