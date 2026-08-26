@@ -1,65 +1,46 @@
 using Appwrite;
-using Appwrite.Models;
 using Appwrite.Services;
 
 namespace USCF.Backend.Services.Appwrite;
 
-public sealed class AppwriteService
+public class AppwriteService
 {
-    private readonly TablesDB _tables;
+    private readonly Client _client;
 
-    private readonly string _databaseId;
-    private readonly string _usersTableId;
+    public Databases Databases { get; }
+    public Storage Storage { get; }
+
+    public string DatabaseId { get; }
+    public string UsersTableId { get; }
 
     public AppwriteService(IConfiguration configuration)
     {
         var endpoint = configuration["Appwrite:Endpoint"]
             ?? throw new InvalidOperationException(
-                "Appwrite:Endpoint is not configured.");
+                "Appwrite endpoint is not configured.");
 
         var projectId = configuration["Appwrite:ProjectId"]
             ?? throw new InvalidOperationException(
-                "Appwrite:ProjectId is not configured.");
+                "Appwrite project ID is not configured.");
 
         var apiKey = configuration["Appwrite:ApiKey"]
             ?? throw new InvalidOperationException(
-                "Appwrite:ApiKey is not configured.");
+                "Appwrite API key is not configured.");
 
-        _databaseId = configuration["Appwrite:DatabaseId"]
+        DatabaseId = configuration["Appwrite:DatabaseId"]
             ?? throw new InvalidOperationException(
-                "Appwrite:DatabaseId is not configured.");
+                "Appwrite database ID is not configured.");
 
-        _usersTableId = configuration["Appwrite:UsersTableId"]
+        UsersTableId = configuration["Appwrite:UsersTableId"]
             ?? throw new InvalidOperationException(
-                "Appwrite:UsersTableId is not configured.");
+                "Appwrite users table ID is not configured.");
 
-        var client = new Client()
+        _client = new Client()
             .SetEndpoint(endpoint)
             .SetProject(projectId)
             .SetKey(apiKey);
 
-        _tables = new TablesDB(client);
-    }
-
-    public async Task<Row> CreateUserAsync(
-        string userId,
-        string name,
-        string email,
-        string? phone)
-    {
-        var data = new Dictionary<string, object?>
-        {
-            ["user_id"] = userId,
-            ["name"] = name,
-            ["email"] = email,
-            ["phone"] = phone
-        };
-
-        return await _tables.CreateRow(
-            databaseId: _databaseId,
-            tableId: _usersTableId,
-            rowId: ID.Unique(),
-            data: data
-        );
+        Databases = new Databases(_client);
+        Storage = new Storage(_client);
     }
 }
