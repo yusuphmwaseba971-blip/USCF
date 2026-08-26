@@ -4,6 +4,6 @@ namespace CCT_USCF.Services
     public static class ApiConfig
     {
         // Development backend host (physical device on same LAN)
-        public const string BaseUrl = "http://192.168.136.4:5140";
+        public const string BaseUrl = "https://cctapi.sgp.appwrite.run";
     }
 }
