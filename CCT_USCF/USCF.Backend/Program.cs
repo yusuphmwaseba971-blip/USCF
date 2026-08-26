@@ -2,14 +2,17 @@ using Microsoft.EntityFrameworkCore;
 using USCF.Backend.Data;
 using USCF.Backend.Options;
 using USCF.Backend.Services;
+using USCF.Backend.Services.Appwrite;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSingleton<AppwriteService>();
 
 builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.SectionName));
 builder.Services.Configure<UserRetentionOptions>(builder.Configuration.GetSection(UserRetentionOptions.SectionName));
 
 builder.Services.AddDbContext<USCFDbContext>(options =>
- options.UseNpgsql(
+ options.UseSqlServer(
     builder.Configuration.GetConnectionString("DefaultConnection"),
     npgsqlOptions => npgsqlOptions.EnableRetryOnFailure()));
 // register services

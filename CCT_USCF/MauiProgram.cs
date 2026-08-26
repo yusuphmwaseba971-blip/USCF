@@ -1,58 +1,133 @@
+using Appwrite;
+using Appwrite.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CCT_USCF;
 
 public static class MauiProgram
 {
-	public static System.IServiceProvider Services { get; private set; }
+    public static IServiceProvider Services { get; private set; } = null!;
 
-	// Current authenticated user (nullable)
-	public static CCT_USCF.Models.CurrentUser? CurrentUser { get; private set; }
+    // Current authenticated user
+    public static CCT_USCF.Models.CurrentUser? CurrentUser { get; private set; }
 
-	// Event used to notify pages/shell of authentication state changes (login/logout)
-	public static event Action? AuthStateChanged;
-	public static void NotifyAuthChanged() => AuthStateChanged?.Invoke();
+    // Authentication state event
+    public static event Action? AuthStateChanged;
 
-	public static void SetCurrentUser(CCT_USCF.Models.CurrentUser? user)
-	{
-	CurrentUser = user;
-}
+    // Appwrite configuration
+    private const string AppwriteEndpoint =
+        "https://sgp.cloud.appwrite.io/v1";
 
-	public static CCT_USCF.Services.AuthService CreateAuthServiceForPages()
-	{
-return (CCT_USCF.Services.AuthService)Services.GetService(typeof(CCT_USCF.Services.AuthService))!;
-	}
+    private const string AppwriteProjectId =
+        "cct-uscf";
 
-	public static MauiApp CreateMauiApp()
-	{
-var builder = MauiApp.CreateBuilder();
-builder
-		.UseMauiApp<App>()
-			.ConfigureFonts(fonts =>
-			{
-				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-			});
-		#if DEBUG
-		builder.Logging.AddDebug();
+    public static void NotifyAuthChanged()
+    {
+        AuthStateChanged?.Invoke();
+    }
+
+    public static void SetCurrentUser(
+        CCT_USCF.Models.CurrentUser? user)
+    {
+        CurrentUser = user;
+    }
+
+    public static CCT_USCF.Services.AuthService
+        CreateAuthServiceForPages()
+    {
+        return Services
+            .GetRequiredService<CCT_USCF.Services.AuthService>();
+    }
+
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
+
+        builder
+            .UseMauiApp<App>()
+            .ConfigureFonts(fonts =>
+            {
+                fonts.AddFont(
+                    "OpenSans-Regular.ttf",
+                    "OpenSansRegular");
+
+                fonts.AddFont(
+                    "OpenSans-Semibold.ttf",
+                    "OpenSansSemibold");
+            });
+
+#if DEBUG
+        builder.Logging.AddDebug();
 #endif
 
-// register HttpClient and AuthService for pages
-// Use centralized API base URL from ApiConfig
-builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri(CCT_USCF.Services.ApiConfig.BaseUrl) });
-builder.Services.AddSingleton<CCT_USCF.Services.AuthService>();
-            // Community API for prayer requests and other community features
-            builder.Services.AddSingleton<CCT_USCF.Services.CommunityService>();
-            // Offline Bible service (loads kjv.json from app package)
-            builder.Services.AddSingleton<CCT_USCF.Services.BibleService>();
+        // =========================================================
+        // EXISTING BACKEND API
+        // =========================================================
+
+        builder.Services.AddSingleton(sp =>
+            new HttpClient
+            {
+                BaseAddress = new Uri(
+                    CCT_USCF.Services.ApiConfig.BaseUrl)
+            });
+
+        // =========================================================
+        // APPWRITE CLOUD
+        // =========================================================
+
+        var appwriteClient = new Client()
+            .SetEndpoint(AppwriteEndpoint)
+            .SetProject(AppwriteProjectId);
+
+        // Register the Appwrite client
+        builder.Services.AddSingleton(appwriteClient);
+
+        // Appwrite Authentication
+        builder.Services.AddSingleton<Account>();
+
+        // Appwrite database
+        builder.Services.AddSingleton<TablesDB>();
+
+        // Appwrite file storage
+        builder.Services.AddSingleton<Storage>();
+
+        // Appwrite Functions
+        builder.Services.AddSingleton<Functions>();
+
+        // =========================================================
+        // CCT SERVICES
+        // =========================================================
+
+        // Authentication
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.AuthService>();
+
+        // Community
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.CommunityService>();
+
+        // Offline Bible
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.BibleService>();
 
 #if ANDROID
-// Register Android audio player implementation for platform-specific playback
-builder.Services.AddSingleton<CCT_USCF.Services.IAudioPlayer, CCT_USCF.Services.AndroidAudioPlayer>();
+
+        // Android audio player
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.IAudioPlayer,
+            CCT_USCF.Services.AndroidAudioPlayer>();
+
 #endif
-		var app = builder.Build();
-// expose the service provider for simple page-level access
-Services = app.Services;
-return app;
-	}
+
+        // =========================================================
+        // BUILD APPLICATION
+        // =========================================================
+
+        var app = builder.Build();
+
+        // Expose service provider for page-level access
+        Services = app.Services;
+
+        return app;
+    }
 }
