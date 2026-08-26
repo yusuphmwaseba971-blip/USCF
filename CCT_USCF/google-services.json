@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "743066602037",
+    "project_id": "cct-uscf",
+    "storage_bucket": "cct-uscf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:743066602037:android:0d4aa92bd6c19b7dce7f7c",
+        "android_client_info": {
+          "package_name": "com.uscf.cct"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4HCC0Bh1oeYVXJR9ei1TSw7yH9n-XLak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

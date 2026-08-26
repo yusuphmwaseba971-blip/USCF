@@ -11,7 +11,9 @@
 
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+
 		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+
 		<AndroidSdkDirectory>C:\Users\Yusuph\AppData\Local\Android\Sdk</AndroidSdkDirectory>
 		<JavaSdkDirectory>C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot</JavaSdkDirectory>
 
@@ -25,7 +27,7 @@
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<!-- Android minimum version -->
-		<SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion>23.0</SupportedOSPlatformVersion>
 
 		<!-- Disable Windows packaging -->
 		<WindowsPackageType>None</WindowsPackageType>
@@ -69,8 +71,18 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug"
 		                  Version="10.0.0" />
 
+		<!-- Firebase -->
+		<PackageReference Include="Plugin.Firebase"
+		                  Version="4.2.1" />
+
 	</ItemGroup>
 
+	<!-- Firebase Android configuration -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<GoogleServicesJson Include="google-services.json" />
+	</ItemGroup>
+
+	<!-- Keep existing backend files outside the MAUI project -->
 	<ItemGroup>
 		<Compile Remove="USCF.Backend\**\*.cs" />
 		<EmbeddedResource Remove="USCF.Backend\**\*" />
