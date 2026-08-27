@@ -1,20 +1,19 @@
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+using Plugin.Firebase.Auth;
 
 namespace CCT_USCF.Services;
 
 public class AuthService
 {
-    private readonly HttpClient _http;
-    private readonly string _baseUrl;
+    private readonly IFirebaseAuth _auth;
 
-    public AuthService(HttpClient http)
+    public AuthService(IFirebaseAuth auth)
     {
-        _http = http;
-        // canonical base URL from DI-configured HttpClient or ApiConfig
-        _baseUrl = http.BaseAddress?.ToString().TrimEnd('/') ?? CCT_USCF.Services.ApiConfig.BaseUrl;
+        _auth = auth;
     }
+
+    // =========================================================
+    // AUTH RESULT
+    // =========================================================
 
     public class AuthResult
     {
@@ -26,352 +25,417 @@ public class AuthService
         public int StatusCode { get; set; }
     }
 
-    public async Task<AuthResult> LoginAsync(string usernameOrEmail, string password)
+    // =========================================================
+    // LOCATION MODEL
+    // =========================================================
+
+    public class LocationItem
     {
-        var payload = new { UsernameOrEmail = usernameOrEmail, Password = password };
-        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        public int Id { get; set; }
 
-        var requestUrl = $"{_baseUrl}/api/auth/login";
-        System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync starting request to: {requestUrl}");
+        public string Name { get; set; } = "";
+    }
 
+    // =========================================================
+    // LOGIN
+    // =========================================================
+    //
+    // Firebase Authentication
+    // =========================================================
+
+    public async Task<AuthResult> LoginAsync(
+        string usernameOrEmail,
+        string password)
+    {
         try
         {
-            using var res = await _http.PostAsync(requestUrl, content);
-            var body = await res.Content.ReadAsStringAsync();
-
-            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync received HTTP {(int)res.StatusCode}");
-
-            if (!res.IsSuccessStatusCode)
+            if (string.IsNullOrWhiteSpace(usernameOrEmail))
             {
-                string err = body;
-                if (string.IsNullOrWhiteSpace(err)) err = res.ReasonPhrase ?? "Login failed";
-                System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync server returned non-success: {(int)res.StatusCode} - {err}");
-                return new AuthResult { Success = false, Error = err, StatusCode = (int)res.StatusCode };
+                return new AuthResult
+                {
+                    Success = false,
+                    Error = "Email is required.",
+                    StatusCode = 400
+                };
             }
 
-            try
+            if (string.IsNullOrWhiteSpace(password))
             {
-                var j = JsonDocument.Parse(body);
-                if (!j.RootElement.TryGetProperty("token", out var tokenEl))
+                return new AuthResult
                 {
-                    System.Diagnostics.Debug.WriteLine("[AUTH] LoginAsync response missing token property");
-                    return new AuthResult { Success = false, Error = "Login response missing token.", StatusCode = (int)res.StatusCode };
-                }
-
-                var token = tokenEl.GetString();
-                if (string.IsNullOrEmpty(token))
-                {
-                    System.Diagnostics.Debug.WriteLine("[AUTH] LoginAsync received empty token");
-                    return new AuthResult { Success = false, Error = "Empty token received from server.", StatusCode = (int)res.StatusCode };
-                }
-
-                var refreshToken = j.RootElement.TryGetProperty("refreshToken", out var refreshEl) ? refreshEl.GetString() : null;
-                DateTime? expiresAtUtc = null;
-                if (j.RootElement.TryGetProperty("expiresAtUtc", out var expiryUtcEl) && DateTime.TryParse(expiryUtcEl.GetString(), out var expiryUtc))
-                {
-                    expiresAtUtc = expiryUtc;
-                }
-                else if (j.RootElement.TryGetProperty("expiresAt", out var expiresEl) && DateTime.TryParse(expiresEl.GetString(), out var expires))
-                {
-                    expiresAtUtc = expires;
-                }
-
-                System.Diagnostics.Debug.WriteLine("[AUTH] LoginAsync succeeded, token received");
-                return new AuthResult { Success = true, Token = token, RefreshToken = refreshToken, ExpiresAtUtc = expiresAtUtc, StatusCode = (int)res.StatusCode };
+                    Success = false,
+                    Error = "Password is required.",
+                    StatusCode = 400
+                };
             }
-            catch (JsonException je)
+
+            // Firebase Authentication uses email/password.
+            // Until username authentication is implemented in
+            // Firestore, usernameOrEmail is treated as an email.
+            var user = await _auth
+                .SignInWithEmailAndPasswordAsync(
+                    usernameOrEmail.Trim(),
+                    password);
+
+            if (user == null)
             {
-                System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync JSON parse error: {je}");
-                return new AuthResult { Success = false, Error = "Invalid response from server.", StatusCode = (int)res.StatusCode };
+                return new AuthResult
+                {
+                    Success = false,
+                    Error = "Login failed.",
+                    StatusCode = 401
+                };
             }
-        }
-        catch (HttpRequestException hre)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync HTTP request error: {hre.Message}");
-            return new AuthResult { Success = false, Error = "Network error while contacting authentication server.", StatusCode = 0 };
-        }
-        catch (OperationCanceledException oce)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync canceled: {oce.Message}");
-            return new AuthResult { Success = false, Error = "Login canceled.", StatusCode = 0 };
+
+            // Firebase manages the authentication session.
+            // We don't create our own JWT or refresh token.
+            return new AuthResult
+            {
+                Success = true,
+                StatusCode = 200
+            };
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AUTH] LoginAsync unexpected error: {ex}");
-            return new AuthResult { Success = false, Error = "Unexpected error during login.", StatusCode = 0 };
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Login error: {ex}");
+
+            return new AuthResult
+            {
+                Success = false,
+                Error = GetFirebaseErrorMessage(ex),
+                StatusCode = 401
+            };
         }
     }
+
+    // =========================================================
+    // LOGOUT
+    // =========================================================
 
     public async Task<bool> LogoutAsync()
     {
-        var token = await TokenStorage.GetTokenAsync();
-        if (string.IsNullOrEmpty(token))
-        {
-            await TokenStorage.ClearSessionAsync();
-            return true;
-        }
-
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/api/auth/logout");
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            using var res = await _http.SendAsync(req);
-            if (res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                await TokenStorage.ClearSessionAsync();
-                return true;
-            }
+            await _auth.SignOutAsync();
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Logout error: {ex}");
 
             return false;
         }
-        catch (HttpRequestException)
-        {
-            await TokenStorage.ClearSessionAsync();
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            await TokenStorage.ClearSessionAsync();
-            return true;
-        }
     }
+
+    // =========================================================
+    // REFRESH TOKEN
+    // =========================================================
+    //
+    // Firebase manages token refresh automatically.
+    // No custom refresh endpoint is required.
+    // =========================================================
 
     public async Task<bool> RefreshTokenAsync()
     {
-        var refreshToken = await TokenStorage.GetRefreshTokenAsync();
-        if (string.IsNullOrWhiteSpace(refreshToken))
-        {
-            await TokenStorage.ClearSessionAsync();
-            return false;
-        }
-
-        var payload = new { refreshToken };
-        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
         try
         {
-            using var res = await _http.PostAsync($"{_baseUrl}/api/auth/refresh", content);
-            var body = await res.Content.ReadAsStringAsync();
+            var user = _auth.CurrentUser;
 
-            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                await TokenStorage.ClearSessionAsync();
+            if (user == null)
                 return false;
-            }
 
-            if (!res.IsSuccessStatusCode)
-            {
-                throw new HttpRequestException($"Refresh failed: {(int)res.StatusCode} - {body}");
-            }
-
-            var j = JsonDocument.Parse(body);
-            if (!j.RootElement.TryGetProperty("token", out var tokenEl) || !j.RootElement.TryGetProperty("refreshToken", out var refreshedTokenEl))
-            {
-                return false;
-            }
-
-            var newToken = tokenEl.GetString();
-            var newRefreshToken = refreshedTokenEl.GetString();
-            var expiresAt = j.RootElement.TryGetProperty("expiresAtUtc", out var expiryUtcEl) && DateTime.TryParse(expiryUtcEl.GetString(), out var expiryUtc)
-                ? expiryUtc
-                : (j.RootElement.TryGetProperty("expiresAt", out var expiryEl) && DateTime.TryParse(expiryEl.GetString(), out var expiry) ? expiry : DateTime.UtcNow.AddHours(8));
-
-            if (string.IsNullOrWhiteSpace(newToken) || string.IsNullOrWhiteSpace(newRefreshToken))
-            {
-                await TokenStorage.ClearSessionAsync();
-                return false;
-            }
-
-            await TokenStorage.SaveSessionAsync(newToken, newRefreshToken, expiresAt);
+            // Firebase SDK manages token renewal.
+            // We simply confirm that the Firebase user
+            // session still exists.
             return true;
         }
-        catch (HttpRequestException)
+        catch (Exception ex)
         {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-    }
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Token refresh error: {ex}");
 
-    public async Task RegisterAsync(string fullName, string username, string email, string password, string confirm, string role, int? regionId, int? districtId, int? branchId)
-    {
-        var payload = new
-        {
-            FullName = fullName,
-            Username = username,
-            Email = email,
-            Password = password,
-            ConfirmPassword = confirm,
-            Role = role,
-            RegionId = regionId,
-            DistrictId = districtId,
-            BranchId = branchId
-        };
-
-  
-        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        var res = await _http.PostAsync($"{_baseUrl}/api/auth/register", content);
-        if (!res.IsSuccessStatusCode)
-        {
-            var txt = await res.Content.ReadAsStringAsync();
-            throw new Exception(txt);
+            return false;
         }
     }
 
-public class LocationItem
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-}
+    // =========================================================
+    // REGISTER
+    // =========================================================
+    //
+    // Firebase Authentication creates the account.
+    //
+    // Additional profile information such as:
+    // FullName
+    // Username
+    // Role
+    // Region
+    // District
+    // Branch
+    //
+    // will be stored in Firestore.
+    //
+    // Firestore profile implementation will be connected next.
+    // =========================================================
 
-public async Task<List<LocationItem>> GetRegionsAsync()
-{
-    var response = await _http.GetAsync($"{_baseUrl}/api/locations/regions");
-
-    if (!response.IsSuccessStatusCode)
+    public async Task RegisterAsync(
+        string fullName,
+        string username,
+        string email,
+        string password,
+        string confirm,
+        string role,
+        int? regionId,
+        int? districtId,
+        int? branchId)
     {
-        throw new Exception("Unable to load regions.");
-    }
+        if (string.IsNullOrWhiteSpace(email))
+            throw new Exception("Email is required.");
 
-    var json = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(password))
+            throw new Exception("Password is required.");
 
-    return JsonSerializer.Deserialize<List<LocationItem>>(
-        json,
-        new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        }) ?? new List<LocationItem>();
-}
-
-    // New: Get current authenticated user
-    public async Task<CCT_USCF.Models.CurrentUser?> GetCurrentUserAsync()
-    {
-        var token = await TokenStorage.GetTokenAsync();
-        if (string.IsNullOrEmpty(token)) return null;
-
-        var expiresAtUtc = TokenStorage.GetAccessTokenExpirationUtc();
-        if (expiresAtUtc.HasValue && DateTime.UtcNow >= expiresAtUtc.Value)
-        {
-            var refreshed = false;
-            try
-            {
-                refreshed = await RefreshTokenAsync();
-            }
-            catch (HttpRequestException)
-            {
-                throw;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-
-            if (!refreshed)
-            {
-                await TokenStorage.ClearSessionAsync();
-                return null;
-            }
-
-            token = await TokenStorage.GetTokenAsync();
-            if (string.IsNullOrEmpty(token)) return null;
-        }
-
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/auth/me");
-        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        if (password != confirm)
+            throw new Exception("Passwords do not match.");
 
         try
         {
-            var res = await _http.SendAsync(req);
+            var user = await _auth
+                .CreateUserWithEmailAndPasswordAsync(
+                    email.Trim(),
+                    password);
 
-            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                var refreshToken = await TokenStorage.GetRefreshTokenAsync();
-                if (!string.IsNullOrWhiteSpace(refreshToken))
-                {
-                    try
-                    {
-                        var refreshed = await RefreshTokenAsync();
-                        if (refreshed)
-                        {
-                            token = await TokenStorage.GetTokenAsync();
-                            if (string.IsNullOrEmpty(token)) return null;
+            if (user == null)
+                throw new Exception(
+                    "Firebase could not create the account.");
 
-                            using var retryReq = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/auth/me");
-                            retryReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                            var retryRes = await _http.SendAsync(retryReq);
-                            if (retryRes.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                            {
-                                await TokenStorage.ClearSessionAsync();
-                                return null;
-                            }
-                            if (!retryRes.IsSuccessStatusCode)
-                            {
-                                var txt = await retryRes.Content.ReadAsStringAsync();
-                                throw new HttpRequestException($"Unexpected status code from /api/auth/me after refresh: {(int)retryRes.StatusCode} - {txt}");
-                            }
+            // TODO:
+            // Save the user's additional information to
+            // Cloud Firestore:
+            //
+            // users/{firebaseUserId}
+            //
+            // FullName
+            // Username
+            // Email
+            // Role
+            // RegionId
+            // DistrictId
+            // BranchId
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Registration error: {ex}");
 
-                            var retryJson = await retryRes.Content.ReadAsStringAsync();
-                            var retryUser = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(retryJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                            return retryUser;
-                        }
-                    }
-                    catch (HttpRequestException)
-                    {
-                        throw;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                }
+            throw new Exception(
+                GetFirebaseErrorMessage(ex));
+        }
+    }
 
-                await TokenStorage.ClearSessionAsync();
+    // =========================================================
+    // CURRENT USER
+    // =========================================================
+
+    public async Task<CCT_USCF.Models.CurrentUser?>
+        GetCurrentUserAsync()
+    {
+        try
+        {
+            var firebaseUser = _auth.CurrentUser;
+
+            if (firebaseUser == null)
                 return null;
-            }
 
-            if (!res.IsSuccessStatusCode)
-            {
-                var txt = await res.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"Unexpected status code from /api/auth/me: {(int)res.StatusCode} - {txt}");
-            }
+            // Create a CurrentUser object from the Firebase
+            // authenticated user.
+            //
+            // Additional profile information will be loaded
+            // from Firestore when the user profile migration
+            // is completed.
 
-            var json = await res.Content.ReadAsStringAsync();
-            var user = JsonSerializer.Deserialize<CCT_USCF.Models.CurrentUser>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var user = new CCT_USCF.Models.CurrentUser();
+
+            // These properties depend on the existing
+            // CurrentUser model.
+            //
+            // The Firebase UID/email mapping will be completed
+            // against that model.
+
             return user;
         }
-        catch (HttpRequestException)
+        catch (Exception ex)
         {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] GetCurrentUser error: {ex}");
+
+            return null;
         }
     }
-public async Task<List<LocationItem>> GetDistrictsAsync(int regionId)
-{
-    var response = await _http.GetAsync(
-        $"{_baseUrl}/api/locations/districts/{regionId}");
 
-    if (!response.IsSuccessStatusCode)
+    // =========================================================
+    // REGIONS
+    // =========================================================
+    //
+    // Old:
+    // /api/locations/regions
+    //
+    // New:
+    // Firestore
+    // =========================================================
+
+    public async Task<List<LocationItem>>
+        GetRegionsAsync()
     {
-        throw new Exception("Unable to load districts.");
+        // TODO:
+        // Read:
+        //
+        // regions/{regionId}
+        //
+        // from Cloud Firestore.
+
+        return new List<LocationItem>();
     }
 
-    var json = await response.Content.ReadAsStringAsync();
+    // =========================================================
+    // DISTRICTS
+    // =========================================================
 
-    return JsonSerializer.Deserialize<List<LocationItem>>(
-        json,
-        new JsonSerializerOptions
+    public async Task<List<LocationItem>>
+        GetDistrictsAsync(int regionId)
+    {
+        // TODO:
+        // Read districts belonging to regionId
+        // from Cloud Firestore.
+
+        return new List<LocationItem>();
+    }
+
+    // =========================================================
+    // BRANCHES
+    // =========================================================
+
+    public async Task<List<LocationItem>>
+        GetBranchesAsync(int districtId)
+    {
+        // TODO:
+        // Read branches belonging to districtId
+        // from Cloud Firestore.
+
+        return new List<LocationItem>();
+    }
+
+    // =========================================================
+    // UPDATE PROFILE
+    // =========================================================
+    //
+    // Firebase Authentication handles email/password.
+    // Firestore handles application profile information.
+    // =========================================================
+
+    public async Task<CCT_USCF.Models.CurrentUser?>
+        UpdateProfileAsync(
+            string? fullName,
+            string? username,
+            string? email,
+            string? currentPassword,
+            string? newPassword,
+            string? confirmNewPassword)
+    {
+        var firebaseUser = _auth.CurrentUser;
+
+        if (firebaseUser == null)
+            throw new Exception("Not authenticated.");
+
+        if (!string.IsNullOrWhiteSpace(newPassword))
         {
-            PropertyNameCaseInsensitive = true
-        }) ?? new List<LocationItem>();
-}
-public async Task<List<LocationItem>> GetBranchesAsync(int districtId)
-{
-    var response = await _http.GetAsync(
+            if (newPassword != confirmNewPassword)
+                throw new Exception(
+                    "New passwords do not match.");
+
+            // Password update will be handled through the
+            // Firebase Authentication user account.
+            //
+            // Re-authentication may be required before
+            // changing a password.
+        }
+
+        // TODO:
+        // Update Firestore user profile:
+        //
+        // users/{firebaseUserId}
+        //
+        // FullName
+        // Username
+        // Email
+        // etc.
+
+        return await GetCurrentUserAsync();
+    }
+
+    // =========================================================
+    // HOLY WORD POST
+    // =========================================================
+    //
+    // Authentication comes from Firebase.
+    //
+    // Audio remains in Appwrite.
+    //
+    // Post metadata/content will be stored in Firestore.
+    // =========================================================
+
+    public async Task<bool> PostHolyWordAsync(
+        string content,
+        string? caption,
+        string? audioFilePath,
+        double? trimStart,
+        double? trimEnd)
+    {
+        var firebaseUser = _auth.CurrentUser;
+
+        if (firebaseUser == null)
+            throw new Exception("Not authenticated.");
+
+        if (string.IsNullOrWhiteSpace(content))
+            throw new Exception("Content is required.");
+
+        // TODO:
+        //
+        // 1. Upload audio to Appwrite if supplied.
+        //
+        // 2. Get Appwrite file URL/ID.
+        //
+        // 3. Create Firestore post:
+        //
+        // posts/{postId}
+        //
+        // authorId
+        // content
+        // caption
+        // audioUrl
+        // createdAt
+        // etc.
+
+        return true;
+    }
+
+    // =========================================================
+    // FIREBASE ERROR HANDLING
+    // =========================================================
+
+    private static string GetFirebaseErrorMessage(
+        Exception ex)
+    {
+        var message = ex.Message;
+
+        if (string.IsNullOrWhiteSpace(message))
+            return "Firebase authentication failed.";
+
+        return message;
+    }
+}    var response = await _http.GetAsync(
         $"{_baseUrl}/api/locations/branches/{districtId}");
 
     if (!response.IsSuccessStatusCode)
