@@ -233,7 +233,7 @@ public class AuthService
             // =================================================
 
             var firebaseUser =
-                await _auth.CreateUserWithEmailAndPasswordAsync(
+                await _auth.CreateUserAsync(
                     email.Trim(),
                     password);
 
@@ -340,7 +340,7 @@ public class AuthService
         var snapshot = await _firestore
             .GetCollection("users")
             .GetDocument(uid)
-            .GetAsync();
+            .GetDocumentSnapshotAsync<Dictionary<string, object>>(Source.Default);
 
         if (snapshot == null || snapshot.Data == null)
         {
@@ -464,7 +464,7 @@ public class AuthService
             var snapshot =
                 await _firestore
                     .GetCollection("regions")
-                    .GetDocumentsAsync();
+                    .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
 
             var regions =
                 new List<LocationItem>();
@@ -529,7 +529,7 @@ public class AuthService
             var snapshot =
                 await _firestore
                     .GetCollection("districts")
-                    .GetDocumentsAsync();
+                    .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
 
             var districts =
                 new List<LocationItem>();
@@ -600,7 +600,7 @@ public class AuthService
             var snapshot =
                 await _firestore
                     .GetCollection("branches")
-                    .GetDocumentsAsync();
+                    .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
 
             var branches =
                 new List<LocationItem>();
@@ -795,7 +795,7 @@ public class AuthService
         var snapshot =
             await _firestore
                 .GetCollection(collection)
-                .GetDocumentsAsync();
+                .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
 
         if (snapshot == null)
             return null;

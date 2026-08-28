@@ -150,7 +150,8 @@ public partial class BiblePage : ContentPage
     {
         try
         {
-            var user = await new CCT_USCF.Services.AuthService(new HttpClient { BaseAddress = new Uri(CCT_USCF.Services.ApiConfig.BaseUrl) }).GetCurrentUserAsync();
+            var auth = MauiProgram.CreateAuthServiceForPages();
+            var user = MauiProgram.CurrentUser ?? await auth.GetCurrentUserAsync();
             var isLeader = user != null && user.Role.Contains("Leader", StringComparison.OrdinalIgnoreCase);
             if (!isLeader)
             {
