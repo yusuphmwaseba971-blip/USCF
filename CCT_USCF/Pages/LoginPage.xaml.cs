@@ -69,31 +69,24 @@ public partial class LoginPage : ContentPage
                 }
                 catch (HttpRequestException httpEx)
                 {
-                                    // Network/server issue — keep the persisted session so the app can recover later.
-                                    // Allow the user to proceed using the locally available token/profile.
-                                    MessageLabel.Text = "Logged in (offline). You can use the app now; verification will resume when connection is available.";
-                                    MessageLabel.IsVisible = true;
-                                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Network error verifying session: {httpEx.Message}");
+                    // Network/server issue — keep the persisted session so the app can recover later.
+                    // Allow the user to proceed using the locally available profile.
+                    MessageLabel.Text = "Logged in (offline). You can use the app now; verification will resume when connection is available.";
+                    MessageLabel.IsVisible = true;
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Network error verifying session: {httpEx.Message}");
 
-                                    // Attempt to restore a local user from the token or cached profile
-                                    var localUser = CCT_USCF.AppShell.TryGetUserFromToken(await CCT_USCF.Services.TokenStorage.GetTokenAsync());
-                                    if (localUser == null)
-                                    {
-                                        localUser = CCT_USCF.Services.TokenStorage.GetCachedUser();
-                                    }
+                    var localUser = CCT_USCF.Services.TokenStorage.GetCachedUser();
+                    if (localUser != null)
+                    {
+                        MauiProgram.SetCurrentUser(localUser);
+                        await CCT_USCF.Services.TokenStorage.SaveCachedUserAsync(localUser);
+                        MauiProgram.NotifyAuthChanged();
+                        await Shell.Current.GoToAsync("//home");
+                        return;
+                    }
 
-                                    if (localUser != null)
-                                    {
-                                        MauiProgram.SetCurrentUser(localUser);
-                                        await CCT_USCF.Services.TokenStorage.SaveCachedUserAsync(localUser);
-                                        MauiProgram.NotifyAuthChanged();
-                                        await Shell.Current.GoToAsync("//home");
-                                        return;
-                                    }
-
-                                    // If no local user could be restored, remain on the login page so user can retry
-                                    return;
-                                }
+                    return;
+                }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[LOGIN] Unexpected error verifying session: {ex}");

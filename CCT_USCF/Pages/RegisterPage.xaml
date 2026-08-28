@@ -1,599 +1,166 @@
-
-using System;
-using System.Linq;
-using Microsoft.Maui.Controls;
-using CCT_USCF.Services;
-
-namespace CCT_USCF.Pages;
-
-public partial class RegisterPage : ContentPage
-{
-    private readonly AuthService _authService;
-
-    private bool _loadingRegions;
-    private bool _loadingDistricts;
-    private bool _loadingBranches;
-
-    public RegisterPage()
-    {
-        InitializeComponent();
-
-        _authService =
-            MauiProgram.CreateAuthServiceForPages();
-
-        // Default account type
-        if (RolePicker.Items.Count > 0)
-            RolePicker.SelectedIndex = 0;
-
-        // Load regions when page opens
-        Loaded += OnPageLoaded;
-    }
-
-    // =========================================================
-    // PAGE LOADED
-    // =========================================================
-
-    private async void OnPageLoaded(
-        object? sender,
-        EventArgs e)
-    {
-        Loaded -= OnPageLoaded;
-
-        await LoadRegionsAsync();
-    }
-
-    // =========================================================
-    // LOAD TANZANIA REGIONS
-    // =========================================================
-
-    private async Task LoadRegionsAsync()
-    {
-        if (_loadingRegions)
-            return;
-
-        _loadingRegions = true;
-
-        try
-        {
-            SetMessage(string.Empty);
-
-            RegionPicker.IsEnabled = false;
-            DistrictPicker.IsEnabled = false;
-            BranchPicker.IsEnabled = false;
-
-            ShowLoading(true);
-
-            var regions =
-                await _authService.GetRegionsAsync();
-
-            if (regions == null || regions.Count == 0)
-            {
-                SetMessage(
-                    "No regions were found in Firebase Firestore.");
-
-                return;
-            }
-
-            // Bind complete LocationItem objects
-            RegionPicker.ItemsSource = regions;
-
-            RegionPicker.ItemDisplayBinding =
-                new Binding(nameof(AuthService.LocationItem.Name));
-
-            RegionPicker.SelectedIndex = -1;
-
-            RegionPicker.IsEnabled = true;
-
-            // Make sure dependent controls start empty
-            DistrictPicker.ItemsSource = null;
-            BranchPicker.ItemsSource = null;
-
-            DistrictPicker.SelectedIndex = -1;
-            BranchPicker.SelectedIndex = -1;
-
-            DistrictPicker.IsVisible = false;
-            BranchPicker.IsVisible = false;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] Region loading failed: {ex}");
-
-            SetMessage(
-                "Unable to load regions. Please check your internet connection and try again.");
-        }
-        finally
-        {
-            RegionPicker.IsEnabled = true;
-
-            ShowLoading(false);
-            _loadingRegions = false;
-        }
-    }
-
-    // =========================================================
-    // REGION SELECTED
-    // =========================================================
-
-    private async void OnRegionChanged(
-        object sender,
-        EventArgs e)
-    {
-        if (_loadingRegions)
-            return;
-
-        if (RegionPicker.SelectedItem
-            is not AuthService.LocationItem selectedRegion)
-        {
-            DistrictPicker.ItemsSource = null;
-            BranchPicker.ItemsSource = null;
-
-            DistrictPicker.IsVisible = false;
-            BranchPicker.IsVisible = false;
-
-            return;
-        }
-
-        await LoadDistrictsAsync(
-            selectedRegion.Id);
-    }
-
-    // =========================================================
-    // LOAD DISTRICTS
-    // =========================================================
-
-    private async Task LoadDistrictsAsync(
-        int regionId)
-    {
-        if (_loadingDistricts)
-            return;
-
-        _loadingDistricts = true;
-
-        try
-        {
-            SetMessage(string.Empty);
-
-            // Clear branches whenever region changes
-            BranchPicker.ItemsSource = null;
-            BranchPicker.SelectedIndex = -1;
-            BranchPicker.IsVisible = false;
-
-            DistrictPicker.ItemsSource = null;
-            DistrictPicker.SelectedIndex = -1;
-
-            DistrictPicker.IsVisible = true;
-            DistrictPicker.IsEnabled = false;
-
-            ShowLoading(true);
-
-            var districts =
-                await _authService.GetDistrictsAsync(
-                    regionId);
-
-            if (districts == null ||
-                districts.Count == 0)
-            {
-                SetMessage(
-                    "No districts were found for the selected region.");
-
-                return;
-            }
-
-            DistrictPicker.ItemsSource = districts;
-
-            DistrictPicker.ItemDisplayBinding =
-                new Binding(nameof(AuthService.LocationItem.Name));
-
-            DistrictPicker.SelectedIndex = -1;
-            DistrictPicker.IsEnabled = true;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] District loading failed: {ex}");
-
-            SetMessage(
-                "Unable to load districts. Please try again.");
-        }
-        finally
-        {
-            ShowLoading(false);
-            _loadingDistricts = false;
-        }
-    }
-
-    // =========================================================
-    // DISTRICT SELECTED
-    // =========================================================
-
-    private async void OnDistrictChanged(
-        object sender,
-        EventArgs e)
-    {
-        if (_loadingDistricts)
-            return;
-
-        if (DistrictPicker.SelectedItem
-            is not AuthService.LocationItem selectedDistrict)
-        {
-            BranchPicker.ItemsSource = null;
-            BranchPicker.IsVisible = false;
-
-            return;
-        }
-
-        await LoadBranchesAsync(
-            selectedDistrict.Id);
-    }
-
-    // =========================================================
-    // LOAD BRANCHES
-    // =========================================================
-
-    private async Task LoadBranchesAsync(
-        int districtId)
-    {
-        if (_loadingBranches)
-            return;
-
-        _loadingBranches = true;
-
-        try
-        {
-            SetMessage(string.Empty);
-
-            BranchPicker.ItemsSource = null;
-            BranchPicker.SelectedIndex = -1;
-
-            BranchPicker.IsVisible = true;
-            BranchPicker.IsEnabled = false;
-
-            ShowLoading(true);
-
-            var branches =
-                await _authService.GetBranchesAsync(
-                    districtId);
-
-            if (branches == null ||
-                branches.Count == 0)
-            {
-                SetMessage(
-                    "No branches were found for the selected district.");
-
-                return;
-            }
-
-            BranchPicker.ItemsSource = branches;
-
-            BranchPicker.ItemDisplayBinding =
-                new Binding(nameof(AuthService.LocationItem.Name));
-
-            BranchPicker.SelectedIndex = -1;
-            BranchPicker.IsEnabled = true;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] Branch loading failed: {ex}");
-
-            SetMessage(
-                "Unable to load branches. Please try again.");
-        }
-        finally
-        {
-            ShowLoading(false);
-            _loadingBranches = false;
-        }
-    }
-
-    // =========================================================
-    // ROLE CHANGED
-    // =========================================================
-
-    private void OnRoleChanged(
-        object sender,
-        EventArgs e)
-    {
-        if (RolePicker.SelectedItem is not string role)
-            return;
-
-        var requiresLeadership =
-            role.Equals(
-                "USCF Leader",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            role.Equals(
-                "Pastor",
-                StringComparison.OrdinalIgnoreCase);
-
-        LeadershipSection.IsVisible =
-            requiresLeadership;
-
-        if (!requiresLeadership)
-        {
-            LevelPicker.SelectedIndex = -1;
-        }
-
-        // Location remains available for all members.
-        LocationSection.IsVisible = true;
-    }
-
-    // =========================================================
-    // LEADERSHIP LEVEL CHANGED
-    // =========================================================
-
-    private void OnLevelChanged(
-        object sender,
-        EventArgs e)
-    {
-        if (LevelPicker.SelectedItem is not string level)
-            return;
-
-        /*
-         * Currently all account types can select their
-         * Tanzania location.
-         *
-         * Additional validation for National/Regional/
-         * District/Branch leadership can be added later
-         * when the leadership authorization model is defined.
-         */
-    }
-
-    // =========================================================
-    // CREATE ACCOUNT
-    // =========================================================
-
-    private async void OnCreateAccountClicked(
-        object sender,
-        EventArgs e)
-    {
-        if (LoadingIndicator.IsRunning)
-            return;
-
-        try
-        {
-            SetMessage(string.Empty);
-
-            // -------------------------------------------------
-            // READ BASIC INFORMATION
-            // -------------------------------------------------
-
-            var fullName =
-                FullNameEntry.Text?.Trim() ?? string.Empty;
-
-            var username =
-                UsernameEntry.Text?.Trim() ?? string.Empty;
-
-            var email =
-                EmailEntry.Text?.Trim() ?? string.Empty;
-
-            var password =
-                PasswordEntry.Text ?? string.Empty;
-
-            var confirmPassword =
-                ConfirmPasswordEntry.Text ?? string.Empty;
-
-            // Phone is currently collected by the UI,
-            // but AuthService does not yet save it.
-            var phone =
-                PhoneEntry.Text?.Trim() ?? string.Empty;
-
-            // -------------------------------------------------
-            // ROLE
-            // -------------------------------------------------
-
-            var role =
-                RolePicker.SelectedItem?.ToString()
-                ?? "USCF Member";
-
-            // -------------------------------------------------
-            // BASIC VALIDATION
-            // -------------------------------------------------
-
-            if (string.IsNullOrWhiteSpace(fullName))
-            {
-                SetMessage("Please enter your full name.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                SetMessage("Please enter a username.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                SetMessage("Please enter your email address.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(phone))
-            {
-                SetMessage("Please enter your phone number.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                SetMessage("Please enter a password.");
-                return;
-            }
-
-            if (password != confirmPassword)
-            {
-                SetMessage("Passwords do not match.");
-                return;
-            }
-
-            // -------------------------------------------------
-            // REGION
-            // -------------------------------------------------
-
-            if (RegionPicker.SelectedItem
-                is not AuthService.LocationItem selectedRegion)
-            {
-                SetMessage(
-                    "Please select your region.");
-
-                return;
-            }
-
-            // -------------------------------------------------
-            // DISTRICT
-            // -------------------------------------------------
-
-            int? districtId = null;
-
-            if (DistrictPicker.IsVisible)
-            {
-                if (DistrictPicker.SelectedItem
-                    is not AuthService.LocationItem selectedDistrict)
-                {
-                    SetMessage(
-                        "Please select your district.");
-
-                    return;
-                }
-
-                districtId =
-                    selectedDistrict.Id;
-            }
-
-            // -------------------------------------------------
-            // BRANCH
-            // -------------------------------------------------
-
-            int? branchId = null;
-
-            if (BranchPicker.IsVisible)
-            {
-                if (BranchPicker.SelectedItem
-                    is not AuthService.LocationItem selectedBranch)
-                {
-                    SetMessage(
-                        "Please select your branch / local fellowship.");
-
-                    return;
-                }
-
-                branchId =
-                    selectedBranch.Id;
-            }
-
-            // -------------------------------------------------
-            // CREATE FIREBASE ACCOUNT
-            // -------------------------------------------------
-
-            SetLoadingButton(true);
-
-            await _authService.RegisterAsync(
-                fullName,
-                username,
-                email,
-                password,
-                confirmPassword,
-                role,
-                selectedRegion.Id,
-                districtId,
-                branchId);
-
-            // -------------------------------------------------
-            // SUCCESS
-            // -------------------------------------------------
-
-            SetMessage(
-                "Account created successfully!",
-                false);
-
-            await DisplayAlert(
-                "Welcome to USCF",
-                "Your USCF account has been created successfully.",
-                "Continue");
-
-            // Firebase automatically authenticates the newly
-            // created account. Go to the home page.
-            await Shell.Current.GoToAsync(
-                "//home");
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] Registration failed: {ex}");
-
-            SetMessage(
-                ex.Message);
-        }
-        finally
-        {
-            SetLoadingButton(false);
-        }
-    }
-
-    // =========================================================
-    // LOGIN
-    // =========================================================
-
-    private async void OnLoginClicked(
-        object sender,
-        EventArgs e)
-    {
-        try
-        {
-            await Shell.Current.GoToAsync(
-                nameof(LoginPage));
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] Login navigation failed: {ex}");
-        }
-    }
-
-    // =========================================================
-    // UI HELPERS
-    // =========================================================
-
-    private void ShowLoading(bool visible)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            LoadingIndicator.IsVisible = visible;
-            LoadingIndicator.IsRunning = visible;
-        });
-    }
-
-    private void SetLoadingButton(bool loading)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            CreateAccountButton.IsEnabled = !loading;
-
-            CreateAccountButton.Text =
-                loading
-                    ? "CREATING ACCOUNT..."
-                    : "CREATE ACCOUNT";
-
-            LoadingIndicator.IsVisible = loading;
-            LoadingIndicator.IsRunning = loading;
-        });
-    }
-
-    private void SetMessage(
-        string message,
-        bool isError = true)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            MessageLabel.Text = message;
-            MessageLabel.IsVisible =
-                !string.IsNullOrWhiteSpace(message);
-
-            MessageLabel.TextColor =
-                isError
-                    ? Colors.Red
-                    : Color.FromArgb("#009E2C");
-        });
-    }
-}
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.RegisterPage"
+    Title="Create USCF Account">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="14">
+
+            <Label
+                Text="Create Your USCF Account"
+                FontSize="26"
+                FontAttributes="Bold"
+                HorizontalOptions="Center"
+                TextColor="#009E2C"/>
+
+            <Label
+                Text="Join the University Students' Christian Fellowship"
+                FontSize="14"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center"/>
+
+            <!-- ACCOUNT TYPE -->
+
+            <Label
+                Text="What type of USCF member are you?"
+                FontAttributes="Bold"
+                Margin="0,15,0,0"/>
+
+            <Picker
+                x:Name="RolePicker"
+                Title="Select account type"
+                SelectedIndexChanged="OnRoleChanged">
+
+                <Picker.Items>
+                    <x:String>USCF Member</x:String>
+                    <x:String>USCF Leader</x:String>
+                    <x:String>Pastor</x:String>
+                </Picker.Items>
+
+            </Picker>
+
+            <!-- BASIC INFORMATION -->
+
+            <Entry
+                x:Name="FullNameEntry"
+                Placeholder="Full Name"/>
+
+            <Entry
+                x:Name="UsernameEntry"
+                Placeholder="Username"/>
+
+            <Entry
+                x:Name="EmailEntry"
+                Placeholder="Email"
+                Keyboard="Email"/>
+
+            <Entry
+                x:Name="PhoneEntry"
+                Placeholder="Phone Number"
+                Keyboard="Telephone"/>
+
+            <Entry
+                x:Name="PasswordEntry"
+                Placeholder="Password"
+                IsPassword="True"/>
+
+            <Entry
+                x:Name="ConfirmPasswordEntry"
+                Placeholder="Confirm Password"
+                IsPassword="True"/>
+
+            <!-- LEADER / PASTOR LEVEL -->
+
+            <VerticalStackLayout
+                x:Name="LeadershipSection"
+                IsVisible="False"
+                Spacing="10">
+
+                <Label
+                    Text="Leadership / Ministry Level"
+                    FontAttributes="Bold"/>
+
+                <Picker
+                    x:Name="LevelPicker"
+                    Title="Select level"
+                    SelectedIndexChanged="OnLevelChanged">
+
+                    <Picker.Items>
+                        <x:String>National</x:String>
+                        <x:String>Regional</x:String>
+                        <x:String>District</x:String>
+                        <x:String>Branch / Local</x:String>
+                    </Picker.Items>
+
+                </Picker>
+
+            </VerticalStackLayout>
+
+            <!-- LOCATION -->
+
+            <VerticalStackLayout
+                x:Name="LocationSection"
+                IsVisible="True"
+                Spacing="10">
+
+                <Label
+                    Text="Your USCF Location"
+                    FontAttributes="Bold"/>
+
+                <Picker
+                    x:Name="RegionPicker"
+                    Title="Select Region"/>
+
+                <Picker
+                    x:Name="DistrictPicker"
+                    Title="Select District"
+                    IsVisible="False"/>
+
+                <Picker
+                    x:Name="BranchPicker"
+                    Title="Select Branch / Local Fellowship"
+                    IsVisible="False"/>
+
+            </VerticalStackLayout>
+
+            <Button
+                x:Name="CreateAccountButton"
+                Text="CREATE ACCOUNT"
+                Clicked="OnCreateAccountClicked"
+                BackgroundColor="#009E2C"
+                TextColor="White"
+                CornerRadius="10"
+                HeightRequest="52"/>
+
+            <HorizontalStackLayout HorizontalOptions="Center">
+
+                <Label
+                    Text="Already have an account?"
+                    VerticalOptions="Center"/>
+
+                <Button
+                    Text="Login"
+                    Clicked="OnLoginClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="#009E2C"/>
+
+            </HorizontalStackLayout>
+
+            <ActivityIndicator
+                x:Name="LoadingIndicator"
+                IsVisible="False"
+                IsRunning="False"
+                Color="#009E2C"/>
+
+            <Label
+                x:Name="MessageLabel"
+                TextColor="Red"
+                IsVisible="False"
+                HorizontalTextAlignment="Center"/>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

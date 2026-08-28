@@ -1,6 +1,7 @@
 using Appwrite;
 using Appwrite.Services;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
 
@@ -56,14 +57,6 @@ public static class MauiProgram
     // =========================================================
     // APPWRITE CONFIGURATION
     // =========================================================
-    builder.Services.AddSingleton<
-    CCT_USCF.Services.FirebaseRegionSeedService>();
-
-builder.Services.AddSingleton<
-    CCT_USCF.Services.FirebaseDistrictSeedService>();
-
-builder.Services.AddSingleton<
-    CCT_USCF.Services.FirebaseUniversitySeedService>();
 
     private const string AppwriteEndpoint =
         "https://sgp.cloud.appwrite.io/v1";
@@ -136,18 +129,21 @@ builder.Services.AddSingleton<
         builder.Services.AddSingleton<IFirebaseAuth>(
             _ => CrossFirebaseAuth.Current);
 
+        // =====================================================
+        // FIREBASE FIRESTORE
+        // =====================================================
+
         builder.Services.AddSingleton<IFirebaseFirestore>(
-    _ => CrossFirebaseFirestore.Current);
+            _ => CrossFirebaseFirestore.Current);
 
         // =====================================================
         // EXISTING ASP.NET CORE API
         // =====================================================
         //
-        // Kept temporarily because other parts of the
-        // application may still use AuthService/API services.
+        // Kept temporarily because existing services may still
+        // communicate with the ASP.NET Core backend.
         //
-        // Once all services are migrated to Firebase/Appwrite,
-        // this HttpClient can be removed.
+        // It can be removed later after complete migration.
         // =====================================================
 
         builder.Services.AddSingleton<HttpClient>(_ =>
@@ -163,14 +159,13 @@ builder.Services.AddSingleton<
         // APPWRITE
         // =====================================================
         //
-        // Appwrite is used for:
+        // Appwrite handles:
+        // - Images
+        // - Videos
+        // - Audio
+        // - Documents
         //
-        // Images
-        // Videos
-        // Audio
-        // Documents
-        //
-        // Firebase Storage is NOT used.
+        // Firebase Storage remains disabled.
         // =====================================================
 
         var appwriteClient = new Client()
@@ -195,17 +190,38 @@ builder.Services.AddSingleton<
         // CCT APPLICATION SERVICES
         // =====================================================
 
-        // Firebase Authentication + Firestore service
+        // Authentication
         builder.Services.AddSingleton<
             CCT_USCF.Services.AuthService>();
 
-        // Community service
+        // Community
         builder.Services.AddSingleton<
             CCT_USCF.Services.CommunityService>();
 
-        // Bible service
+        // Bible
         builder.Services.AddSingleton<
             CCT_USCF.Services.BibleService>();
+
+        // =====================================================
+        // FIREBASE DATA SEEDERS
+        // =====================================================
+        //
+        // These are registered so they can be called when
+        // required.
+        //
+        // IMPORTANT:
+        // Registration does NOT automatically seed the database.
+        // The seeding methods must be explicitly called.
+        // =====================================================
+
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.FirebaseRegionSeedService>();
+
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.FirebaseDistrictSeedService>();
+
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.FirebaseUniversitySeedService>();
 
         // =====================================================
         // ANDROID AUDIO PLAYER
@@ -225,7 +241,7 @@ builder.Services.AddSingleton<
 
         var app = builder.Build();
 
-        // Store the application's service provider
+        // Store application's service provider
         Services = app.Services;
 
         return app;
@@ -235,256 +251,18 @@ builder.Services.AddSingleton<
     // FIREBASE SETTINGS
     // =========================================================
 
-    private static CrossFirebaseSettings
-        CreateFirebaseSettings()
-    {
-        return new CrossFirebaseSettings(
-
-            // Firebase Analytics
-            isAnalyticsEnabled: true,
-
-            // Firebase Authentication
-            isAuthEnabled: true,
-
-            // Firebase Cloud Messaging
-            isCloudMessagingEnabled: true,
-
-            // Dynamic Links
-            isDynamicLinksEnabled: false,
-
-            // Cloud Firestore
-            isFirestoreEnabled: true,
-
-            // Firebase Functions
-            isFunctionsEnabled: true,
-
-            // Firebase Remote Config
-            isRemoteConfigEnabled: true,
-
-            // Firebase Storage
-            //
-            // FALSE because CCT-USCF uses Appwrite
-            // for images, videos, audio and documents.
-            isStorageEnabled: false
-        )
-        {
-            // Firebase Installations
-            IsInstallationsEnabled = true,
-
-            // Performance Monitoring
-            IsPerformanceMonitoringEnabled = false
-        };
-    }
-
-                fonts.AddFont(
-                    "OpenSans-Semibold.ttf",
-                    "OpenSansSemibold");
-            });
-
-#if DEBUG
-        builder.Logging.AddDebug();
-#endif
-
-        // =========================================================
-        // FIREBASE
-        // =========================================================
-        //
-        // Plugin.Firebase 4.2.1
-        //
-        // Firebase services enabled:
-        // - Authentication
-        // - Cloud Firestore
-        // - Cloud Messaging
-        // - Functions
-        // - Remote Config
-        // - Installations
-        //
-        // Storage is intentionally NOT used because CCT-USCF
-        // will continue using Appwrite for media/files.
-        // =========================================================
-
-#if ANDROID
-
-        builder.ConfigureLifecycleEvents(events =>
-        {
-            events.AddAndroid(android =>
-                android.OnCreate((activity, _) =>
-                {
-                    var firebaseSettings =
-                        CreateFirebaseSettings();
-
-                    CrossFirebase.Initialize(
-                        activity,
-                        () => Platform.CurrentActivity,
-                        firebaseSettings);
-                }));
-        });
-
-#endif
-
-        // Firebase Authentication
-        builder.Services.AddSingleton(
-            _ => CrossFirebaseAuth.Current);
-
-        // =========================================================
-        // EXISTING ASP.NET CORE API
-        // =========================================================
-        //
-        // TEMPORARY.
-        //
-        // DO NOT REMOVE THIS YET.
-        //
-        // AuthService, CommunityService and other existing
-        // services may still depend on the old API.
-        //
-        // We will remove this after those services are migrated
-        // to Firebase/Firestore.
-        // =========================================================
-
-        builder.Services.AddSingleton(sp =>
-            new HttpClient
-            {
-                BaseAddress = new Uri(
-                    CCT_USCF.Services.ApiConfig.BaseUrl)
-            });
-
-        // =========================================================
-        // APPWRITE CLOUD
-        // =========================================================
-        //
-        // Appwrite remains responsible for:
-        // - Images
-        // - Videos
-        // - Audio
-        // - Documents
-        // =========================================================
-
-        var appwriteClient = new Client()
-            .SetEndpoint(AppwriteEndpoint)
-            .SetProject(AppwriteProjectId);
-
-        builder.Services.AddSingleton(appwriteClient);
-
-        // Appwrite account
-        builder.Services.AddSingleton<Account>();
-
-        // Appwrite database
-        builder.Services.AddSingleton<TablesDB>();
-
-        // Appwrite file storage
-        builder.Services.AddSingleton<Storage>();
-
-        // Appwrite functions
-        builder.Services.AddSingleton<Functions>();
-
-        // =========================================================
-        // CCT SERVICES
-        // =========================================================
-
-        // Authentication
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.AuthService>();
-
-        // Community
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.CommunityService>();
-
-        // Offline Bible
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.BibleService>();
-
-#if ANDROID
-
-        // Android audio player
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.IAudioPlayer,
-            CCT_USCF.Services.AndroidAudioPlayer>();
-
-#endif
-
-        // =========================================================
-        // BUILD APPLICATION
-        // =========================================================
-
-        var app = builder.Build();
-
-        // Expose service provider
-        Services = app.Services;
-
-        return app;
-    }
-
-    // =========================================================
-    // FIREBASE SETTINGS
-    // =========================================================
-
-    private static CrossFirebaseSettings
-        CreateFirebaseSettings()
-    {
-        return new CrossFirebaseSettings(
-
-            // Firebase Analytics
-            isAnalyticsEnabled: true,
-
-            // Firebase Authentication
-            isAuthEnabled: true,
-
-            // Firebase Cloud Messaging
-            isCloudMessagingEnabled: true,
-
-            // Dynamic Links
-            isDynamicLinksEnabled: false,
-
-            // Cloud Firestore
-            isFirestoreEnabled: true,
-
-            // Firebase Functions
-            isFunctionsEnabled: true,
-
-            // Remote Config
-            isRemoteConfigEnabled: true,
-
-            // Firebase Storage
-            // Disabled because Appwrite handles media.
-            isStorageEnabled: false
-
-        )
-        {
-            // Firebase Installations
-            IsInstallationsEnabled = true,
-
-            // Performance Monitoring
-            IsPerformanceMonitoringEnabled = false
-        };
-    }
-}            CCT_USCF.Services.AuthService>();
-
-        // Community
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.CommunityService>();
-
-        // Offline Bible
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.BibleService>();
-
-#if ANDROID
-
-        // Android audio player
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.IAudioPlayer,
-            CCT_USCF.Services.AndroidAudioPlayer>();
-
-#endif
-
-        // =========================================================
-        // BUILD APPLICATION
-        // =========================================================
-
-        var app = builder.Build();
-
-        // Expose service provider for page-level access
-        Services = app.Services;
-
-        return app;
-    }
+   private static CrossFirebaseSettings
+       CreateFirebaseSettings()
+   {
+       return new CrossFirebaseSettings(
+           isAnalyticsEnabled: true,
+           isAuthEnabled: true,
+           isCloudMessagingEnabled: true,
+           isDynamicLinksEnabled: true,
+           isFirestoreEnabled: true,
+           isFunctionsEnabled: true,
+           isRemoteConfigEnabled: true,
+           isStorageEnabled: false);
+   }
 }
+
