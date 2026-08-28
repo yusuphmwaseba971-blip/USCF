@@ -1,3 +1,4 @@
+
 using AuthLocation = CCT_USCF.Services.AuthService.LocationItem;
 
 namespace CCT_USCF.Pages;
@@ -10,42 +11,95 @@ public partial class RegisterPage : ContentPage
     private List<AuthLocation> _districts = new();
     private List<AuthLocation> _branches = new();
 
+    private bool _loadingRegions;
+    private bool _loadingDistricts;
+    private bool _loadingBranches;
+
     public RegisterPage()
     {
         InitializeComponent();
 
-        _authService = LoginRegisterHelpers.GetAuthService();
+        _authService =
+            LoginRegisterHelpers.GetAuthService();
+
+        // =====================================================
+        // DEFAULT ROLE
+        // =====================================================
 
         RolePicker.SelectedIndex = 0;
 
-        RegionPicker.SelectedIndexChanged += OnRegionChanged;
-        DistrictPicker.SelectedIndexChanged += OnDistrictChanged;
+        // =====================================================
+        // LOCATION EVENTS
+        // =====================================================
+        //
+        // These are NOT declared in XAML currently, so we
+        // subscribe here.
+        //
+        // Do not add these same events to XAML unless you remove
+        // these subscriptions.
+        // =====================================================
+
+        RegionPicker.SelectedIndexChanged +=
+            OnRegionChanged;
+
+        DistrictPicker.SelectedIndexChanged +=
+            OnDistrictChanged;
+
+        // =====================================================
+        // INITIAL UI
+        // =====================================================
 
         UpdateRoleUI();
+
+        // =====================================================
+        // LOAD TANZANIA REGIONS FROM FIRESTORE
+        // =====================================================
 
         _ = LoadRegionsAsync();
     }
 
-    private void OnRoleChanged(object sender, EventArgs e)
+    // =========================================================
+    // ROLE
+    // =========================================================
+
+    private void OnRoleChanged(
+        object sender,
+        EventArgs e)
     {
         UpdateRoleUI();
     }
 
     private void UpdateRoleUI()
     {
-        var role = RolePicker.SelectedIndex;
+        var roleIndex =
+            RolePicker.SelectedIndex;
 
-        if (role == 0)
+        // -----------------------------------------------------
+        // MEMBER
+        // -----------------------------------------------------
+
+        if (roleIndex == 0)
         {
             LeadershipSection.IsVisible = false;
+
             LevelPicker.SelectedIndex = -1;
 
             LocationSection.IsVisible = true;
-            DistrictPicker.IsVisible = true;
-            BranchPicker.IsVisible = true;
+
+            RegionPicker.IsVisible = true;
+
+            DistrictPicker.IsVisible =
+                RegionPicker.SelectedItem != null;
+
+            BranchPicker.IsVisible =
+                DistrictPicker.SelectedItem != null;
 
             return;
         }
+
+        // -----------------------------------------------------
+        // LEADER / PASTOR
+        // -----------------------------------------------------
 
         LeadershipSection.IsVisible = true;
         LocationSection.IsVisible = true;
@@ -53,7 +107,13 @@ public partial class RegisterPage : ContentPage
         UpdateLocationFields();
     }
 
-    private void OnLevelChanged(object sender, EventArgs e)
+    // =========================================================
+    // LEADERSHIP LEVEL
+    // =========================================================
+
+    private void OnLevelChanged(
+        object sender,
+        EventArgs e)
     {
         UpdateLocationFields();
     }
@@ -65,113 +125,484 @@ public partial class RegisterPage : ContentPage
 
         switch (LevelPicker.SelectedIndex)
         {
-            case 0: // National
+            // -------------------------------------------------
+            // NATIONAL
+            // -------------------------------------------------
+
+            case 0:
+
                 RegionPicker.IsVisible = false;
                 DistrictPicker.IsVisible = false;
                 BranchPicker.IsVisible = false;
+
                 break;
 
-            case 1: // Regional
+            // -------------------------------------------------
+            // REGIONAL
+            // -------------------------------------------------
+
+            case 1:
+
                 RegionPicker.IsVisible = true;
+
                 DistrictPicker.IsVisible = false;
                 BranchPicker.IsVisible = false;
+
                 break;
 
-            case 2: // District
+            // -------------------------------------------------
+            // DISTRICT
+            // -------------------------------------------------
+
+            case 2:
+
                 RegionPicker.IsVisible = true;
-                DistrictPicker.IsVisible = true;
+
+                DistrictPicker.IsVisible =
+                    RegionPicker.SelectedItem != null;
+
                 BranchPicker.IsVisible = false;
+
                 break;
 
-            case 3: // Branch
+            // -------------------------------------------------
+            // BRANCH / LOCAL
+            // -------------------------------------------------
+
+            case 3:
+
                 RegionPicker.IsVisible = true;
-                DistrictPicker.IsVisible = true;
-                BranchPicker.IsVisible = true;
+
+                DistrictPicker.IsVisible =
+                    RegionPicker.SelectedItem != null;
+
+                BranchPicker.IsVisible =
+                    DistrictPicker.SelectedItem != null;
+
+                break;
+
+            // -------------------------------------------------
+            // NO LEVEL SELECTED
+            // -------------------------------------------------
+
+            default:
+
+                RegionPicker.IsVisible = false;
+                DistrictPicker.IsVisible = false;
+                BranchPicker.IsVisible = false;
+
                 break;
         }
     }
+
+    // =========================================================
+    // LOAD REGIONS
+    // =========================================================
 
     private async Task LoadRegionsAsync()
     {
+        if (_loadingRegions)
+            return;
+
+        _loadingRegions = true;
+
         try
         {
-            _regions = await _authService.GetRegionsAsync();
+            ShowLoading(true);
 
-            RegionPicker.ItemsSource = _regions;
-            RegionPicker.ItemDisplayBinding = new Binding("Name");
+            MessageLabel.IsVisible = false;
+
+            RegionPicker.IsEnabled = false;
+
+            _regions =
+                await _authService.GetRegionsAsync();
+
+            if (_regions == null ||
+                _regions.Count == 0)
+            {
+                ShowError(
+                    "No Tanzania regions were found in Firebase.");
+
+                return;
+            }
+
+            // -------------------------------------------------
+            // BIND REGIONS
+            // -------------------------------------------------
+
+            RegionPicker.ItemsSource =
+                _regions;
+
+            RegionPicker.ItemDisplayBinding =
+                new Binding(nameof(AuthLocation.Name));
+
+            RegionPicker.SelectedIndex = -1;
+
+            // -------------------------------------------------
+            // RESET CHILDREN
+            // -------------------------------------------------
+
+            _districts.Clear();
+            _branches.Clear();
+
+            DistrictPicker.ItemsSource = null;
+            BranchPicker.ItemsSource = null;
+
+            DistrictPicker.SelectedIndex = -1;
+            BranchPicker.SelectedIndex = -1;
+
+            DistrictPicker.IsVisible = false;
+            BranchPicker.IsVisible = false;
+
+            RegionPicker.IsEnabled = true;
         }
         catch (Exception ex)
         {
-            ShowError($"Unable to load regions: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Failed to load regions: {ex}");
+
+            ShowError(
+                $"Unable to load regions: {ex.Message}");
+        }
+        finally
+        {
+            RegionPicker.IsEnabled = true;
+
+            ShowLoading(false);
+
+            _loadingRegions = false;
         }
     }
 
-    private async void OnRegionChanged(object? sender, EventArgs e)
+    // =========================================================
+    // REGION CHANGED
+    // =========================================================
+
+    private async void OnRegionChanged(
+        object? sender,
+        EventArgs e)
     {
-        if (RegionPicker.SelectedItem is not AuthLocation region)
+        if (_loadingRegions)
             return;
 
-        DistrictPicker.SelectedIndex = -1;
-        BranchPicker.SelectedIndex = -1;
+        if (RegionPicker.SelectedItem
+            is not AuthLocation selectedRegion)
+        {
+            DistrictPicker.ItemsSource = null;
+            BranchPicker.ItemsSource = null;
+
+            DistrictPicker.SelectedIndex = -1;
+            BranchPicker.SelectedIndex = -1;
+
+            DistrictPicker.IsVisible = false;
+            BranchPicker.IsVisible = false;
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // RESET DISTRICT + BRANCH
+        // -----------------------------------------------------
 
         DistrictPicker.ItemsSource = null;
         BranchPicker.ItemsSource = null;
 
+        DistrictPicker.SelectedIndex = -1;
+        BranchPicker.SelectedIndex = -1;
+
+        _districts.Clear();
+        _branches.Clear();
+
+        BranchPicker.IsVisible = false;
+
+        // -----------------------------------------------------
+        // NATIONAL LEVEL DOES NOT NEED LOCATION
+        // -----------------------------------------------------
+
+        if (RolePicker.SelectedIndex != 0 &&
+            LevelPicker.SelectedIndex <= 1)
+        {
+            DistrictPicker.IsVisible = false;
+            BranchPicker.IsVisible = false;
+
+            return;
+        }
+
+        await LoadDistrictsAsync(
+            selectedRegion.Id);
+    }
+
+    // =========================================================
+    // LOAD DISTRICTS
+    // =========================================================
+
+    private async Task LoadDistrictsAsync(
+        int regionId)
+    {
+        if (_loadingDistricts)
+            return;
+
+        _loadingDistricts = true;
+
         try
         {
-            _districts = await _authService.GetDistrictsAsync(region.Id);
+            ShowLoading(true);
 
-            DistrictPicker.ItemsSource = _districts;
-            DistrictPicker.ItemDisplayBinding = new Binding("Name");
+            DistrictPicker.IsEnabled = false;
 
-            DistrictPicker.IsVisible = true;
+            _districts =
+                await _authService.GetDistrictsAsync(
+                    regionId);
+
+            if (_districts == null ||
+                _districts.Count == 0)
+            {
+                ShowError(
+                    "No districts were found for the selected region.");
+
+                DistrictPicker.IsVisible = false;
+                BranchPicker.IsVisible = false;
+
+                return;
+            }
+
+            DistrictPicker.ItemsSource =
+                _districts;
+
+            DistrictPicker.ItemDisplayBinding =
+                new Binding(nameof(AuthLocation.Name));
+
+            DistrictPicker.SelectedIndex = -1;
+
+            // -------------------------------------------------
+            // DISTRICT LEVEL OR BRANCH LEVEL
+            // -------------------------------------------------
+
+            if (RolePicker.SelectedIndex == 0)
+            {
+                DistrictPicker.IsVisible = true;
+            }
+            else if (LevelPicker.SelectedIndex >= 2)
+            {
+                DistrictPicker.IsVisible = true;
+            }
         }
         catch (Exception ex)
         {
-            ShowError($"Unable to load districts: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Failed to load districts: {ex}");
+
+            ShowError(
+                $"Unable to load districts: {ex.Message}");
+
+            DistrictPicker.IsVisible = false;
+        }
+        finally
+        {
+            DistrictPicker.IsEnabled = true;
+
+            ShowLoading(false);
+
+            _loadingDistricts = false;
         }
     }
 
-    private async void OnDistrictChanged(object? sender, EventArgs e)
+    // =========================================================
+    // DISTRICT CHANGED
+    // =========================================================
+
+    private async void OnDistrictChanged(
+        object? sender,
+        EventArgs e)
     {
-        if (DistrictPicker.SelectedItem is not AuthLocation district)
+        if (_loadingDistricts)
             return;
 
-        BranchPicker.SelectedIndex = -1;
+        if (DistrictPicker.SelectedItem
+            is not AuthLocation selectedDistrict)
+        {
+            BranchPicker.ItemsSource = null;
+            BranchPicker.SelectedIndex = -1;
+            BranchPicker.IsVisible = false;
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // RESET BRANCH
+        // -----------------------------------------------------
+
         BranchPicker.ItemsSource = null;
+        BranchPicker.SelectedIndex = -1;
+
+        _branches.Clear();
+
+        // -----------------------------------------------------
+        // MEMBER
+        //
+        // Members need branch/local fellowship.
+        // -----------------------------------------------------
+
+        if (RolePicker.SelectedIndex == 0)
+        {
+            await LoadBranchesAsync(
+                selectedDistrict.Id);
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // DISTRICT LEADER
+        //
+        // District level does not require branch.
+        // -----------------------------------------------------
+
+        if (LevelPicker.SelectedIndex == 2)
+        {
+            BranchPicker.IsVisible = false;
+            return;
+        }
+
+        // -----------------------------------------------------
+        // BRANCH LEADER
+        // -----------------------------------------------------
+
+        if (LevelPicker.SelectedIndex == 3)
+        {
+            await LoadBranchesAsync(
+                selectedDistrict.Id);
+
+            return;
+        }
+
+        BranchPicker.IsVisible = false;
+    }
+
+    // =========================================================
+    // LOAD BRANCHES
+    // =========================================================
+
+    private async Task LoadBranchesAsync(
+        int districtId)
+    {
+        if (_loadingBranches)
+            return;
+
+        _loadingBranches = true;
 
         try
         {
-            _branches = await _authService.GetBranchesAsync(district.Id);
+            ShowLoading(true);
 
-            BranchPicker.ItemsSource = _branches;
-            BranchPicker.ItemDisplayBinding = new Binding("Name");
+            BranchPicker.IsEnabled = false;
+
+            _branches =
+                await _authService.GetBranchesAsync(
+                    districtId);
+
+            if (_branches == null ||
+                _branches.Count == 0)
+            {
+                ShowError(
+                    "No branches were found for the selected district.");
+
+                BranchPicker.IsVisible = false;
+
+                return;
+            }
+
+            BranchPicker.ItemsSource =
+                _branches;
+
+            BranchPicker.ItemDisplayBinding =
+                new Binding(nameof(AuthLocation.Name));
+
+            BranchPicker.SelectedIndex = -1;
 
             BranchPicker.IsVisible = true;
         }
         catch (Exception ex)
         {
-            ShowError($"Unable to load branches: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Failed to load branches: {ex}");
+
+            ShowError(
+                $"Unable to load branches: {ex.Message}");
+
+            BranchPicker.IsVisible = false;
+        }
+        finally
+        {
+            BranchPicker.IsEnabled = true;
+
+            ShowLoading(false);
+
+            _loadingBranches = false;
         }
     }
 
-    private async void OnCreateAccountClicked(object sender, EventArgs e)
+    // =========================================================
+    // CREATE ACCOUNT
+    // =========================================================
+
+    private async void OnCreateAccountClicked(
+        object sender,
+        EventArgs e)
     {
+        if (LoadingIndicator.IsRunning)
+            return;
+
         MessageLabel.IsVisible = false;
 
-        var fullName = FullNameEntry.Text?.Trim();
-        var username = UsernameEntry.Text?.Trim();
-        var email = EmailEntry.Text?.Trim();
+        var fullName =
+            FullNameEntry.Text?.Trim() ?? string.Empty;
 
-        var password = PasswordEntry.Text ?? "";
-        var confirm = ConfirmPasswordEntry.Text ?? "";
+        var username =
+            UsernameEntry.Text?.Trim() ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(fullName) ||
-            string.IsNullOrWhiteSpace(username) ||
-            string.IsNullOrWhiteSpace(email) ||
-            string.IsNullOrWhiteSpace(password))
+        var email =
+            EmailEntry.Text?.Trim() ?? string.Empty;
+
+        var phone =
+            PhoneEntry.Text?.Trim() ?? string.Empty;
+
+        var password =
+            PasswordEntry.Text ?? string.Empty;
+
+        var confirm =
+            ConfirmPasswordEntry.Text ?? string.Empty;
+
+        // =====================================================
+        // BASIC VALIDATION
+        // =====================================================
+
+        if (string.IsNullOrWhiteSpace(fullName))
         {
-            ShowError("Please complete all required fields.");
+            ShowError("Please enter your full name.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            ShowError("Please enter your username.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            ShowError("Please enter your email address.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            ShowError("Please enter your phone number.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            ShowError("Please enter a password.");
             return;
         }
 
@@ -181,25 +612,87 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
-        var role = RolePicker.SelectedIndex switch
-        {
-            1 => "Leader",
-            2 => "Pastor",
-            _ => "Member"
-        };
+        // =====================================================
+        // ROLE
+        // =====================================================
+
+        var role =
+            RolePicker.SelectedIndex switch
+            {
+                1 => "Leader",
+                2 => "Pastor",
+                _ => "Member"
+            };
+
+        // =====================================================
+        // LOCATION IDS
+        // =====================================================
 
         int? regionId = null;
         int? districtId = null;
         int? branchId = null;
 
-        if (RegionPicker.SelectedItem is AuthLocation selectedRegion)
-            regionId = selectedRegion.Id;
+        if (RegionPicker.IsVisible)
+        {
+            if (RegionPicker.SelectedItem
+                is not AuthLocation selectedRegion)
+            {
+                ShowError(
+                    "Please select your region.");
 
-        if (DistrictPicker.SelectedItem is AuthLocation selectedDistrict)
-            districtId = selectedDistrict.Id;
+                return;
+            }
 
-        if (BranchPicker.SelectedItem is AuthLocation selectedBranch)
-            branchId = selectedBranch.Id;
+            regionId =
+                selectedRegion.Id;
+        }
+
+        if (DistrictPicker.IsVisible)
+        {
+            if (DistrictPicker.SelectedItem
+                is not AuthLocation selectedDistrict)
+            {
+                ShowError(
+                    "Please select your district.");
+
+                return;
+            }
+
+            districtId =
+                selectedDistrict.Id;
+        }
+
+        if (BranchPicker.IsVisible)
+        {
+            if (BranchPicker.SelectedItem
+                is not AuthLocation selectedBranch)
+            {
+                ShowError(
+                    "Please select your branch / local fellowship.");
+
+                return;
+            }
+
+            branchId =
+                selectedBranch.Id;
+        }
+
+        // =====================================================
+        // LEADERSHIP LEVEL
+        // =====================================================
+
+        if (RolePicker.SelectedIndex != 0 &&
+            LevelPicker.SelectedIndex < 0)
+        {
+            ShowError(
+                "Please select your leadership / ministry level.");
+
+            return;
+        }
+
+        // =====================================================
+        // CREATE FIREBASE ACCOUNT
+        // =====================================================
 
         try
         {
@@ -216,16 +709,27 @@ public partial class RegisterPage : ContentPage
                 districtId,
                 branchId);
 
+            // =================================================
+            // SUCCESS
+            // =================================================
+
             await DisplayAlert(
                 "Account Created",
                 "Your USCF account has been created successfully.",
                 "OK");
 
-            await Shell.Current.GoToAsync(nameof(LoginPage));
+            // Firebase automatically signs in the new user.
+            // Go directly to Home.
+            await Shell.Current.GoToAsync(
+                "//home");
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Account creation failed: {ex}");
+
+            ShowError(
+                ex.Message);
         }
         finally
         {
@@ -233,22 +737,70 @@ public partial class RegisterPage : ContentPage
         }
     }
 
-    private async void OnLoginClicked(object sender, EventArgs e)
+    // =========================================================
+    // LOGIN
+    // =========================================================
+
+    private async void OnLoginClicked(
+        object sender,
+        EventArgs e)
     {
-        await Shell.Current.GoToAsync(nameof(LoginPage));
+        try
+        {
+            await Shell.Current.GoToAsync(
+                nameof(LoginPage));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Login navigation failed: {ex}");
+        }
     }
 
-    private void ShowError(string message)
+    // =========================================================
+    // ERROR MESSAGE
+    // =========================================================
+
+    private void ShowError(
+        string message)
     {
-        MessageLabel.Text = message;
-        MessageLabel.IsVisible = true;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            MessageLabel.Text = message;
+            MessageLabel.TextColor = Colors.Red;
+            MessageLabel.IsVisible = true;
+        });
     }
 
-    private void SetLoading(bool loading)
-    {
-        LoadingIndicator.IsVisible = loading;
-        LoadingIndicator.IsRunning = loading;
+    // =========================================================
+    // LOADING
+    // =========================================================
 
-        CreateAccountButton.IsEnabled = !loading;
+    private void ShowLoading(
+        bool loading)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            LoadingIndicator.IsVisible = loading;
+            LoadingIndicator.IsRunning = loading;
+        });
+    }
+
+    private void SetLoading(
+        bool loading)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            LoadingIndicator.IsVisible = loading;
+            LoadingIndicator.IsRunning = loading;
+
+            CreateAccountButton.IsEnabled =
+                !loading;
+
+            CreateAccountButton.Text =
+                loading
+                    ? "CREATING ACCOUNT..."
+                    : "CREATE ACCOUNT";
+        });
     }
 }
