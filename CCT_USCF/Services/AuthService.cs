@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -48,7 +49,7 @@ public class AuthService
     {
         public int Id { get; set; }
 
-        public string Name { get; set; } = "";
+        public string Name { get; set; } = string.Empty;
     }
 
     // =========================================================
@@ -59,33 +60,37 @@ public class AuthService
         string usernameOrEmail,
         string password)
     {
+        if (string.IsNullOrWhiteSpace(usernameOrEmail))
+        {
+            return new AuthResult
+            {
+                Success = false,
+                Error = "Email is required.",
+                StatusCode = 400
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            return new AuthResult
+            {
+                Success = false,
+                Error = "Password is required.",
+                StatusCode = 400
+            };
+        }
+
         try
         {
-            if (string.IsNullOrWhiteSpace(usernameOrEmail))
-            {
-                return new AuthResult
-                {
-                    Success = false,
-                    Error = "Email is required.",
-                    StatusCode = 400
-                };
-            }
-
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                return new AuthResult
-                {
-                    Success = false,
-                    Error = "Password is required.",
-                    StatusCode = 400
-                };
-            }
-
             /*
-             * Firebase Authentication currently uses EMAIL.
+             * Firebase Authentication uses email/password.
              *
-             * Therefore the login field must contain the
-             * user's Firebase email address.
+             * The existing parameter is called
+             * usernameOrEmail because the old application
+             * supported both.
+             *
+             * For the Firebase migration, the value is treated
+             * as the Firebase email address.
              */
 
             var email = usernameOrEmail.Trim();
@@ -106,11 +111,13 @@ public class AuthService
             }
 
             /*
-             * Firebase maintains the authentication session.
+             * Firebase owns the authentication session.
              *
-             * We do NOT create our own JWT.
-             * We do NOT call the old ASP.NET /api/auth/login.
+             * No custom JWT is created here.
+             * No ASP.NET /api/auth/login request is made here.
              */
+
+            await LoadCurrentUserAsync();
 
             return new AuthResult
             {
@@ -121,7 +128,7 @@ public class AuthService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIREBASE AUTH] Login error: {ex}");
+                $"[FIREBASE AUTH] Login failed: {ex}");
 
             return new AuthResult
             {
@@ -143,46 +150,35 @@ public class AuthService
             await _auth.SignOutAsync();
 
             MauiProgram.SetCurrentUser(null);
-            MauiProgram.NotifyAuthChanged();
 
             return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIREBASE AUTH] Logout error: {ex}");
+                $"[FIREBASE AUTH] Logout failed: {ex}");
 
             return false;
         }
     }
 
     // =========================================================
-    // REFRESH TOKEN
+    // TOKEN REFRESH
     // =========================================================
     //
-    // Firebase handles token renewal automatically.
+    // Firebase handles token refresh automatically.
     // =========================================================
 
     public async Task<bool> RefreshTokenAsync()
     {
         try
         {
-            var user = _auth.CurrentUser;
-
-            if (user == null)
-                return false;
-
-            /*
-             * Firebase SDK manages the ID-token lifecycle.
-             * No custom refresh endpoint is required.
-             */
-
-            return true;
+            return _auth.CurrentUser != null;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIREBASE AUTH] Refresh error: {ex}");
+                $"[FIREBASE AUTH] Refresh check failed: {ex}");
 
             return false;
         }
@@ -192,9 +188,13 @@ public class AuthService
     // REGISTER
     // =========================================================
     //
-    // 1. Create Firebase Authentication account.
+    // Firebase:
+    //     Authentication account
     //
-    // 2. Create Firestore profile:
+    // Firestore:
+    //     User profile
+    //
+    // Document:
     //
     // users/{firebaseUid}
     //
@@ -228,10 +228,9 @@ public class AuthService
 
         try
         {
-            // -------------------------------------------------
-            // STEP 1
-            // Firebase Authentication
-            // -------------------------------------------------
+            // =================================================
+            // CREATE FIREBASE AUTH ACCOUNT
+            // =================================================
 
             var firebaseUser =
                 await _auth.CreateUserWithEmailAndPasswordAsync(
@@ -239,64 +238,56 @@ public class AuthService
                     password);
 
             if (firebaseUser == null)
+            {
                 throw new Exception(
                     "Firebase could not create the account.");
+            }
 
-            /*
-             * IMPORTANT:
-             *
-             * Firebase UID becomes the Firestore document ID.
-             */
+            var firebaseUid = firebaseUser.Uid;
 
-            var uid = firebaseUser.Uid;
+            // =================================================
+            // CREATE FIRESTORE USER PROFILE
+            // =================================================
 
-            // -------------------------------------------------
-            // STEP 2
-            // Firestore user profile
-            // -------------------------------------------------
+            var userData =
+                new Dictionary<string, object>
+                {
+                    ["fullName"] = fullName.Trim(),
 
-            var userData = new Dictionary<string, object>
-            {
-                ["fullName"] = fullName.Trim(),
+                    ["username"] = username.Trim(),
 
-                ["username"] = username.Trim(),
+                    ["email"] = email.Trim(),
 
-                ["email"] = email.Trim(),
+                    ["role"] =
+                        string.IsNullOrWhiteSpace(role)
+                            ? "Member"
+                            : role.Trim(),
 
-                ["role"] = string.IsNullOrWhiteSpace(role)
-                    ? "Member"
-                    : role.Trim(),
+                    ["regionId"] = regionId ?? 0,
 
-                ["regionId"] = regionId ?? 0,
+                    ["districtId"] = districtId ?? 0,
 
-                ["districtId"] = districtId ?? 0,
+                    ["branchId"] = branchId ?? 0,
 
-                ["branchId"] = branchId ?? 0,
-
-                ["createdAt"] =
-                    DateTime.UtcNow.ToString("O")
-            };
-
-            /*
-             * users/{uid}
-             */
+                    ["createdAt"] =
+                        DateTime.UtcNow.ToString("O")
+                };
 
             await _firestore
                 .GetCollection("users")
-                .GetDocument(uid)
+                .GetDocument(firebaseUid)
                 .SetDataAsync(userData);
 
-            // -------------------------------------------------
-            // STEP 3
-            // Load current user
-            // -------------------------------------------------
+            // =================================================
+            // LOAD THE NEW USER
+            // =================================================
 
             await LoadCurrentUserAsync();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIREBASE AUTH] Registration error: {ex}");
+                $"[FIREBASE AUTH] Registration failed: {ex}");
 
             throw new Exception(
                 GetFirebaseErrorMessage(ex));
@@ -304,7 +295,7 @@ public class AuthService
     }
 
     // =========================================================
-    // CURRENT USER
+    // GET CURRENT USER
     // =========================================================
 
     public async Task<CCT_USCF.Models.CurrentUser?>
@@ -312,12 +303,9 @@ public class AuthService
     {
         try
         {
-            var firebaseUser = _auth.CurrentUser;
-
-            if (firebaseUser == null)
+            if (_auth.CurrentUser == null)
             {
                 MauiProgram.SetCurrentUser(null);
-
                 return null;
             }
 
@@ -326,14 +314,14 @@ public class AuthService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIREBASE AUTH] GetCurrentUser error: {ex}");
+                $"[FIREBASE AUTH] GetCurrentUser failed: {ex}");
 
             return null;
         }
     }
 
     // =========================================================
-    // LOAD USER FROM FIRESTORE
+    // LOAD CURRENT USER FROM FIRESTORE
     // =========================================================
 
     private async Task<CCT_USCF.Models.CurrentUser?>
@@ -342,7 +330,10 @@ public class AuthService
         var firebaseUser = _auth.CurrentUser;
 
         if (firebaseUser == null)
+        {
+            MauiProgram.SetCurrentUser(null);
             return null;
+        }
 
         var uid = firebaseUser.Uid;
 
@@ -351,96 +342,117 @@ public class AuthService
             .GetDocument(uid)
             .GetAsync();
 
-        if (snapshot == null)
-            return null;
+        if (snapshot == null || snapshot.Data == null)
+        {
+            /*
+             * Authentication exists, but the Firestore profile
+             * does not exist yet.
+             *
+             * We still return a basic CurrentUser instead of
+             * treating the Firebase login as failed.
+             */
+
+            var basicUser =
+                new CCT_USCF.Models.CurrentUser
+                {
+                    Id = ConvertFirebaseUidToGuid(uid),
+
+                    Email = firebaseUser.Email ?? string.Empty
+                };
+
+            MauiProgram.SetCurrentUser(basicUser);
+
+            return basicUser;
+        }
 
         var data = snapshot.Data;
 
-        if (data == null)
-            return null;
+        var currentUser =
+            new CCT_USCF.Models.CurrentUser
+            {
+                Id = ConvertFirebaseUidToGuid(uid),
 
-        var user = new CCT_USCF.Models.CurrentUser
-        {
-            Id = ConvertFirebaseUidToGuid(uid),
+                FullName =
+                    GetString(data, "fullName"),
 
-            FullName = GetString(data, "fullName"),
+                Username =
+                    GetString(data, "username"),
 
-            Username = GetString(data, "username"),
+                Email =
+                    GetString(data, "email"),
 
-            Email = GetString(data, "email"),
+                Role =
+                    GetString(data, "role"),
 
-            Role = GetString(data, "role"),
+                RegionId =
+                    GetNullableInt(data, "regionId"),
 
-            RegionId = GetNullableInt(data, "regionId"),
+                DistrictId =
+                    GetNullableInt(data, "districtId"),
 
-            DistrictId = GetNullableInt(data, "districtId"),
+                BranchId =
+                    GetNullableInt(data, "branchId")
+            };
 
-            BranchId = GetNullableInt(data, "branchId")
-        };
+        // =====================================================
+        // REGION NAME
+        // =====================================================
 
-        // -----------------------------------------------------
-        // Load region name
-        // -----------------------------------------------------
-
-        if (user.RegionId.HasValue)
+        if (currentUser.RegionId.HasValue)
         {
             var region =
                 await GetLocationByIdAsync(
                     "regions",
-                    user.RegionId.Value);
+                    currentUser.RegionId.Value);
 
-            user.Region = region?.Name;
+            currentUser.Region = region?.Name;
         }
 
-        // -----------------------------------------------------
-        // Load district name
-        // -----------------------------------------------------
+        // =====================================================
+        // DISTRICT NAME
+        // =====================================================
 
-        if (user.DistrictId.HasValue)
+        if (currentUser.DistrictId.HasValue)
         {
             var district =
                 await GetLocationByIdAsync(
                     "districts",
-                    user.DistrictId.Value);
+                    currentUser.DistrictId.Value);
 
-            user.District = district?.Name;
+            currentUser.District = district?.Name;
         }
 
-        // -----------------------------------------------------
-        // Load branch name
-        // -----------------------------------------------------
+        // =====================================================
+        // BRANCH NAME
+        // =====================================================
 
-        if (user.BranchId.HasValue)
+        if (currentUser.BranchId.HasValue)
         {
             var branch =
                 await GetLocationByIdAsync(
                     "branches",
-                    user.BranchId.Value);
+                    currentUser.BranchId.Value);
 
-            user.Branch = branch?.Name;
+            currentUser.Branch = branch?.Name;
         }
 
-        MauiProgram.SetCurrentUser(user);
-        MauiProgram.NotifyAuthChanged();
+        MauiProgram.SetCurrentUser(currentUser);
 
-        return user;
+        return currentUser;
     }
 
     // =========================================================
-    // REGIONS
+    // GET REGIONS
     // =========================================================
     //
     // Firestore:
     //
     // regions
     //   ├── mwanza
-    //   │     Id: 1
-    //   │     Name: "Mwanza"
+    //   │     Id   = 1
+    //   │     Name = "Mwanza"
     //   │
-    //   ├── arusha
-    //   │     Id: 2
-    //   │     Name: "Arusha"
-    //   ...
+    //   └── ...
     //
     // =========================================================
 
@@ -449,14 +461,16 @@ public class AuthService
     {
         try
         {
-            var snapshot = await _firestore
-                .GetCollection("regions")
-                .GetDocumentsAsync();
+            var snapshot =
+                await _firestore
+                    .GetCollection("regions")
+                    .GetDocumentsAsync();
 
-            var result = new List<LocationItem>();
+            var regions =
+                new List<LocationItem>();
 
             if (snapshot == null)
-                return result;
+                return regions;
 
             foreach (var document in snapshot.Documents)
             {
@@ -465,9 +479,11 @@ public class AuthService
                 if (data == null)
                     continue;
 
-                var id = GetInt(data, "Id");
+                var id =
+                    GetInt(data, "Id");
 
-                var name = GetString(data, "Name");
+                var name =
+                    GetString(data, "Name");
 
                 if (id <= 0)
                     continue;
@@ -475,21 +491,22 @@ public class AuthService
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
 
-                result.Add(new LocationItem
-                {
-                    Id = id,
-                    Name = name
-                });
+                regions.Add(
+                    new LocationItem
+                    {
+                        Id = id,
+                        Name = name
+                    });
             }
 
-            return result
+            return regions
                 .OrderBy(x => x.Name)
                 .ToList();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIRESTORE] GetRegions error: {ex}");
+                $"[FIRESTORE] Regions failed: {ex}");
 
             throw new Exception(
                 "Unable to load regions from Firebase.",
@@ -498,22 +515,27 @@ public class AuthService
     }
 
     // =========================================================
-    // DISTRICTS
+    // GET DISTRICTS
     // =========================================================
 
     public async Task<List<LocationItem>>
         GetDistrictsAsync(int regionId)
     {
+        if (regionId <= 0)
+            return new List<LocationItem>();
+
         try
         {
-            var snapshot = await _firestore
-                .GetCollection("districts")
-                .GetDocumentsAsync();
+            var snapshot =
+                await _firestore
+                    .GetCollection("districts")
+                    .GetDocumentsAsync();
 
-            var result = new List<LocationItem>();
+            var districts =
+                new List<LocationItem>();
 
             if (snapshot == null)
-                return result;
+                return districts;
 
             foreach (var document in snapshot.Documents)
             {
@@ -522,15 +544,17 @@ public class AuthService
                 if (data == null)
                     continue;
 
-                var currentRegionId =
+                var parentRegionId =
                     GetInt(data, "RegionId");
 
-                if (currentRegionId != regionId)
+                if (parentRegionId != regionId)
                     continue;
 
-                var id = GetInt(data, "Id");
+                var id =
+                    GetInt(data, "Id");
 
-                var name = GetString(data, "Name");
+                var name =
+                    GetString(data, "Name");
 
                 if (id <= 0)
                     continue;
@@ -538,21 +562,22 @@ public class AuthService
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
 
-                result.Add(new LocationItem
-                {
-                    Id = id,
-                    Name = name
-                });
+                districts.Add(
+                    new LocationItem
+                    {
+                        Id = id,
+                        Name = name
+                    });
             }
 
-            return result
+            return districts
                 .OrderBy(x => x.Name)
                 .ToList();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIRESTORE] GetDistricts error: {ex}");
+                $"[FIRESTORE] Districts failed: {ex}");
 
             throw new Exception(
                 "Unable to load districts from Firebase.",
@@ -561,22 +586,27 @@ public class AuthService
     }
 
     // =========================================================
-    // BRANCHES
+    // GET BRANCHES
     // =========================================================
 
     public async Task<List<LocationItem>>
         GetBranchesAsync(int districtId)
     {
+        if (districtId <= 0)
+            return new List<LocationItem>();
+
         try
         {
-            var snapshot = await _firestore
-                .GetCollection("branches")
-                .GetDocumentsAsync();
+            var snapshot =
+                await _firestore
+                    .GetCollection("branches")
+                    .GetDocumentsAsync();
 
-            var result = new List<LocationItem>();
+            var branches =
+                new List<LocationItem>();
 
             if (snapshot == null)
-                return result;
+                return branches;
 
             foreach (var document in snapshot.Documents)
             {
@@ -585,15 +615,17 @@ public class AuthService
                 if (data == null)
                     continue;
 
-                var currentDistrictId =
+                var parentDistrictId =
                     GetInt(data, "DistrictId");
 
-                if (currentDistrictId != districtId)
+                if (parentDistrictId != districtId)
                     continue;
 
-                var id = GetInt(data, "Id");
+                var id =
+                    GetInt(data, "Id");
 
-                var name = GetString(data, "Name");
+                var name =
+                    GetString(data, "Name");
 
                 if (id <= 0)
                     continue;
@@ -601,21 +633,22 @@ public class AuthService
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
 
-                result.Add(new LocationItem
-                {
-                    Id = id,
-                    Name = name
-                });
+                branches.Add(
+                    new LocationItem
+                    {
+                        Id = id,
+                        Name = name
+                    });
             }
 
-            return result
+            return branches
                 .OrderBy(x => x.Name)
                 .ToList();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIRESTORE] GetBranches error: {ex}");
+                $"[FIRESTORE] Branches failed: {ex}");
 
             throw new Exception(
                 "Unable to load branches from Firebase.",
@@ -641,32 +674,25 @@ public class AuthService
         if (firebaseUser == null)
             throw new Exception("Not authenticated.");
 
-        var uid = firebaseUser.Uid;
-
-        // -----------------------------------------------------
-        // Password validation
-        // -----------------------------------------------------
-
         if (!string.IsNullOrWhiteSpace(newPassword))
         {
             if (newPassword != confirmNewPassword)
+            {
                 throw new Exception(
                     "New passwords do not match.");
+            }
 
             /*
-             * Password update can be added through Firebase
-             * Auth's UpdatePasswordAsync.
+             * Password change requires Firebase Auth
+             * re-authentication when Firebase requires it.
              *
-             * We deliberately do not silently change the
-             * password here without handling re-authentication.
+             * We are deliberately not pretending that the
+             * password was changed here.
              */
         }
 
-        // -----------------------------------------------------
-        // Firestore profile update
-        // -----------------------------------------------------
-
-        var updates = new Dictionary<string, object>();
+        var updates =
+            new Dictionary<string, object>();
 
         if (!string.IsNullOrWhiteSpace(fullName))
             updates["fullName"] = fullName.Trim();
@@ -681,7 +707,7 @@ public class AuthService
         {
             await _firestore
                 .GetCollection("users")
-                .GetDocument(uid)
+                .GetDocument(firebaseUser.Uid)
                 .SetDataAsync(updates);
         }
 
@@ -694,7 +720,7 @@ public class AuthService
     //
     // Firebase:
     //     Authentication
-    //     Firestore post metadata
+    //     Firestore metadata
     //
     // Appwrite:
     //     Audio/media files
@@ -716,50 +742,49 @@ public class AuthService
         if (string.IsNullOrWhiteSpace(content))
             throw new Exception("Content is required.");
 
-        /*
-         * Appwrite media upload will be connected separately.
-         *
-         * For now, create the Firestore post record.
-         */
+        var post =
+            new Dictionary<string, object>
+            {
+                ["authorId"] =
+                    firebaseUser.Uid,
 
-        var postData = new Dictionary<string, object>
-        {
-            ["authorId"] = firebaseUser.Uid,
+                ["content"] =
+                    content.Trim(),
 
-            ["content"] = content.Trim(),
+                ["caption"] =
+                    caption?.Trim() ?? string.Empty,
 
-            ["caption"] =
-                caption?.Trim() ?? "",
-
-            ["createdAt"] =
-                DateTime.UtcNow.ToString("O")
-        };
+                ["createdAt"] =
+                    DateTime.UtcNow.ToString("O")
+            };
 
         if (trimStart.HasValue)
-            postData["trimStart"] = trimStart.Value;
+            post["trimStart"] = trimStart.Value;
 
         if (trimEnd.HasValue)
-            postData["trimEnd"] = trimEnd.Value;
+            post["trimEnd"] = trimEnd.Value;
 
         if (!string.IsNullOrWhiteSpace(audioFilePath))
         {
             /*
-             * This will eventually contain the Appwrite
-             * file ID/URL after upload.
+             * The actual audio upload belongs to Appwrite.
+             *
+             * We only keep the filename here until the
+             * Appwrite media service is connected.
              */
-            postData["audioFileName"] =
+            post["audioFileName"] =
                 System.IO.Path.GetFileName(audioFilePath);
         }
 
         await _firestore
             .GetCollection("posts")
-            .AddDocumentAsync(postData);
+            .AddDocumentAsync(post);
 
         return true;
     }
 
     // =========================================================
-    // LOCATION HELPER
+    // LOCATION LOOKUP
     // =========================================================
 
     private async Task<LocationItem?>
@@ -767,9 +792,10 @@ public class AuthService
             string collection,
             int id)
     {
-        var snapshot = await _firestore
-            .GetCollection(collection)
-            .GetDocumentsAsync();
+        var snapshot =
+            await _firestore
+                .GetCollection(collection)
+                .GetDocumentsAsync();
 
         if (snapshot == null)
             return null;
@@ -781,7 +807,8 @@ public class AuthService
             if (data == null)
                 continue;
 
-            var documentId = GetInt(data, "Id");
+            var documentId =
+                GetInt(data, "Id");
 
             if (documentId != id)
                 continue;
@@ -805,9 +832,9 @@ public class AuthService
         string key)
     {
         if (!data.TryGetValue(key, out var value))
-            return "";
+            return string.Empty;
 
-        return value?.ToString() ?? "";
+        return value?.ToString() ?? string.Empty;
     }
 
     private static int GetInt(
@@ -817,20 +844,23 @@ public class AuthService
         if (!data.TryGetValue(key, out var value))
             return 0;
 
-        if (value is int intValue)
-            return intValue;
+        if (value is int i)
+            return i;
 
-        if (value is long longValue)
-            return (int)longValue;
+        if (value is long l)
+            return (int)l;
 
-        if (value is double doubleValue)
-            return (int)doubleValue;
+        if (value is double d)
+            return (int)d;
+
+        if (value is float f)
+            return (int)f;
 
         if (int.TryParse(
             value?.ToString(),
-            out var parsed))
+            out var result))
         {
-            return parsed;
+            return result;
         }
 
         return 0;
@@ -840,7 +870,8 @@ public class AuthService
         IDictionary<string, object> data,
         string key)
     {
-        var value = GetInt(data, key);
+        var value =
+            GetInt(data, key);
 
         return value > 0
             ? value
@@ -851,13 +882,11 @@ public class AuthService
     // FIREBASE UID → GUID
     // =========================================================
     //
-    // CurrentUser.Id is Guid.
-    //
+    // Existing CurrentUser.Id is Guid.
     // Firebase UID is a string.
     //
-    // We create a deterministic GUID from the Firebase UID
-    // so the existing CurrentUser model does not have to be
-    // changed right now.
+    // This produces a deterministic Guid from the Firebase UID
+    // without changing the existing CurrentUser model.
     // =========================================================
 
     private static Guid ConvertFirebaseUidToGuid(
@@ -867,52 +896,55 @@ public class AuthService
             System.Security.Cryptography.MD5.Create();
 
         var bytes =
-            System.Text.Encoding.UTF8.GetBytes(firebaseUid);
+            System.Text.Encoding.UTF8
+                .GetBytes(firebaseUid);
 
-        var hash = md5.ComputeHash(bytes);
+        var hash =
+            md5.ComputeHash(bytes);
 
         return new Guid(hash);
     }
 
     // =========================================================
-    // FIREBASE ERROR MESSAGE
+    // FIREBASE ERROR HANDLING
     // =========================================================
 
     private static string GetFirebaseErrorMessage(
         Exception ex)
     {
-        var message = ex.Message ?? "";
+        var message =
+            ex.Message ?? string.Empty;
 
         if (message.Contains(
-            "email",
-            StringComparison.OrdinalIgnoreCase) &&
+                "already",
+                StringComparison.OrdinalIgnoreCase) &&
             message.Contains(
-            "already",
-            StringComparison.OrdinalIgnoreCase))
+                "email",
+                StringComparison.OrdinalIgnoreCase))
         {
             return "This email is already registered.";
         }
 
         if (message.Contains(
-            "password",
-            StringComparison.OrdinalIgnoreCase) &&
+                "weak",
+                StringComparison.OrdinalIgnoreCase) &&
             message.Contains(
-            "weak",
-            StringComparison.OrdinalIgnoreCase))
+                "password",
+                StringComparison.OrdinalIgnoreCase))
         {
             return "Password is too weak.";
         }
 
         if (message.Contains(
-            "invalid",
-            StringComparison.OrdinalIgnoreCase))
+                "invalid",
+                StringComparison.OrdinalIgnoreCase))
         {
             return "Invalid email or password.";
         }
 
         if (message.Contains(
-            "network",
-            StringComparison.OrdinalIgnoreCase))
+                "network",
+                StringComparison.OrdinalIgnoreCase))
         {
             return "Network error. Check your internet connection.";
         }
