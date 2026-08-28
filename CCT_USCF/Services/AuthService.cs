@@ -440,10 +440,15 @@ public class AuthService
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine("[CCT-FIRESTORE] Starting regions query");
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Firestore instance: {_firestore?.GetType().FullName ?? "null"}");
+
             var snapshot =
                 await _firestore
                     .GetCollection("regions")
                     .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
+
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Firestore query completed: snapshot is {(snapshot == null ? "null" : "not null")}");
 
             var regions =
                 new List<LocationItem>();
@@ -451,9 +456,18 @@ public class AuthService
             if (snapshot == null)
                 return regions;
 
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Documents returned: {snapshot.Documents?.Count ?? 0}");
+
             foreach (var document in snapshot.Documents)
             {
                 var data = document.Data;
+
+                // Log document keys to aid diagnosis
+                if (data != null)
+                {
+                    var keys = string.Join(", ", data.Keys);
+                    System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Document keys: {keys}");
+                }
 
                 if (data == null)
                     continue;
@@ -463,6 +477,8 @@ public class AuthService
 
                 var name =
                     GetString(data, "Name");
+
+                System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Parsed region - Id: {id}, Name: {name}");
 
                 if (id <= 0)
                     continue;
@@ -485,7 +501,16 @@ public class AuthService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIRESTORE] Regions failed: {ex}");
+                $"[CCT-FIRESTORE][ERROR] Regions failed: {ex}");
+
+            // Log full exception details
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE][ERROR] Exception type: {ex.GetType().FullName}");
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE][ERROR] Message: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE][ERROR] StackTrace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE][ERROR] InnerException: {ex.InnerException}");
+            }
 
             throw new Exception(
                 "Unable to load regions from Firebase.",
@@ -810,17 +835,32 @@ public class AuthService
         IDictionary<string, object> data,
         string key)
     {
-        if (!data.TryGetValue(key, out var value))
-            return string.Empty;
+        // Try exact key first
+        if (data.TryGetValue(key, out var exactValue))
+            return exactValue?.ToString() ?? string.Empty;
 
-        return value?.ToString() ?? string.Empty;
+        // Fallback: case-insensitive key search
+        var match = data.Keys.FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+        if (match != null && data.TryGetValue(match, out var ciValue))
+            return ciValue?.ToString() ?? string.Empty;
+
+        return string.Empty;
     }
 
     private static int GetInt(
         IDictionary<string, object> data,
         string key)
     {
+        // Try exact key first
         if (!data.TryGetValue(key, out var value))
+        {
+            // Fallback: case-insensitive key search
+            var match = data.Keys.FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+                value = data[match];
+        }
+
+        if (value == null)
             return 0;
 
         if (value is int i)
