@@ -456,7 +456,14 @@ public class AuthService
             if (snapshot == null)
                 return regions;
 
-            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Documents returned: {snapshot.Documents?.Count ?? 0}");
+            // Count documents without assuming Documents exposes a Count property
+            var docCount = 0;
+            if (snapshot.Documents != null)
+            {
+                foreach (var _d in snapshot.Documents)
+                    docCount++;
+            }
+            System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Documents returned: {docCount}");
 
             foreach (var document in snapshot.Documents)
             {

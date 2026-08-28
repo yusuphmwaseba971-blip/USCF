@@ -214,12 +214,18 @@ public partial class RegisterPage : ContentPage
 
             RegionPicker.IsEnabled = false;
 
+            System.Diagnostics.Debug.WriteLine("[REGISTER] Starting LoadRegionsAsync");
+
             _regions =
                 await _authService.GetRegionsAsync();
+
+            System.Diagnostics.Debug.WriteLine($"[REGISTER] Regions returned: {_regions?.Count ?? 0}");
 
             if (_regions == null ||
                 _regions.Count == 0)
             {
+                System.Diagnostics.Debug.WriteLine("[REGISTER] No regions found: query returned zero documents.");
+
                 ShowError(
                     "No Tanzania regions were found in Firebase.");
 
