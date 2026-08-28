@@ -214,12 +214,17 @@ public partial class RegisterPage : ContentPage
 
             RegionPicker.IsEnabled = false;
 
-            System.Diagnostics.Debug.WriteLine("[REGISTER] Starting LoadRegionsAsync");
+        // Ensure Firebase is initialized on Android before attempting Firestore queries.
+        System.Diagnostics.Debug.WriteLine("[REGISTER] Waiting for Firebase initialization...");
+        await FirebaseInit.Initialized;
+        System.Diagnostics.Debug.WriteLine("[REGISTER] Firebase initialization signaled");
 
-            _regions =
-                await _authService.GetRegionsAsync();
+        System.Diagnostics.Debug.WriteLine("[REGISTER] Starting LoadRegionsAsync");
 
-            System.Diagnostics.Debug.WriteLine($"[REGISTER] Regions returned: {_regions?.Count ?? 0}");
+        _regions =
+            await _authService.GetRegionsAsync();
+
+        System.Diagnostics.Debug.WriteLine($"[REGISTER] Regions returned: {_regions?.Count ?? 0}");
 
             if (_regions == null ||
                 _regions.Count == 0)
