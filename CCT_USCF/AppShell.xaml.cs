@@ -1,8 +1,6 @@
-using System.Text;
-using System.Text.Json;
+
 using CCT_USCF.Pages;
-using Microsoft.Maui.Storage;
-using Microsoft.Maui.Controls;
+using CCT_USCF.Services;
 
 namespace CCT_USCF;
 
@@ -12,6 +10,10 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
 
+        // =====================================================
+        // ROUTES
+        // =====================================================
+
         Routing.RegisterRoute(nameof(BiblePage), typeof(BiblePage));
         Routing.RegisterRoute(nameof(PrayerPage), typeof(PrayerPage));
         Routing.RegisterRoute(nameof(CommunityPage), typeof(CommunityPage));
@@ -20,225 +22,276 @@ public partial class AppShell : Shell
         Routing.RegisterRoute(nameof(EventsPage), typeof(EventsPage));
         Routing.RegisterRoute(nameof(GivingPage), typeof(GivingPage));
 
-        Routing.RegisterRoute(nameof(Pages.SettingsPage), typeof(Pages.SettingsPage));
-        Routing.RegisterRoute(nameof(Pages.SavedVersesPage), typeof(Pages.SavedVersesPage));
-        Routing.RegisterRoute(nameof(Pages.MyPrayerRequestsPage), typeof(Pages.MyPrayerRequestsPage));
-        Routing.RegisterRoute(nameof(Pages.SavedSermonsPage), typeof(Pages.SavedSermonsPage));
-        Routing.RegisterRoute(nameof(Pages.CreateHolyWordPage), typeof(Pages.CreateHolyWordPage));
+        Routing.RegisterRoute(
+            nameof(SettingsPage),
+            typeof(SettingsPage));
 
-        Routing.RegisterRoute(nameof(Pages.LoginPage), typeof(Pages.LoginPage));
-        Routing.RegisterRoute(nameof(Pages.RegisterPage), typeof(Pages.RegisterPage));
-        Routing.RegisterRoute("login", typeof(Pages.LoginPage));
-        Routing.RegisterRoute("register", typeof(Pages.RegisterPage));
+        Routing.RegisterRoute(
+            nameof(SavedVersesPage),
+            typeof(SavedVersesPage));
 
-        MauiProgram.AuthStateChanged += async () => await UpdateAuthUIAsync();
+        Routing.RegisterRoute(
+            nameof(MyPrayerRequestsPage),
+            typeof(MyPrayerRequestsPage));
+
+        Routing.RegisterRoute(
+            nameof(SavedSermonsPage),
+            typeof(SavedSermonsPage));
+
+        Routing.RegisterRoute(
+            nameof(CreateHolyWordPage),
+            typeof(CreateHolyWordPage));
+
+        Routing.RegisterRoute(
+            nameof(LoginPage),
+            typeof(LoginPage));
+
+        Routing.RegisterRoute(
+            nameof(RegisterPage),
+            typeof(RegisterPage));
+
+        Routing.RegisterRoute(
+            "login",
+            typeof(LoginPage));
+
+        Routing.RegisterRoute(
+            "register",
+            typeof(RegisterPage));
+
+        // =====================================================
+        // FIREBASE AUTH STATE
+        // =====================================================
+
+        MauiProgram.AuthStateChanged +=
+            OnAuthStateChanged;
+
+        // Check current Firebase session.
         _ = UpdateAuthUIAsync();
     }
+
+    // =========================================================
+    // PAGE APPEARING
+    // =========================================================
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
+
         _ = UpdateAuthUIAsync();
     }
+
+    // =========================================================
+    // FIREBASE AUTH STATE CHANGED
+    // =========================================================
+
+    private async void OnAuthStateChanged()
+    {
+        await UpdateAuthUIAsync();
+    }
+
+    // =========================================================
+    // UPDATE AUTHENTICATION UI
+    // =========================================================
 
     private async Task UpdateAuthUIAsync()
     {
         try
         {
-            var token = await CCT_USCF.Services.TokenStorage.GetTokenAsync();
-            if (string.IsNullOrWhiteSpace(token))
+            var auth =
+                MauiProgram.CreateAuthServiceForPages();
+
+            var firebaseUser =
+                await auth.GetCurrentUserAsync();
+
+            // -------------------------------------------------
+            // NOT LOGGED IN
+            // -------------------------------------------------
+
+            if (firebaseUser == null)
             {
-                ClearAuthenticatedState();
+                ShowUnauthenticatedState();
                 return;
             }
 
-            var localUser = TryGetUserFromToken(token);
-                        if (localUser == null)
+            // -------------------------------------------------
+            // LOGGED IN
+            // -------------------------------------------------
+
+            MauiProgram.SetCurrentUser(firebaseUser);
+
+            ShowAuthenticatedState();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[APP SHELL AUTH] {ex}");
+
+            /*
+             * Do NOT destroy the UI or clear a valid Firebase
+             * session simply because Firestore/network failed.
+             *
+             * Firebase Authentication maintains its own session.
+             */
+
+            if (MauiProgram.CurrentUser != null)
             {
-                            // try to restore cached user profile if JWT payload not available or token is opaque
-                            localUser = CCT_USCF.Services.TokenStorage.GetCachedUser();
-                        }
-
-                        if (localUser != null)
-                        {
-                            MauiProgram.SetCurrentUser(localUser);
-                        }
-
-            var auth = MauiProgram.CreateAuthServiceForPages();
-            try
-            {
-                var user = await auth.GetCurrentUserAsync();
-                if (user == null)
-                {
-                                    // Explicit rejection from server — clear session
-                                    await CCT_USCF.Services.TokenStorage.ClearSessionAsync();
-                                    ClearAuthenticatedState();
-                                    return;
-                                }
-
-                                // Save server-returned user to cached profile for offline use
-                                await CCT_USCF.Services.TokenStorage.SaveCachedUserAsync(user);
-
-                                MauiProgram.SetCurrentUser(user);
-                                ShowAuthenticatedState();
-                                return;
+                ShowAuthenticatedState();
             }
-            catch (UnauthorizedAccessException)
+            else
             {
-                await CCT_USCF.Services.TokenStorage.ClearSessionAsync();
-                ClearAuthenticatedState();
-                return;
+                ShowUnauthenticatedState();
             }
-            catch (HttpRequestException httpEx)
-            {
-                System.Diagnostics.Debug.WriteLine($"UpdateAuthUIAsync network error: {httpEx.Message}");
-                if (localUser != null || MauiProgram.CurrentUser != null)
-                {
-                    ShowAuthenticatedState();
-                    return;
-                }
+        }
+    }
 
-                ClearAuthenticatedState();
-                return;
-            }
-            catch (OperationCanceledException)
-            {
-                if (localUser != null || MauiProgram.CurrentUser != null)
-                {
-                    ShowAuthenticatedState();
-                    return;
-                }
+    // =========================================================
+    // AUTHENTICATED UI
+    // =========================================================
 
-                ClearAuthenticatedState();
-                return;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"UpdateAuthUIAsync generic error: {ex}");
-                if (localUser != null || MauiProgram.CurrentUser != null)
-                {
-                    ShowAuthenticatedState();
-                    return;
-                }
+    private void ShowAuthenticatedState()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            SignUpLoginButton.IsVisible = false;
+            AuthProfileButton.IsVisible = true;
+        });
+    }
 
-                ClearAuthenticatedState();
-                return;
+    // =========================================================
+    // UNAUTHENTICATED UI
+    // =========================================================
+
+    private void ShowUnauthenticatedState()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            SignUpLoginButton.IsVisible = true;
+            AuthProfileButton.IsVisible = false;
+        });
+    }
+
+    // =========================================================
+    // SIGN UP / LOGIN BUTTON
+    // =========================================================
+
+    private async void OnSignUpLoginClicked(
+        object sender,
+        EventArgs e)
+    {
+        try
+        {
+            var choice =
+                await DisplayActionSheet(
+                    "Sign In or Create Account",
+                    "Cancel",
+                    null,
+                    "Login",
+                    "Create Account");
+
+            switch (choice)
+            {
+                case "Login":
+
+                    await Shell.Current.GoToAsync(
+                        nameof(LoginPage));
+
+                    break;
+
+                case "Create Account":
+
+                    await Shell.Current.GoToAsync(
+                        nameof(RegisterPage));
+
+                    break;
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"UpdateAuthUIAsync storage error: {ex}");
-            ClearAuthenticatedState();
+            System.Diagnostics.Debug.WriteLine(
+                $"[APP SHELL] Navigation error: {ex}");
+
+            await DisplayAlert(
+                "Error",
+                "Unable to open the requested page.",
+                "OK");
         }
     }
 
-    private void ShowAuthenticatedState()
-    {
-        SignUpLoginButton.IsVisible = false;
-        AuthProfileButton.IsVisible = true;
-    }
+    // =========================================================
+    // PROFILE / LOGOUT
+    // =========================================================
 
-    private void ClearAuthenticatedState()
-    {
-        SignUpLoginButton.IsVisible = true;
-        AuthProfileButton.IsVisible = false;
-        MauiProgram.SetCurrentUser(null);
-    }
-
-    public static CCT_USCF.Models.CurrentUser? TryGetUserFromToken(string token)
+    private async void OnAuthProfileClicked(
+        object sender,
+        EventArgs e)
     {
         try
         {
-            var parts = token.Split('.');
-            if (parts.Length < 2) return null;
+            var choice =
+                await DisplayActionSheet(
+                    "Account",
+                    "Cancel",
+                    null,
+                    "Profile",
+                    "Logout");
 
-            var payload = parts[1];
-            var padded = payload.Replace('-', '+').Replace('_', '/');
-            while (padded.Length % 4 != 0)
+            switch (choice)
             {
-                padded += "=";
-            }
+                case "Profile":
 
-            var payloadBytes = Convert.FromBase64String(padded);
-            using var doc = JsonDocument.Parse(payloadBytes);
-            var root = doc.RootElement;
+                    await Shell.Current.GoToAsync(
+                        nameof(ProfilePage));
 
-            string? userId = TryGetString(root, new[] { "nameid", "sub", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", "userId" });
-            string? fullName = TryGetString(root, new[] { "name", "fullName" });
-            string? username = TryGetString(root, new[] { "username", "preferred_username", "given_name" });
-            string? email = TryGetString(root, new[] { "email", "emails" });
-            string? role = TryGetString(root, new[] { "role", "http://schemas.microsoft.com/ws/2008/06/identity/claims/role" });
+                    break;
 
-            if (string.IsNullOrWhiteSpace(userId)) return null;
+                case "Logout":
 
-            return new CCT_USCF.Models.CurrentUser
-            {
-                Id = Guid.TryParse(userId, out var parsedUserId) ? parsedUserId : Guid.Empty,
-                FullName = fullName ?? username ?? "User",
-                Username = username ?? fullName ?? "user",
-                Email = email ?? string.Empty,
-                Role = role ?? "Member"
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
+                    await LogoutAsync();
 
-    private static string? TryGetString(JsonElement root, string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (root.TryGetProperty(key, out var value))
-            {
-                if (value.ValueKind == JsonValueKind.String)
-                {
-                    return value.GetString();
-                }
+                    break;
             }
         }
-
-        return null;
-    }
-
-    private async void OnSignUpLoginClicked(object sender, EventArgs e)
-    {
-        var choice = await this.DisplayActionSheet("Sign In or Create Account", "Cancel", null, "Login", "Create Account");
-
-        switch (choice)
+        catch (Exception ex)
         {
-            case "Login":
-                await Shell.Current.GoToAsync(nameof(Pages.LoginPage));
-                break;
-            case "Create Account":
-                await Shell.Current.GoToAsync(nameof(Pages.RegisterPage));
-                break;
+            System.Diagnostics.Debug.WriteLine(
+                $"[APP SHELL] Account error: {ex}");
+
+            await DisplayAlert(
+                "Error",
+                "Unable to complete the account action.",
+                "OK");
         }
     }
 
-    private async void OnAuthProfileClicked(object sender, EventArgs e)
-    {
-        var choice = await this.DisplayActionSheet("Account", "Cancel", null, "Profile", "Logout");
-        switch (choice)
-        {
-            case "Profile":
-                await Shell.Current.GoToAsync(nameof(Pages.ProfilePage));
-                break;
-            case "Logout":
-                try
-                {
-                    await MauiProgram.CreateAuthServiceForPages().LogoutAsync();
-                }
-                catch
-                {
-                }
+    // =========================================================
+    // FIREBASE LOGOUT
+    // =========================================================
 
-                await CCT_USCF.Services.TokenStorage.ClearSessionAsync();
-                MauiProgram.SetCurrentUser(null);
-                MauiProgram.NotifyAuthChanged();
-                await Shell.Current.GoToAsync("//home");
-                break;
+    private async Task LogoutAsync()
+    {
+        try
+        {
+            var auth =
+                MauiProgram.CreateAuthServiceForPages();
+
+            await auth.LogoutAsync();
+
+            MauiProgram.SetCurrentUser(null);
+
+            ShowUnauthenticatedState();
+
+            await Shell.Current.GoToAsync(
+                "//home");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE LOGOUT] {ex}");
+
+            await DisplayAlert(
+                "Logout Error",
+                "Unable to sign out. Please try again.",
+                "OK");
         }
     }
 }
