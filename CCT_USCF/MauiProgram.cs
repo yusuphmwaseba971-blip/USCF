@@ -6,6 +6,7 @@ using Microsoft.Maui.LifecycleEvents;
 
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Bundled.Shared;
+using Plugin.Firebase.Firestore;
 
 #if ANDROID
 using Plugin.Firebase.Bundled.Platforms.Android;
@@ -126,6 +127,9 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<IFirebaseAuth>(
             _ => CrossFirebaseAuth.Current);
+
+        builder.Services.AddSingleton<IFirebaseFirestore>(
+    _ => CrossFirebaseFirestore.Current);
 
         // =====================================================
         // EXISTING ASP.NET CORE API
