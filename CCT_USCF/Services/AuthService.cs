@@ -117,11 +117,15 @@ public class AuthService
              * No ASP.NET /api/auth/login request is made here.
              */
 
-            await LoadCurrentUserAsync();
+            var currentUser = await LoadCurrentUserAsync();
+            MauiProgram.SetCurrentUser(currentUser);
 
             return new AuthResult
             {
                 Success = true,
+                Token = firebaseUser.Uid,
+                RefreshToken = firebaseUser.Email,
+                ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
                 StatusCode = 200
             };
         }
@@ -149,7 +153,7 @@ public class AuthService
         {
             await _auth.SignOutAsync();
 
-            MauiProgram.SetCurrentUser(null);
+            MauiProgram.SetCurrentUser(null, notify: true);
 
             return true;
         }
@@ -282,7 +286,8 @@ public class AuthService
             // LOAD THE NEW USER
             // =================================================
 
-            await LoadCurrentUserAsync();
+            var currentUser = await LoadCurrentUserAsync();
+            MauiProgram.SetCurrentUser(currentUser);
         }
         catch (Exception ex)
         {
@@ -304,10 +309,7 @@ public class AuthService
         try
         {
             if (_auth.CurrentUser == null)
-            {
-                MauiProgram.SetCurrentUser(null);
                 return null;
-            }
 
             return await LoadCurrentUserAsync();
         }
@@ -330,10 +332,7 @@ public class AuthService
         var firebaseUser = _auth.CurrentUser;
 
         if (firebaseUser == null)
-        {
-            MauiProgram.SetCurrentUser(null);
             return null;
-        }
 
         var uid = firebaseUser.Uid;
 
@@ -352,17 +351,11 @@ public class AuthService
              * treating the Firebase login as failed.
              */
 
-            var basicUser =
-                new CCT_USCF.Models.CurrentUser
-                {
-                    Id = ConvertFirebaseUidToGuid(uid),
-
-                    Email = firebaseUser.Email ?? string.Empty
-                };
-
-            MauiProgram.SetCurrentUser(basicUser);
-
-            return basicUser;
+            return new CCT_USCF.Models.CurrentUser
+            {
+                Id = ConvertFirebaseUidToGuid(uid),
+                Email = firebaseUser.Email ?? string.Empty
+            };
         }
 
         var data = snapshot.Data;
@@ -394,10 +387,6 @@ public class AuthService
                     GetNullableInt(data, "branchId")
             };
 
-        // =====================================================
-        // REGION NAME
-        // =====================================================
-
         if (currentUser.RegionId.HasValue)
         {
             var region =
@@ -407,10 +396,6 @@ public class AuthService
 
             currentUser.Region = region?.Name;
         }
-
-        // =====================================================
-        // DISTRICT NAME
-        // =====================================================
 
         if (currentUser.DistrictId.HasValue)
         {
@@ -422,10 +407,6 @@ public class AuthService
             currentUser.District = district?.Name;
         }
 
-        // =====================================================
-        // BRANCH NAME
-        // =====================================================
-
         if (currentUser.BranchId.HasValue)
         {
             var branch =
@@ -435,8 +416,6 @@ public class AuthService
 
             currentUser.Branch = branch?.Name;
         }
-
-        MauiProgram.SetCurrentUser(currentUser);
 
         return currentUser;
     }

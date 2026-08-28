@@ -84,6 +84,8 @@ public partial class AppShell : Shell
     // FIREBASE AUTH STATE CHANGED
     // =========================================================
 
+    private int _authUiUpdateInProgress;
+
     private async void OnAuthStateChanged()
     {
         await UpdateAuthUIAsync();
@@ -95,6 +97,9 @@ public partial class AppShell : Shell
 
     private async Task UpdateAuthUIAsync()
     {
+        if (Interlocked.Exchange(ref _authUiUpdateInProgress, 1) == 1)
+            return;
+
         try
         {
             var auth =
@@ -103,35 +108,20 @@ public partial class AppShell : Shell
             var firebaseUser =
                 await auth.GetCurrentUserAsync();
 
-            // -------------------------------------------------
-            // NOT LOGGED IN
-            // -------------------------------------------------
-
             if (firebaseUser == null)
             {
+                MauiProgram.SetCurrentUser(null);
                 ShowUnauthenticatedState();
                 return;
             }
 
-            // -------------------------------------------------
-            // LOGGED IN
-            // -------------------------------------------------
-
             MauiProgram.SetCurrentUser(firebaseUser);
-
             ShowAuthenticatedState();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[APP SHELL AUTH] {ex}");
-
-            /*
-             * Do NOT destroy the UI or clear a valid Firebase
-             * session simply because Firestore/network failed.
-             *
-             * Firebase Authentication maintains its own session.
-             */
 
             if (MauiProgram.CurrentUser != null)
             {
@@ -141,6 +131,10 @@ public partial class AppShell : Shell
             {
                 ShowUnauthenticatedState();
             }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _authUiUpdateInProgress, 0);
         }
     }
 

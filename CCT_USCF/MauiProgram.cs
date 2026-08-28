@@ -37,10 +37,13 @@ public static class MauiProgram
     }
 
     public static void SetCurrentUser(
-        CCT_USCF.Models.CurrentUser? user)
+        CCT_USCF.Models.CurrentUser? user,
+        bool notify = false)
     {
         CurrentUser = user;
-        NotifyAuthChanged();
+
+        if (notify)
+            NotifyAuthChanged();
     }
 
     // =========================================================

@@ -46,11 +46,19 @@ public partial class LoginPage : ContentPage
                     return;
             }
 
-                // Save the authenticated session securely and verify it
+                // Persist a lightweight local session only when a non-Firebase session marker is available.
+                // Firebase Authentication remains authoritative; the local cache is only for offline recovery.
                 try
                 {
-                    System.Diagnostics.Debug.WriteLine("[LOGIN] Saving session to secure storage");
-                    await TokenStorage.SaveSessionAsync(result.Token!, result.RefreshToken, result.ExpiresAtUtc ?? DateTime.UtcNow.AddHours(8));
+                    if (!string.IsNullOrWhiteSpace(result.Token))
+                    {
+                        System.Diagnostics.Debug.WriteLine("[LOGIN] Saving lightweight local session to secure storage");
+                        await TokenStorage.SaveSessionAsync(result.Token, result.RefreshToken, result.ExpiresAtUtc ?? DateTime.UtcNow.AddDays(30));
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[LOGIN] No local token marker available; continuing with Firebase session only.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -60,37 +68,33 @@ public partial class LoginPage : ContentPage
                     return;
                 }
 
-                CCT_USCF.Models.CurrentUser? user = null;
+                CCT_USCF.Models.CurrentUser? user = MauiProgram.CurrentUser;
                 try
                 {
-                    System.Diagnostics.Debug.WriteLine("[LOGIN] Calling GetCurrentUserAsync to verify token");
-                    user = await _authService.GetCurrentUserAsync();
-                    System.Diagnostics.Debug.WriteLine($"[LOGIN] GetCurrentUserAsync returned user: {(user != null ? user.Username : "null")}");
+                    if (user == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[LOGIN] Loading current Firebase user profile after login");
+                        user = await _authService.GetCurrentUserAsync();
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Current user after login: {(user != null ? user.Username : "null")}");
                 }
-                catch (HttpRequestException httpEx)
+                catch (Exception ex)
                 {
-                    // Network/server issue — keep the persisted session so the app can recover later.
-                    // Allow the user to proceed using the locally available profile.
-                    MessageLabel.Text = "Logged in (offline). You can use the app now; verification will resume when connection is available.";
-                    MessageLabel.IsVisible = true;
-                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Network error verifying session: {httpEx.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Error reading current Firebase user: {ex}");
 
                     var localUser = CCT_USCF.Services.TokenStorage.GetCachedUser();
                     if (localUser != null)
                     {
-                        MauiProgram.SetCurrentUser(localUser);
+                        user = localUser;
+                        MauiProgram.SetCurrentUser(user);
                         await CCT_USCF.Services.TokenStorage.SaveCachedUserAsync(localUser);
                         MauiProgram.NotifyAuthChanged();
                         await Shell.Current.GoToAsync("//home");
                         return;
                     }
 
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[LOGIN] Unexpected error verifying session: {ex}");
-                    MessageLabel.Text = "An unexpected error occurred verifying the session.";
+                    MessageLabel.Text = "The session could not be verified. Please try again.";
                     MessageLabel.IsVisible = true;
                     return;
                 }
@@ -98,19 +102,18 @@ public partial class LoginPage : ContentPage
                 if (user == null)
                 {
                     await TokenStorage.ClearSessionAsync();
-                    MessageLabel.Text = "Login failed: server rejected the token.";
+                    MessageLabel.Text = "Login failed: the Firebase session was not available.";
                     MessageLabel.IsVisible = true;
-                    System.Diagnostics.Debug.WriteLine("[LOGIN] Server rejected token (user==null)");
+                    System.Diagnostics.Debug.WriteLine("[LOGIN] No current Firebase user available after login");
                     return;
                 }
 
-                                // Cache the verified user for offline use
-                                await TokenStorage.SaveCachedUserAsync(user);
+                await TokenStorage.SaveCachedUserAsync(user);
 
-                                System.Diagnostics.Debug.WriteLine("[LOGIN] Login successful, navigating to home");
-                                MauiProgram.SetCurrentUser(user);
-                                MauiProgram.NotifyAuthChanged();
-                                await Shell.Current.GoToAsync("//home");
+                System.Diagnostics.Debug.WriteLine("[LOGIN] Login successful, navigating to home");
+                MauiProgram.SetCurrentUser(user);
+                MauiProgram.NotifyAuthChanged();
+                await Shell.Current.GoToAsync("//home");
 
             }
             catch (Exception ex)
