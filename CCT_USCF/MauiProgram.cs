@@ -8,6 +8,7 @@ using Microsoft.Maui.LifecycleEvents;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Bundled.Shared;
 using Plugin.Firebase.Firestore;
+using CCT_USCF.Services;
 
 #if ANDROID
 using Plugin.Firebase.Bundled.Platforms.Android;
@@ -119,6 +120,11 @@ public static class MauiProgram
                         activity,
                         () => Platform.CurrentActivity,
                         firebaseSettings);
+
+                    // Signal that CrossFirebase.Initialize has completed so
+                    // pages can await FirebaseInit.Initialized before issuing
+                    // Firestore/Auth calls.
+                    FirebaseInit.SignalInitialized();
                 });
             });
         });
