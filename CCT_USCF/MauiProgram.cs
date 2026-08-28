@@ -56,6 +56,14 @@ public static class MauiProgram
     // =========================================================
     // APPWRITE CONFIGURATION
     // =========================================================
+    builder.Services.AddSingleton<
+    CCT_USCF.Services.FirebaseRegionSeedService>();
+
+builder.Services.AddSingleton<
+    CCT_USCF.Services.FirebaseDistrictSeedService>();
+
+builder.Services.AddSingleton<
+    CCT_USCF.Services.FirebaseUniversitySeedService>();
 
     private const string AppwriteEndpoint =
         "https://sgp.cloud.appwrite.io/v1";
