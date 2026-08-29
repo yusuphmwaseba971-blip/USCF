@@ -52,6 +52,24 @@ public class AuthService
         public string Name { get; set; } = string.Empty;
     }
 
+    private sealed class FirestoreLocationDocument : IFirestoreObject
+    {
+        [FirestoreDocumentId]
+        public string DocumentId { get; set; } = string.Empty;
+
+        [FirestoreProperty("Id")]
+        public int Id { get; set; }
+
+        [FirestoreProperty("Name")]
+        public string Name { get; set; } = string.Empty;
+
+        [FirestoreProperty("RegionId")]
+        public int RegionId { get; set; }
+
+        [FirestoreProperty("DistrictId")]
+        public int DistrictId { get; set; }
+    }
+
     // =========================================================
     // LOGIN
     // =========================================================
@@ -446,7 +464,7 @@ public class AuthService
             var snapshot =
                 await _firestore
                     .GetCollection("regions")
-                    .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
+                    .GetDocumentsAsync<FirestoreLocationDocument>(Source.Default);
 
             System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Firestore query completed: snapshot is {(snapshot == null ? "null" : "not null")}");
 
@@ -456,34 +474,26 @@ public class AuthService
             if (snapshot == null)
                 return regions;
 
-            // Count documents without assuming Documents exposes a Count property
-            var docCount = 0;
-            if (snapshot.Documents != null)
-            {
-                foreach (var _d in snapshot.Documents)
-                    docCount++;
-            }
+            var docCount = snapshot.Count;
             System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Documents returned: {docCount}");
 
             foreach (var document in snapshot.Documents)
             {
                 var data = document.Data;
+                var documentId = document.Reference?.Id ?? string.Empty;
 
-                // Log document keys to aid diagnosis
-                if (data != null)
-                {
-                    var keys = string.Join(", ", data.Keys);
-                    System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Document keys: {keys}");
-                }
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-FIRESTORE] Region document ID: {documentId}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-FIRESTORE] Field Id: {data?.Id}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-FIRESTORE] Field Name: {data?.Name}");
 
                 if (data == null)
                     continue;
 
-                var id =
-                    GetInt(data, "Id");
-
-                var name =
-                    GetString(data, "Name");
+                var id = data.Id;
+                var name = data.Name;
 
                 System.Diagnostics.Debug.WriteLine($"[CCT-FIRESTORE] Parsed region - Id: {id}, Name: {name}");
 
@@ -540,7 +550,7 @@ public class AuthService
             var snapshot =
                 await _firestore
                     .GetCollection("districts")
-                    .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
+                    .GetDocumentsAsync<FirestoreLocationDocument>(Source.Default);
 
             var districts =
                 new List<LocationItem>();
@@ -555,17 +565,13 @@ public class AuthService
                 if (data == null)
                     continue;
 
-                var parentRegionId =
-                    GetInt(data, "RegionId");
+                var parentRegionId = data.RegionId;
 
                 if (parentRegionId != regionId)
                     continue;
 
-                var id =
-                    GetInt(data, "Id");
-
-                var name =
-                    GetString(data, "Name");
+                var id = data.Id;
+                var name = data.Name;
 
                 if (id <= 0)
                     continue;
@@ -611,7 +617,7 @@ public class AuthService
             var snapshot =
                 await _firestore
                     .GetCollection("branches")
-                    .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
+                    .GetDocumentsAsync<FirestoreLocationDocument>(Source.Default);
 
             var branches =
                 new List<LocationItem>();
@@ -626,17 +632,13 @@ public class AuthService
                 if (data == null)
                     continue;
 
-                var parentDistrictId =
-                    GetInt(data, "DistrictId");
+                var parentDistrictId = data.DistrictId;
 
                 if (parentDistrictId != districtId)
                     continue;
 
-                var id =
-                    GetInt(data, "Id");
-
-                var name =
-                    GetString(data, "Name");
+                var id = data.Id;
+                var name = data.Name;
 
                 if (id <= 0)
                     continue;
@@ -806,7 +808,7 @@ public class AuthService
         var snapshot =
             await _firestore
                 .GetCollection(collection)
-                .GetDocumentsAsync<Dictionary<string, object>>(Source.Default);
+                .GetDocumentsAsync<FirestoreLocationDocument>(Source.Default);
 
         if (snapshot == null)
             return null;
@@ -818,8 +820,7 @@ public class AuthService
             if (data == null)
                 continue;
 
-            var documentId =
-                GetInt(data, "Id");
+            var documentId = data.Id;
 
             if (documentId != id)
                 continue;
@@ -827,7 +828,7 @@ public class AuthService
             return new LocationItem
             {
                 Id = documentId,
-                Name = GetString(data, "Name")
+                Name = data.Name
             };
         }
 
