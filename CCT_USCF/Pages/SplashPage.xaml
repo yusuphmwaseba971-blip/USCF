@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.SplashPage"
+    Shell.NavBarIsVisible="False"
+    NavigationPage.HasNavigationBar="False"
+    BackgroundColor="#FFFFFF">
+
+    <Grid
+        BackgroundColor="#FFFFFF"
+        RowDefinitions="*,Auto,*"
+        Padding="24">
+
+        <VerticalStackLayout
+            Grid.Row="1"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            Spacing="18">
+
+            <Image
+                x:Name="USCFLogo"
+                Source="uscf_logo.png"
+                WidthRequest="240"
+                HeightRequest="240"
+                Aspect="AspectFit"
+                HorizontalOptions="Center"
+                VerticalOptions="Center" />
+
+            <Label
+                Text="CCT - USCF"
+                FontSize="25"
+                FontAttributes="Bold"
+                TextColor="#009E2C"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center" />
+
+            <Label
+                Text="Christian Community &amp; Fellowship"
+                FontSize="14"
+                TextColor="#64748B"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center" />
+
+        </VerticalStackLayout>
+
+        <Label
+            Grid.Row="2"
+            Text="University Students' Christian Fellowship"
+            FontSize="11"
+            TextColor="#64748B"
+            HorizontalOptions="Center"
+            VerticalOptions="End"
+            HorizontalTextAlignment="Center"
+            Margin="0,0,0,20" />
+
+    </Grid>
+
+</ContentPage>
