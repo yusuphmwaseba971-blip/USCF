@@ -10,10 +10,10 @@ namespace CCT_USCF.Services;
 /// <summary>
 /// ONE-TIME FIRESTORE SEEDER
 ///
-/// Seeds TCU-listed university institutions into:
+/// Seeds TCU-listed branch / institutional records into:
 ///
 ///     Firestore
-///         institutions
+///         branches
 ///
 /// Each document contains:
 ///
@@ -604,7 +604,7 @@ public class FirebaseUniversitySeedService
         // =====================================================
 
         var collection =
-            _firestore.GetCollection("institutions");
+            _firestore.GetCollection("branches");
 
         // =====================================================
         // WRITE INSTITUTIONS

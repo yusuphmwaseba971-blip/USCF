@@ -544,49 +544,84 @@ public class AuthService
     {
         if (regionId <= 0)
             return new List<LocationItem>();
-
+ 
         try
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT-DISTRICT] Selected RegionId: {regionId}");
+            System.Diagnostics.Debug.WriteLine(
+                "[CCT-DISTRICT] District query started");
+ 
             var snapshot =
                 await _firestore
                     .GetCollection("districts")
                     .GetDocumentsAsync<FirestoreLocationDocument>(Source.Default);
-
+ 
             var districts =
                 new List<LocationItem>();
-
+ 
             if (snapshot == null)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[CCT-DISTRICT] District query returned null snapshot");
                 return districts;
-
+            }
+ 
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT-DISTRICT] District documents returned: {snapshot.Count}");
+ 
             foreach (var document in snapshot.Documents)
             {
                 var data = document.Data;
-
+                var documentId = document.Reference?.Id ?? string.Empty;
+ 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-DISTRICT] District document ID: {documentId}");
+ 
                 if (data == null)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[CCT-DISTRICT] District document {documentId} has null Data");
                     continue;
-
+                }
+ 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-DISTRICT] District field Id: {data.Id}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-DISTRICT] District field Name: {data.Name}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-DISTRICT] District field RegionId: {data.RegionId}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-DISTRICT] District field DistrictId: {data.DistrictId}");
+ 
                 var parentRegionId = data.RegionId;
-
+ 
                 if (parentRegionId != regionId)
                     continue;
-
+ 
                 var id = data.Id;
                 var name = data.Name;
-
+ 
                 if (id <= 0)
                     continue;
-
+ 
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-
+ 
                 districts.Add(
                     new LocationItem
                     {
                         Id = id,
                         Name = name
                     });
+ 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-DISTRICT] District accepted: Id={id}, Name={name}");
             }
-
+ 
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT-DISTRICT] Final districts for RegionId {regionId}: {districts.Count}");
+ 
             return districts
                 .OrderBy(x => x.Name)
                 .ToList();
@@ -594,8 +629,8 @@ public class AuthService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIRESTORE] Districts failed: {ex}");
-
+                $"[CCT-DISTRICT] District query failed: {ex}");
+ 
             throw new Exception(
                 "Unable to load districts from Firebase.",
                 ex);
@@ -611,49 +646,84 @@ public class AuthService
     {
         if (districtId <= 0)
             return new List<LocationItem>();
-
+ 
         try
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT-BRANCH] Selected DistrictId: {districtId}");
+            System.Diagnostics.Debug.WriteLine(
+                "[CCT-BRANCH] Branch query started");
+ 
             var snapshot =
                 await _firestore
                     .GetCollection("branches")
                     .GetDocumentsAsync<FirestoreLocationDocument>(Source.Default);
-
+ 
             var branches =
                 new List<LocationItem>();
-
+ 
             if (snapshot == null)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[CCT-BRANCH] Branch query returned null snapshot");
                 return branches;
-
+            }
+ 
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT-BRANCH] Branch documents returned: {snapshot.Count}");
+ 
             foreach (var document in snapshot.Documents)
             {
                 var data = document.Data;
-
+                var documentId = document.Reference?.Id ?? string.Empty;
+ 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-BRANCH] Branch document ID: {documentId}");
+ 
                 if (data == null)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[CCT-BRANCH] Branch document {documentId} has null Data");
                     continue;
-
+                }
+ 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-BRANCH] Branch field Id: {data.Id}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-BRANCH] Branch field Name: {data.Name}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-BRANCH] Branch field DistrictId: {data.DistrictId}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-BRANCH] Branch field RegionId: {data.RegionId}");
+ 
                 var parentDistrictId = data.DistrictId;
-
+ 
                 if (parentDistrictId != districtId)
                     continue;
-
+ 
                 var id = data.Id;
                 var name = data.Name;
-
+ 
                 if (id <= 0)
                     continue;
-
+ 
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-
+ 
                 branches.Add(
                     new LocationItem
                     {
                         Id = id,
                         Name = name
                     });
+ 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT-BRANCH] Branch accepted: Id={id}, Name={name}");
             }
-
+ 
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT-BRANCH] Final branches for DistrictId {districtId}: {branches.Count}");
+ 
             return branches
                 .OrderBy(x => x.Name)
                 .ToList();
@@ -661,8 +731,8 @@ public class AuthService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[FIRESTORE] Branches failed: {ex}");
-
+                $"[CCT-BRANCH] Branch query failed: {ex}");
+ 
             throw new Exception(
                 "Unable to load branches from Firebase.",
                 ex);

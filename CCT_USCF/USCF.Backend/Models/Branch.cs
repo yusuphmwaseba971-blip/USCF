@@ -11,6 +11,7 @@ public class Branch
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;
 
+    public int RegionId { get; set; }
     public int DistrictId { get; set; }
     public District? District { get; set; }
 }
