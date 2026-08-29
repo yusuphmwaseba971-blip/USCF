@@ -26,6 +26,7 @@ public partial class ProfilePage : ContentPage
                 FullNameLabel.Text = "Full Name: Not available";
                 UsernameLabel.Text = "Username: Not available";
                 EmailLabel.Text = "Email: Not available";
+                PhoneNumberLabel.Text = "Phone Number: Not available";
                 RoleLabel.Text = "Role: Not available";
                 RegionLabel.Text = "Region: Not available";
                 DistrictLabel.Text = "District: Not available";
@@ -36,6 +37,7 @@ public partial class ProfilePage : ContentPage
             FullNameLabel.Text = $"Full Name: {user.FullName}";
             UsernameLabel.Text = $"Username: {user.Username}";
             EmailLabel.Text = $"Email: {user.Email}";
+            PhoneNumberLabel.Text = $"Phone Number: {user.PhoneNumber}";
             RoleLabel.Text = $"Role: {user.Role}";
             RegionLabel.Text = $"Region: {user.Region ?? "Not available"}";
             DistrictLabel.Text = $"District: {user.District ?? "Not available"}";
@@ -48,6 +50,7 @@ public partial class ProfilePage : ContentPage
             FullNameLabel.Text = "Full Name: Unable to load";
             UsernameLabel.Text = "Username: Unable to load";
             EmailLabel.Text = "Email: Unable to load";
+            PhoneNumberLabel.Text = "Phone Number: Unable to load";
             RoleLabel.Text = "Role: Unable to load";
             RegionLabel.Text = "Region: Unable to load";
             DistrictLabel.Text = "District: Unable to load";

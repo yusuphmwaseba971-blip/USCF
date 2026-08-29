@@ -65,7 +65,8 @@
                 Text="📢 Church Announcements" />
 
             <Button
-                Text="👥 Church Groups" />
+                Text="👥 Church Groups"
+                Clicked="OnChurchGroupsClicked" />
 
         </VerticalStackLayout>
     </ScrollView>

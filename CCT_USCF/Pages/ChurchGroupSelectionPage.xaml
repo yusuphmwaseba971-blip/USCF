@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.ChurchGroupSelectionPage"
+    Title="Church Group"
+    BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+            <Label Text="Church Group" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Label x:Name="DestinationLabel" Text="" FontSize="16" TextColor="#64748B" />
+
+            <Label Text="Choose an organizational level" FontSize="18" FontAttributes="Bold" />
+            <Button x:Name="NationalButton" Text="National Group" Clicked="OnNationalClicked" />
+            <Button x:Name="RegionalButton" Text="Regional Group" Clicked="OnRegionalClicked" />
+            <Button x:Name="DistrictButton" Text="District Group" Clicked="OnDistrictClicked" />
+            <Button x:Name="BranchButton" Text="Branch Group" Clicked="OnBranchClicked" />
+
+            <Label x:Name="StatusLabel" Text="" TextColor="#64748B" />
+            <VerticalStackLayout x:Name="GroupsLayout" Spacing="10" />
+            <Button Text="Cancel" Clicked="OnCancelClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

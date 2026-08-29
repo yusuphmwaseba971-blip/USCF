@@ -2,6 +2,8 @@ using Microsoft.Maui.Storage;
 
 namespace CCT_USCF.Pages;
 
+[QueryProperty(nameof(Destination), "destination")]
+[QueryProperty(nameof(Group), "group")]
 public partial class CreateHolyWordPage : ContentPage
 {
     private Services.AuthService _auth;
@@ -11,6 +13,8 @@ public partial class CreateHolyWordPage : ContentPage
     private double _trimStart = 0;
     private double _trimEnd = 0;
     private bool _isPlayingPreview = false;
+    private string _selectedDestination = string.Empty;
+    private string _selectedGroup = string.Empty;
 
     public CreateHolyWordPage()
     {
@@ -18,10 +22,37 @@ public partial class CreateHolyWordPage : ContentPage
         _auth = LoginRegisterHelpers.GetAuthService();
     }
 
+    public string Destination
+    {
+        set => _selectedDestination = Uri.UnescapeDataString(value ?? string.Empty);
+    }
+
+    public string Group
+    {
+        set
+        {
+            _selectedGroup = Uri.UnescapeDataString(value ?? string.Empty);
+            SelectedGroupLabel.Text = string.IsNullOrWhiteSpace(_selectedGroup)
+                ? string.Empty
+                : $"Destination: {_selectedDestination} | Group: {_selectedGroup}";
+        }
+    }
+
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        if (string.IsNullOrWhiteSpace(_selectedGroup))
+        {
+            _ = ReturnToGroupSelectionAsync();
+            return;
+        }
+
         LoadPosterInfo();
+    }
+
+    private async Task ReturnToGroupSelectionAsync()
+    {
+        await Shell.Current.GoToAsync(nameof(ChurchGroupSelectionPage), true);
     }
 
     private async void LoadPosterInfo()
