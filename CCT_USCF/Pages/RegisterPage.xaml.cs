@@ -88,14 +88,9 @@ public partial class RegisterPage : ContentPage
             DutyPicker.SelectedIndex = -1;
 
             LocationSection.IsVisible = true;
-
             RegionPicker.IsVisible = true;
-
-            DistrictPicker.IsVisible =
-                RegionPicker.SelectedItem != null;
-
-            BranchPicker.IsVisible =
-                DistrictPicker.SelectedItem != null;
+            DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
+            BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
 
             return;
         }
@@ -133,6 +128,9 @@ public partial class RegisterPage : ContentPage
             DutyPicker.SelectedIndex = -1;
         }
 
+        // Keep the USCF location controls visible for Leader and Pastor.
+        // The location chain still remains available when the selected
+        // leadership level requires Region, District, or Branch data.
         switch (LevelPicker.SelectedIndex)
         {
             // -------------------------------------------------
@@ -154,7 +152,6 @@ public partial class RegisterPage : ContentPage
             case 1:
 
                 RegionPicker.IsVisible = true;
-
                 DistrictPicker.IsVisible = false;
                 BranchPicker.IsVisible = false;
 
@@ -167,10 +164,7 @@ public partial class RegisterPage : ContentPage
             case 2:
 
                 RegionPicker.IsVisible = true;
-
-                DistrictPicker.IsVisible =
-                    RegionPicker.SelectedItem != null;
-
+                DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
                 BranchPicker.IsVisible = false;
 
                 break;
@@ -182,12 +176,8 @@ public partial class RegisterPage : ContentPage
             case 3:
 
                 RegionPicker.IsVisible = true;
-
-                DistrictPicker.IsVisible =
-                    RegionPicker.SelectedItem != null;
-
-                BranchPicker.IsVisible =
-                    DistrictPicker.SelectedItem != null;
+                DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
+                BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
 
                 break;
 
@@ -197,9 +187,9 @@ public partial class RegisterPage : ContentPage
 
             default:
 
-                RegionPicker.IsVisible = false;
-                DistrictPicker.IsVisible = false;
-                BranchPicker.IsVisible = false;
+                RegionPicker.IsVisible = true;
+                DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
+                BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
 
                 break;
         }
@@ -776,10 +766,43 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
+        if (RolePicker.SelectedIndex != 0 &&
+            LevelPicker.SelectedIndex > 0)
+        {
+            if (RegionPicker.SelectedItem is not AuthLocation selectedRegion)
+            {
+                ShowError(
+                    "Please select your USCF Location before continuing.");
+
+                return;
+            }
+
+            if (LevelPicker.SelectedIndex >= 2 &&
+                DistrictPicker.SelectedItem is not AuthLocation)
+            {
+                ShowError(
+                    "Please select your USCF Location before continuing.");
+
+                return;
+            }
+
+            if (LevelPicker.SelectedIndex == 3 &&
+                BranchPicker.SelectedItem is not AuthLocation)
+            {
+                ShowError(
+                    "Please select your USCF Location before continuing.");
+
+                return;
+            }
+        }
+
         if (RolePicker.SelectedIndex != 0)
         {
             await ShowLeadershipDutyPopupAsync(leadershipDuty);
         }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] Selected role={role}, leadershipLevel={leadershipLevel}, leadershipDuty={leadershipDuty}, regionId={regionId}, districtId={districtId}, branchId={branchId}");
 
         // =====================================================
         // CREATE FIREBASE ACCOUNT

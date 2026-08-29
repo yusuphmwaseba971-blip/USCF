@@ -75,6 +75,9 @@ public class AuthService
         [FirestoreDocumentId]
         public string DocumentId { get; set; } = string.Empty;
 
+        [FirestoreProperty("uid")]
+        public string Uid { get; set; } = string.Empty;
+
         [FirestoreProperty("fullName")]
         public string FullName { get; set; } = string.Empty;
 
@@ -318,6 +321,9 @@ public class AuthService
         var normalizedLeadershipDuty = string.IsNullOrWhiteSpace(leadershipDuty) ? string.Empty : leadershipDuty.Trim();
         var normalizedExistingRole = string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole;
 
+        System.Diagnostics.Debug.WriteLine(
+            $"[FIREBASE AUTH] RegisterAsync inputs: role={normalizedRole}, leadershipLevel={normalizedLeadershipLevel}, leadershipDuty={normalizedLeadershipDuty}, regionId={regionId}, districtId={districtId}, branchId={branchId}");
+
         try
         {
             await FirebaseInit.Initialized;
@@ -337,11 +343,16 @@ public class AuthService
             }
 
             var firebaseUid = firebaseUser.Uid;
+            var profileDocumentPath = $"users/{firebaseUid}";
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Firebase Auth UID created: {firebaseUid}. Firestore profile path: {profileDocumentPath}");
 
             var profileDocument =
                 new FirestoreUserProfileDocument
                 {
                     DocumentId = firebaseUid,
+                    Uid = firebaseUid,
                     FullName = fullName.Trim(),
                     Username = normalizedUsername,
                     Email = normalizedEmail,
@@ -369,12 +380,22 @@ public class AuthService
                     .GetDocument(firebaseUid)
                     .GetDocumentSnapshotAsync<FirestoreUserProfileDocument>(Source.Default);
 
+                var savedDocumentId = savedDocument?.Reference?.Id ?? savedDocument?.Data?.DocumentId ?? string.Empty;
+                var savedProfileUid = savedDocument?.Data?.Uid ?? savedDocumentId;
+                var profileMatchesCurrentUser =
+                    string.Equals(savedDocumentId, firebaseUid, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(savedProfileUid, firebaseUid, StringComparison.OrdinalIgnoreCase);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[FIREBASE AUTH] Firestore profile verification: documentId={savedDocumentId}, profileUid={savedProfileUid}, expectedUid={firebaseUid}, profileMatchesCurrentUser={profileMatchesCurrentUser}");
+
                 var isProfileSaved = savedDocument?.Data != null &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.FullName) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Username) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Email) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.PhoneNumber) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Role) &&
+                    profileMatchesCurrentUser &&
                     (savedDocument.Data.RegionId > 0 || savedDocument.Data.DistrictId > 0 || savedDocument.Data.BranchId > 0 || string.Equals(savedDocument.Data.Role, "Member", StringComparison.OrdinalIgnoreCase));
 
                 if (!isProfileSaved)
@@ -489,6 +510,25 @@ public class AuthService
             }
 
             var profile = snapshot.Data;
+            var documentId = snapshot.Reference?.Id ?? profile.DocumentId ?? string.Empty;
+            var profileUid = !string.IsNullOrWhiteSpace(profile.Uid) ? profile.Uid : documentId;
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Loading profile: authUid={uid}, documentId={documentId}, profileUid={profileUid}");
+
+            if (!string.IsNullOrWhiteSpace(profileUid) &&
+                !string.Equals(profileUid, uid, StringComparison.OrdinalIgnoreCase))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[FIREBASE AUTH] Firestore profile UID mismatch: authUid={uid}, profileUid={profileUid}, documentId={documentId}");
+
+                var existingUser = MauiProgram.CurrentUser;
+                if (existingUser != null && !string.IsNullOrWhiteSpace(existingUser.Email))
+                    return existingUser;
+
+                return null;
+            }
+
             var currentUser =
                 new CCT_USCF.Models.CurrentUser
                 {
