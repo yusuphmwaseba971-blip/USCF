@@ -31,6 +31,7 @@ public partial class SettingsPage : ContentPage
             FullNameEntry.Text = user.FullName;
             UsernameEntry.Text = user.Username;
             EmailEntry.Text = user.Email;
+            PhoneNumberEntry.Text = user.PhoneNumber;
         }
         catch (Exception ex)
         {
@@ -46,6 +47,7 @@ public partial class SettingsPage : ContentPage
             var fullName = FullNameEntry.Text?.Trim();
             var username = UsernameEntry.Text?.Trim();
             var email = EmailEntry.Text?.Trim();
+            var phoneNumber = PhoneNumberEntry.Text?.Trim();
 
             // Validate basic fields
             if (string.IsNullOrWhiteSpace(fullName))
@@ -86,7 +88,7 @@ public partial class SettingsPage : ContentPage
                 }
             }
 
-            var updated = await _auth.UpdateProfileAsync(fullName, username, email, currentPwd, newPwd, confirmPwd);
+            var updated = await _auth.UpdateProfileAsync(fullName, username, email, phoneNumber, currentPwd, newPwd, confirmPwd);
             if (updated == null)
             {
                 await DisplayAlert("Error", "Unable to update profile.", "OK");

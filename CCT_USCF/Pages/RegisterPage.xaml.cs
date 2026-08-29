@@ -82,8 +82,10 @@ public partial class RegisterPage : ContentPage
         if (roleIndex == 0)
         {
             LeadershipSection.IsVisible = false;
+            DutySection.IsVisible = false;
 
             LevelPicker.SelectedIndex = -1;
+            DutyPicker.SelectedIndex = -1;
 
             LocationSection.IsVisible = true;
 
@@ -123,6 +125,13 @@ public partial class RegisterPage : ContentPage
     {
         if (RolePicker.SelectedIndex == 0)
             return;
+
+        var hasLevelSelected = LevelPicker.SelectedIndex >= 0;
+        DutySection.IsVisible = hasLevelSelected;
+        if (!hasLevelSelected)
+        {
+            DutyPicker.SelectedIndex = -1;
+        }
 
         switch (LevelPicker.SelectedIndex)
         {
@@ -193,6 +202,45 @@ public partial class RegisterPage : ContentPage
                 BranchPicker.IsVisible = false;
 
                 break;
+        }
+    }
+
+    private async void OnDutyChanged(
+        object sender,
+        EventArgs e)
+    {
+        if (RolePicker.SelectedIndex == 0)
+            return;
+
+        if (DutyPicker.SelectedItem is not string duty)
+            return;
+
+        await ShowLeadershipDutyPopupAsync(duty);
+    }
+
+    private static async Task ShowLeadershipDutyPopupAsync(string duty)
+    {
+        if (string.IsNullOrWhiteSpace(duty))
+            return;
+
+        if (Application.Current?.MainPage is not Page page)
+            return;
+
+        if (string.Equals(duty, "Chairman", StringComparison.OrdinalIgnoreCase))
+        {
+            await page.DisplayAlert(
+                "Chairman Responsibility",
+                "You have a duty to register or add the other leaders in your community Church Group. Please ensure other leaders serving at your level are included in the appropriate Church Group.",
+                "Continue");
+            return;
+        }
+
+        if (string.Equals(duty, "Other Leader", StringComparison.OrdinalIgnoreCase))
+        {
+            await page.DisplayAlert(
+                "Leadership Information",
+                "You will need to ask your Chairman to add or confirm your leadership role in the Community page and appropriate Church Group.",
+                "OK");
         }
     }
 
@@ -636,6 +684,14 @@ public partial class RegisterPage : ContentPage
                 _ => "Member"
             };
 
+        var leadershipLevel =
+            RolePicker.SelectedIndex == 0
+                ? string.Empty
+                : (LevelPicker.SelectedItem as string ?? string.Empty);
+
+        var leadershipDuty =
+            (DutyPicker.SelectedItem as string ?? string.Empty);
+
         // =====================================================
         // LOCATION IDS
         // =====================================================
@@ -702,6 +758,29 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
+        if (RolePicker.SelectedIndex != 0 &&
+            string.IsNullOrWhiteSpace(leadershipLevel))
+        {
+            ShowError(
+                "Please select the leadership level for your account.");
+
+            return;
+        }
+
+        if (RolePicker.SelectedIndex != 0 &&
+            string.IsNullOrWhiteSpace(leadershipDuty))
+        {
+            ShowError(
+                "Please select your leadership duty.");
+
+            return;
+        }
+
+        if (RolePicker.SelectedIndex != 0)
+        {
+            await ShowLeadershipDutyPopupAsync(leadershipDuty);
+        }
+
         // =====================================================
         // CREATE FIREBASE ACCOUNT
         // =====================================================
@@ -714,12 +793,15 @@ public partial class RegisterPage : ContentPage
                 fullName,
                 username,
                 email,
+                phone,
                 password,
                 confirm,
                 role,
                 regionId,
                 districtId,
-                branchId);
+                branchId,
+                leadershipLevel,
+                leadershipDuty);
 
             // =================================================
             // SUCCESS

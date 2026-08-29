@@ -43,6 +43,10 @@ public partial class AppShell : Shell
             typeof(CreateHolyWordPage));
 
         Routing.RegisterRoute(
+            nameof(ChurchGroupSelectionPage),
+            typeof(ChurchGroupSelectionPage));
+
+        Routing.RegisterRoute(
             nameof(LoginPage),
             typeof(LoginPage));
 

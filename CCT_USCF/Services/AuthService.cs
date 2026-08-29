@@ -84,8 +84,23 @@ public class AuthService
         [FirestoreProperty("email")]
         public string Email { get; set; } = string.Empty;
 
+        [FirestoreProperty("phoneNumber")]
+        public string PhoneNumber { get; set; } = string.Empty;
+
         [FirestoreProperty("role")]
         public string Role { get; set; } = string.Empty;
+
+        [FirestoreProperty("leadershipLevel")]
+        public string LeadershipLevel { get; set; } = string.Empty;
+
+        [FirestoreProperty("leadershipDuty")]
+        public string LeadershipDuty { get; set; } = string.Empty;
+
+        [FirestoreProperty("existingRole")]
+        public string ExistingRole { get; set; } = string.Empty;
+
+        [FirestoreProperty("organization")]
+        public string Organization { get; set; } = string.Empty;
 
         [FirestoreProperty("regionId")]
         public int RegionId { get; set; }
@@ -262,12 +277,15 @@ public class AuthService
         string fullName,
         string username,
         string email,
+        string phoneNumber,
         string password,
         string confirm,
         string role,
         int? regionId,
         int? districtId,
-        int? branchId)
+        int? branchId,
+        string? leadershipLevel = null,
+        string? leadershipDuty = null)
     {
         if (string.IsNullOrWhiteSpace(fullName))
             throw new Exception("Full name is required.");
@@ -277,6 +295,9 @@ public class AuthService
 
         if (string.IsNullOrWhiteSpace(email))
             throw new Exception("Email is required.");
+
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            throw new Exception("Phone number is required.");
 
         if (string.IsNullOrWhiteSpace(password))
             throw new Exception("Password is required.");
@@ -293,6 +314,9 @@ public class AuthService
 
         var normalizedEmail = email.Trim();
         var normalizedRole = string.IsNullOrWhiteSpace(role) ? "Member" : role.Trim();
+        var normalizedLeadershipLevel = string.IsNullOrWhiteSpace(leadershipLevel) ? string.Empty : leadershipLevel.Trim();
+        var normalizedLeadershipDuty = string.IsNullOrWhiteSpace(leadershipDuty) ? string.Empty : leadershipDuty.Trim();
+        var normalizedExistingRole = string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole;
 
         try
         {
@@ -321,7 +345,12 @@ public class AuthService
                     FullName = fullName.Trim(),
                     Username = normalizedUsername,
                     Email = normalizedEmail,
+                    PhoneNumber = phoneNumber.Trim(),
                     Role = normalizedRole,
+                    LeadershipLevel = normalizedLeadershipLevel,
+                    LeadershipDuty = normalizedLeadershipDuty,
+                    ExistingRole = normalizedExistingRole,
+                    Organization = BuildOrganizationValue(regionId, districtId, branchId, normalizedLeadershipLevel),
                     RegionId = regionId ?? 0,
                     DistrictId = districtId ?? 0,
                     BranchId = branchId ?? 0,
@@ -344,6 +373,7 @@ public class AuthService
                     !string.IsNullOrWhiteSpace(savedDocument.Data.FullName) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Username) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Email) &&
+                    !string.IsNullOrWhiteSpace(savedDocument.Data.PhoneNumber) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Role) &&
                     (savedDocument.Data.RegionId > 0 || savedDocument.Data.DistrictId > 0 || savedDocument.Data.BranchId > 0 || string.Equals(savedDocument.Data.Role, "Member", StringComparison.OrdinalIgnoreCase));
 
@@ -466,7 +496,12 @@ public class AuthService
                     FullName = !string.IsNullOrWhiteSpace(profile.FullName) ? profile.FullName : (firebaseUser.DisplayName ?? string.Empty),
                     Username = !string.IsNullOrWhiteSpace(profile.Username) ? profile.Username : string.Empty,
                     Email = !string.IsNullOrWhiteSpace(profile.Email) ? profile.Email : (firebaseUser.Email ?? string.Empty),
+                    PhoneNumber = profile.PhoneNumber ?? string.Empty,
                     Role = !string.IsNullOrWhiteSpace(profile.Role) ? profile.Role : string.Empty,
+                    LeadershipLevel = !string.IsNullOrWhiteSpace(profile.LeadershipLevel) ? profile.LeadershipLevel : string.Empty,
+                    LeadershipDuty = !string.IsNullOrWhiteSpace(profile.LeadershipDuty) ? profile.LeadershipDuty : string.Empty,
+                    ExistingRole = !string.IsNullOrWhiteSpace(profile.ExistingRole) ? profile.ExistingRole : string.Empty,
+                    Organization = !string.IsNullOrWhiteSpace(profile.Organization) ? profile.Organization : string.Empty,
                     RegionId = profile.RegionId > 0 ? profile.RegionId : null,
                     DistrictId = profile.DistrictId > 0 ? profile.DistrictId : null,
                     BranchId = profile.BranchId > 0 ? profile.BranchId : null
@@ -549,6 +584,30 @@ public class AuthService
     private static string NormalizeUsername(string? username)
     {
         return username?.Trim().ToLowerInvariant() ?? string.Empty;
+    }
+
+    private static string BuildOrganizationValue(int? regionId, int? districtId, int? branchId, string? leadershipLevel)
+    {
+        if (string.IsNullOrWhiteSpace(leadershipLevel))
+            return string.Empty;
+
+        if (string.Equals(leadershipLevel, "National", StringComparison.OrdinalIgnoreCase))
+            return "National";
+
+        if (string.Equals(leadershipLevel, "Regional", StringComparison.OrdinalIgnoreCase))
+            return regionId.HasValue ? $"Regional:{regionId.Value}" : "Regional";
+
+        if (string.Equals(leadershipLevel, "District", StringComparison.OrdinalIgnoreCase))
+            return districtId.HasValue ? $"District:{districtId.Value}" : "District";
+
+        if (string.Equals(leadershipLevel, "Branch", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(leadershipLevel, "Branch / Local", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(leadershipLevel, "Branch / Local Fellowship", StringComparison.OrdinalIgnoreCase))
+        {
+            return branchId.HasValue ? $"Branch:{branchId.Value}" : "Branch";
+        }
+
+        return leadershipLevel.Trim();
     }
 
     // =========================================================
@@ -861,9 +920,14 @@ public class AuthService
             string? fullName,
             string? username,
             string? email,
+            string? phoneNumber,
             string? currentPassword,
             string? newPassword,
-            string? confirmNewPassword)
+            string? confirmNewPassword,
+            string? leadershipLevel = null,
+            string? leadershipDuty = null,
+            string? existingRole = null,
+            string? organization = null)
     {
         var firebaseUser = _auth.CurrentUser;
 
@@ -898,6 +962,21 @@ public class AuthService
 
         if (!string.IsNullOrWhiteSpace(email))
             updates["email"] = email.Trim();
+
+        if (phoneNumber != null)
+            updates["phoneNumber"] = phoneNumber.Trim();
+
+        if (!string.IsNullOrWhiteSpace(leadershipLevel))
+            updates["leadershipLevel"] = leadershipLevel.Trim();
+
+        if (!string.IsNullOrWhiteSpace(leadershipDuty))
+            updates["leadershipDuty"] = leadershipDuty.Trim();
+
+        if (!string.IsNullOrWhiteSpace(existingRole))
+            updates["existingRole"] = existingRole.Trim();
+
+        if (!string.IsNullOrWhiteSpace(organization))
+            updates["organization"] = organization.Trim();
 
         if (updates.Count > 0)
         {

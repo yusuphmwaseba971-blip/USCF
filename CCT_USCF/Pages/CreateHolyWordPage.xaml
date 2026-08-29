@@ -11,6 +11,7 @@
         <VerticalStackLayout Padding="20" Spacing="16">
 
             <Label Text="Create Holy Word" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Label x:Name="SelectedGroupLabel" Text="" FontSize="15" TextColor="#64748B" />
 
             <Label Text="📖 Holy Word (required)" />
             <Editor x:Name="HolyWordEditor" HeightRequest="120" Placeholder="Write a Bible verse or holy message..." />

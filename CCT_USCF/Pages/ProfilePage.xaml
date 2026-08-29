@@ -52,6 +52,12 @@
                                 HorizontalOptions="Start" />
 
                             <Label
+                                x:Name="PhoneNumberLabel"
+                                Text="Phone Number"
+                                TextColor="#64748B"
+                                HorizontalOptions="Start" />
+
+                            <Label
                                 x:Name="RoleLabel"
                                 Text="Role"
                                 TextColor="#64748B"

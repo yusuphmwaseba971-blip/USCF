@@ -79,7 +79,7 @@
                 Spacing="10">
 
                 <Label
-                    Text="Leadership / Ministry Level"
+                    Text="Select your leadership level"
                     FontAttributes="Bold"/>
 
                 <Picker
@@ -95,6 +95,29 @@
                     </Picker.Items>
 
                 </Picker>
+
+                <VerticalStackLayout
+                    x:Name="DutySection"
+                    IsVisible="False"
+                    Spacing="10">
+
+                    <Label
+                        Text="What is your duty?"
+                        FontAttributes="Bold"/>
+
+                    <Picker
+                        x:Name="DutyPicker"
+                        Title="Select duty"
+                        SelectedIndexChanged="OnDutyChanged">
+
+                        <Picker.Items>
+                            <x:String>Chairman</x:String>
+                            <x:String>Other Leader</x:String>
+                        </Picker.Items>
+
+                    </Picker>
+
+                </VerticalStackLayout>
 
             </VerticalStackLayout>
 
