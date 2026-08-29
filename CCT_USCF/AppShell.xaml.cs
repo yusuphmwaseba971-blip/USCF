@@ -47,6 +47,10 @@ public partial class AppShell : Shell
             typeof(ChurchGroupSelectionPage));
 
         Routing.RegisterRoute(
+            nameof(BranchChatPage),
+            typeof(BranchChatPage));
+
+        Routing.RegisterRoute(
             nameof(LoginPage),
             typeof(LoginPage));
 
