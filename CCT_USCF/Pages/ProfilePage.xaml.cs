@@ -20,11 +20,16 @@ public partial class ProfilePage : ContentPage
     {
         try
         {
-            var user = await _authService.GetCurrentUserAsync();
+            var user = MauiProgram.CurrentUser ?? await _authService.GetCurrentUserAsync();
             if (user == null)
             {
-                // not authenticated
-                await DisplayAlert("Not authenticated", "Please sign in.", "OK");
+                FullNameLabel.Text = "Full Name: Not available";
+                UsernameLabel.Text = "Username: Not available";
+                EmailLabel.Text = "Email: Not available";
+                RoleLabel.Text = "Role: Not available";
+                RegionLabel.Text = "Region: Not available";
+                DistrictLabel.Text = "District: Not available";
+                BranchLabel.Text = "USCF Branch: Not available";
                 return;
             }
 
@@ -32,13 +37,22 @@ public partial class ProfilePage : ContentPage
             UsernameLabel.Text = $"Username: {user.Username}";
             EmailLabel.Text = $"Email: {user.Email}";
             RoleLabel.Text = $"Role: {user.Role}";
-            RegionLabel.Text = $"Region: {user.Region ?? "N/A"}";
-            DistrictLabel.Text = $"District: {user.District ?? "N/A"}";
-            BranchLabel.Text = $"USCF Branch: {user.Branch ?? "N/A"}";
+            RegionLabel.Text = $"Region: {user.Region ?? "Not available"}";
+            DistrictLabel.Text = $"District: {user.District ?? "Not available"}";
+            BranchLabel.Text = $"USCF Branch: {user.Branch ?? "Not available"}";
+
+            MauiProgram.SetCurrentUser(user);
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            FullNameLabel.Text = "Full Name: Unable to load";
+            UsernameLabel.Text = "Username: Unable to load";
+            EmailLabel.Text = "Email: Unable to load";
+            RoleLabel.Text = "Role: Unable to load";
+            RegionLabel.Text = "Region: Unable to load";
+            DistrictLabel.Text = "District: Unable to load";
+            BranchLabel.Text = "USCF Branch: Unable to load";
+            System.Diagnostics.Debug.WriteLine($"[PROFILE] Error loading profile: {ex}");
         }
     }
 

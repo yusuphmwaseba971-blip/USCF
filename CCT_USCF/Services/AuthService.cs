@@ -70,6 +70,36 @@ public class AuthService
         public int DistrictId { get; set; }
     }
 
+    private sealed class FirestoreUserProfileDocument : IFirestoreObject
+    {
+        [FirestoreDocumentId]
+        public string DocumentId { get; set; } = string.Empty;
+
+        [FirestoreProperty("fullName")]
+        public string FullName { get; set; } = string.Empty;
+
+        [FirestoreProperty("username")]
+        public string Username { get; set; } = string.Empty;
+
+        [FirestoreProperty("email")]
+        public string Email { get; set; } = string.Empty;
+
+        [FirestoreProperty("role")]
+        public string Role { get; set; } = string.Empty;
+
+        [FirestoreProperty("regionId")]
+        public int RegionId { get; set; }
+
+        [FirestoreProperty("districtId")]
+        public int DistrictId { get; set; }
+
+        [FirestoreProperty("branchId")]
+        public int BranchId { get; set; }
+
+        [FirestoreProperty("createdAt")]
+        public string CreatedAt { get; set; } = string.Empty;
+    }
+
     // =========================================================
     // LOGIN
     // =========================================================
@@ -83,7 +113,7 @@ public class AuthService
             return new AuthResult
             {
                 Success = false,
-                Error = "Email is required.",
+                Error = "Email or username is required.",
                 StatusCode = 400
             };
         }
@@ -100,22 +130,35 @@ public class AuthService
 
         try
         {
-            /*
-             * Firebase Authentication uses email/password.
-             *
-             * The existing parameter is called
-             * usernameOrEmail because the old application
-             * supported both.
-             *
-             * For the Firebase migration, the value is treated
-             * as the Firebase email address.
-             */
+            await FirebaseInit.Initialized;
 
-            var email = usernameOrEmail.Trim();
+            var identifier = usernameOrEmail.Trim();
+            var normalizedIdentifier = identifier.Trim();
+            var isEmailIdentifier = normalizedIdentifier.Contains('@');
+
+            var emailToUse = isEmailIdentifier
+                ? normalizedIdentifier.Trim().ToLowerInvariant()
+                : string.Empty;
+
+            if (!isEmailIdentifier)
+            {
+                var usernameProfile = await FindUserByUsernameAsync(normalizedIdentifier);
+                if (usernameProfile == null || string.IsNullOrWhiteSpace(usernameProfile.Email))
+                {
+                    return new AuthResult
+                    {
+                        Success = false,
+                        Error = "Username not found.",
+                        StatusCode = 404
+                    };
+                }
+
+                emailToUse = usernameProfile.Email.Trim().ToLowerInvariant();
+            }
 
             var firebaseUser =
                 await _auth.SignInWithEmailAndPasswordAsync(
-                    email,
+                    emailToUse,
                     password);
 
             if (firebaseUser == null)
@@ -123,17 +166,10 @@ public class AuthService
                 return new AuthResult
                 {
                     Success = false,
-                    Error = "Invalid email or password.",
+                    Error = "Incorrect username/email or password.",
                     StatusCode = 401
                 };
             }
-
-            /*
-             * Firebase owns the authentication session.
-             *
-             * No custom JWT is created here.
-             * No ASP.NET /api/auth/login request is made here.
-             */
 
             var currentUser = await LoadCurrentUserAsync();
             MauiProgram.SetCurrentUser(currentUser);
@@ -245,18 +281,29 @@ public class AuthService
         if (string.IsNullOrWhiteSpace(password))
             throw new Exception("Password is required.");
 
+        if (password.Length < 6)
+            throw new Exception("Password must be at least 6 characters.");
+
         if (password != confirm)
             throw new Exception("Passwords do not match.");
 
+        var normalizedUsername = NormalizeUsername(username);
+        if (normalizedUsername.Length < 3)
+            throw new Exception("Username must be at least 3 characters.");
+
+        var normalizedEmail = email.Trim();
+        var normalizedRole = string.IsNullOrWhiteSpace(role) ? "Member" : role.Trim();
+
         try
         {
-            // =================================================
-            // CREATE FIREBASE AUTH ACCOUNT
-            // =================================================
+            await FirebaseInit.Initialized;
+
+            if (await IsUsernameTakenAsync(normalizedUsername))
+                throw new Exception("Username is already registered.");
 
             var firebaseUser =
                 await _auth.CreateUserAsync(
-                    email.Trim(),
+                    normalizedEmail,
                     password);
 
             if (firebaseUser == null)
@@ -267,44 +314,70 @@ public class AuthService
 
             var firebaseUid = firebaseUser.Uid;
 
-            // =================================================
-            // CREATE FIRESTORE USER PROFILE
-            // =================================================
-
-            var userData =
-                new Dictionary<string, object>
+            var profileDocument =
+                new FirestoreUserProfileDocument
                 {
-                    ["fullName"] = fullName.Trim(),
-
-                    ["username"] = username.Trim(),
-
-                    ["email"] = email.Trim(),
-
-                    ["role"] =
-                        string.IsNullOrWhiteSpace(role)
-                            ? "Member"
-                            : role.Trim(),
-
-                    ["regionId"] = regionId ?? 0,
-
-                    ["districtId"] = districtId ?? 0,
-
-                    ["branchId"] = branchId ?? 0,
-
-                    ["createdAt"] =
-                        DateTime.UtcNow.ToString("O")
+                    DocumentId = firebaseUid,
+                    FullName = fullName.Trim(),
+                    Username = normalizedUsername,
+                    Email = normalizedEmail,
+                    Role = normalizedRole,
+                    RegionId = regionId ?? 0,
+                    DistrictId = districtId ?? 0,
+                    BranchId = branchId ?? 0,
+                    CreatedAt = DateTime.UtcNow.ToString("O")
                 };
 
-            await _firestore
-                .GetCollection("users")
-                .GetDocument(firebaseUid)
-                .SetDataAsync(userData);
+            try
+            {
+                await _firestore
+                    .GetCollection("users")
+                    .GetDocument(firebaseUid)
+                    .SetDataAsync(profileDocument);
 
-            // =================================================
-            // LOAD THE NEW USER
-            // =================================================
+                var savedDocument = await _firestore
+                    .GetCollection("users")
+                    .GetDocument(firebaseUid)
+                    .GetDocumentSnapshotAsync<FirestoreUserProfileDocument>(Source.Default);
+
+                var isProfileSaved = savedDocument?.Data != null &&
+                    !string.IsNullOrWhiteSpace(savedDocument.Data.FullName) &&
+                    !string.IsNullOrWhiteSpace(savedDocument.Data.Username) &&
+                    !string.IsNullOrWhiteSpace(savedDocument.Data.Email) &&
+                    !string.IsNullOrWhiteSpace(savedDocument.Data.Role) &&
+                    (savedDocument.Data.RegionId > 0 || savedDocument.Data.DistrictId > 0 || savedDocument.Data.BranchId > 0 || string.Equals(savedDocument.Data.Role, "Member", StringComparison.OrdinalIgnoreCase));
+
+                if (!isProfileSaved)
+                {
+                    throw new InvalidOperationException(
+                        "Profile verification failed after Firestore write.");
+                }
+            }
+            catch (Exception firestoreEx)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[FIREBASE AUTH] Firestore profile write failed for UID {firebaseUid}: {firestoreEx}");
+
+                try
+                {
+                    await _auth.SignOutAsync();
+                }
+                catch
+                {
+                }
+
+                throw new Exception(
+                    "Your Firebase account was created, but your user profile could not be saved. Please try again.",
+                    firestoreEx);
+            }
 
             var currentUser = await LoadCurrentUserAsync();
+            if (currentUser == null)
+            {
+                throw new Exception(
+                    "Your Firebase account exists, but your user profile is missing.");
+            }
+
             MauiProgram.SetCurrentUser(currentUser);
         }
         catch (Exception ex)
@@ -329,12 +402,24 @@ public class AuthService
             if (_auth.CurrentUser == null)
                 return null;
 
-            return await LoadCurrentUserAsync();
+            var currentUser = await LoadCurrentUserAsync();
+            if (currentUser != null)
+                return currentUser;
+
+            var previousUser = MauiProgram.CurrentUser;
+            if (previousUser != null && !string.IsNullOrWhiteSpace(previousUser.Email))
+                return previousUser;
+
+            return null;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[FIREBASE AUTH] GetCurrentUser failed: {ex}");
+
+            var previousUser = MauiProgram.CurrentUser;
+            if (previousUser != null && !string.IsNullOrWhiteSpace(previousUser.Email))
+                return previousUser;
 
             return null;
         }
@@ -354,88 +439,116 @@ public class AuthService
 
         var uid = firebaseUser.Uid;
 
-        var snapshot = await _firestore
-            .GetCollection("users")
-            .GetDocument(uid)
-            .GetDocumentSnapshotAsync<Dictionary<string, object>>(Source.Default);
-
-        if (snapshot == null || snapshot.Data == null)
+        try
         {
-            /*
-             * Authentication exists, but the Firestore profile
-             * does not exist yet.
-             *
-             * We still return a basic CurrentUser instead of
-             * treating the Firebase login as failed.
-             */
+            var snapshot = await _firestore
+                .GetCollection("users")
+                .GetDocument(uid)
+                .GetDocumentSnapshotAsync<FirestoreUserProfileDocument>(Source.Default);
 
-            return new CCT_USCF.Models.CurrentUser
+            if (snapshot == null || snapshot.Data == null)
             {
-                Id = ConvertFirebaseUidToGuid(uid),
-                Email = firebaseUser.Email ?? string.Empty
-            };
-        }
+                System.Diagnostics.Debug.WriteLine(
+                    $"[FIREBASE AUTH] Firebase account exists but Firestore profile is missing for UID {uid}.");
 
-        var data = snapshot.Data;
+                var existingUser = MauiProgram.CurrentUser;
+                if (existingUser != null && !string.IsNullOrWhiteSpace(existingUser.Email))
+                    return existingUser;
 
-        var currentUser =
-            new CCT_USCF.Models.CurrentUser
+                return null;
+            }
+
+            var profile = snapshot.Data;
+            var currentUser =
+                new CCT_USCF.Models.CurrentUser
+                {
+                    Id = ConvertFirebaseUidToGuid(uid),
+                    FullName = !string.IsNullOrWhiteSpace(profile.FullName) ? profile.FullName : (firebaseUser.DisplayName ?? string.Empty),
+                    Username = !string.IsNullOrWhiteSpace(profile.Username) ? profile.Username : string.Empty,
+                    Email = !string.IsNullOrWhiteSpace(profile.Email) ? profile.Email : (firebaseUser.Email ?? string.Empty),
+                    Role = !string.IsNullOrWhiteSpace(profile.Role) ? profile.Role : string.Empty,
+                    RegionId = profile.RegionId > 0 ? profile.RegionId : null,
+                    DistrictId = profile.DistrictId > 0 ? profile.DistrictId : null,
+                    BranchId = profile.BranchId > 0 ? profile.BranchId : null
+                };
+
+            if (currentUser.RegionId.HasValue)
             {
-                Id = ConvertFirebaseUidToGuid(uid),
+                var region = await GetLocationByIdAsync("regions", currentUser.RegionId.Value);
+                currentUser.Region = region?.Name;
+            }
 
-                FullName =
-                    GetString(data, "fullName"),
+            if (currentUser.DistrictId.HasValue)
+            {
+                var district = await GetLocationByIdAsync("districts", currentUser.DistrictId.Value);
+                currentUser.District = district?.Name;
+            }
 
-                Username =
-                    GetString(data, "username"),
+            if (currentUser.BranchId.HasValue)
+            {
+                var branch = await GetLocationByIdAsync("branches", currentUser.BranchId.Value);
+                currentUser.Branch = branch?.Name;
+            }
 
-                Email =
-                    GetString(data, "email"),
-
-                Role =
-                    GetString(data, "role"),
-
-                RegionId =
-                    GetNullableInt(data, "regionId"),
-
-                DistrictId =
-                    GetNullableInt(data, "districtId"),
-
-                BranchId =
-                    GetNullableInt(data, "branchId")
-            };
-
-        if (currentUser.RegionId.HasValue)
-        {
-            var region =
-                await GetLocationByIdAsync(
-                    "regions",
-                    currentUser.RegionId.Value);
-
-            currentUser.Region = region?.Name;
+            return currentUser;
         }
-
-        if (currentUser.DistrictId.HasValue)
+        catch (Exception ex)
         {
-            var district =
-                await GetLocationByIdAsync(
-                    "districts",
-                    currentUser.DistrictId.Value);
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Failed to load user profile for UID {uid}: {ex}");
 
-            currentUser.District = district?.Name;
+            var existingUser = MauiProgram.CurrentUser;
+            if (existingUser != null && !string.IsNullOrWhiteSpace(existingUser.Email))
+                return existingUser;
+
+            return null;
         }
+    }
 
-        if (currentUser.BranchId.HasValue)
+    private async Task<FirestoreUserProfileDocument?> FindUserByUsernameAsync(string username)
+    {
+        var normalized = NormalizeUsername(username);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return null;
+
+        try
         {
-            var branch =
-                await GetLocationByIdAsync(
-                    "branches",
-                    currentUser.BranchId.Value);
+            var snapshot = await _firestore
+                .GetCollection("users")
+                .GetDocumentsAsync<FirestoreUserProfileDocument>(Source.Default);
 
-            currentUser.Branch = branch?.Name;
+            if (snapshot == null)
+                return null;
+
+            foreach (var document in snapshot.Documents)
+            {
+                var profile = document?.Data;
+                if (profile == null)
+                    continue;
+
+                var storedUsername = NormalizeUsername(profile.Username);
+                if (string.Equals(storedUsername, normalized, StringComparison.OrdinalIgnoreCase))
+                    return profile;
+            }
+
+            return null;
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[FIREBASE AUTH] Username lookup failed: {ex}");
+            return null;
+        }
+    }
 
-        return currentUser;
+    private async Task<bool> IsUsernameTakenAsync(string username)
+    {
+        return await FindUserByUsernameAsync(username) != null;
+    }
+
+    private static string NormalizeUsername(string? username)
+    {
+        return username?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
     // =========================================================
@@ -1011,44 +1124,81 @@ public class AuthService
     {
         var message =
             ex.Message ?? string.Empty;
+        var innerMessage = ex.InnerException?.Message ?? string.Empty;
+        var combined = $"{message} {innerMessage}".Trim();
 
-        if (message.Contains(
-                "already",
-                StringComparison.OrdinalIgnoreCase) &&
-            message.Contains(
-                "email",
-                StringComparison.OrdinalIgnoreCase))
+        if (combined.Contains("Password must be at least 6 characters", StringComparison.OrdinalIgnoreCase) ||
+            (combined.Contains("weak", StringComparison.OrdinalIgnoreCase) &&
+             combined.Contains("password", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Password must be at least 6 characters.";
+        }
+
+        if (combined.Contains("This email is already registered", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("already registered", StringComparison.OrdinalIgnoreCase) ||
+            (combined.Contains("already", StringComparison.OrdinalIgnoreCase) &&
+             combined.Contains("email", StringComparison.OrdinalIgnoreCase)))
         {
             return "This email is already registered.";
         }
 
-        if (message.Contains(
-                "weak",
-                StringComparison.OrdinalIgnoreCase) &&
-            message.Contains(
-                "password",
-                StringComparison.OrdinalIgnoreCase))
+        if (combined.Contains("username is already registered", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("This username is already registered", StringComparison.OrdinalIgnoreCase) ||
+            (combined.Contains("already", StringComparison.OrdinalIgnoreCase) &&
+             combined.Contains("username", StringComparison.OrdinalIgnoreCase)))
         {
-            return "Password is too weak.";
+            return "This username is already registered.";
         }
 
-        if (message.Contains(
-                "invalid",
-                StringComparison.OrdinalIgnoreCase))
+        if (combined.Contains("invalid email", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("malformed email", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("email address is invalid", StringComparison.OrdinalIgnoreCase))
         {
-            return "Invalid email or password.";
+            return "Please enter a valid email address.";
         }
 
-        if (message.Contains(
-                "network",
-                StringComparison.OrdinalIgnoreCase))
+        if (combined.Contains("user-not-found", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("username not found", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("no user record", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("not found", StringComparison.OrdinalIgnoreCase) &&
+            combined.Contains("username", StringComparison.OrdinalIgnoreCase))
         {
-            return "Network error. Check your internet connection.";
+            return "Username not found.";
         }
 
-        if (string.IsNullOrWhiteSpace(message))
+        if (combined.Contains("invalid credential", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("wrong-password", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("password is invalid", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("email or password", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("invalid password", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Incorrect username/email or password.";
+        }
+
+        if (combined.Contains("permission denied", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("firestore", StringComparison.OrdinalIgnoreCase) &&
+            combined.Contains("permission", StringComparison.OrdinalIgnoreCase))
+        {
+            return "You are authenticated, but your profile could not be accessed. Please try again.";
+        }
+
+        if (combined.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("unavailable", StringComparison.OrdinalIgnoreCase) ||
+            (combined.Contains("connection", StringComparison.OrdinalIgnoreCase) &&
+             combined.Contains("failed", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Network connection is unavailable. Your login session has not been cleared.";
+        }
+
+        if (combined.Contains("profile", StringComparison.OrdinalIgnoreCase) &&
+            combined.Contains("missing", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Your Firebase account exists, but your user profile is missing.";
+        }
+
+        if (string.IsNullOrWhiteSpace(combined))
             return "Firebase operation failed.";
 
-        return message;
+        return combined;
     }
 }

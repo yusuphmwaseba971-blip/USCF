@@ -1,0 +1,342 @@
+warning: in the working copy of 'CCT_USCF/Platforms/Android/AndroidManifest.xml', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/CCT_USCF/App.xaml.cs b/CCT_USCF/App.xaml.cs[m
+[1mindex 8a645ca..282ddf5 100644[m
+[1m--- a/CCT_USCF/App.xaml.cs[m
+[1m+++ b/CCT_USCF/App.xaml.cs[m
+[36m@@ -1,5 +1,6 @@[m
+ ﻿[m
+ using Microsoft.Extensions.DependencyInjection;[m
+[32m+[m[32musing CCT_USCF.Pages;[m
+ using CCT_USCF.Services;[m
+ [m
+ namespace CCT_USCF;[m
+[36m@@ -40,6 +41,6 @@[m [mpublic partial class App : Application[m
+     protected override Window CreateWindow([m
+         IActivationState? activationState)[m
+     {[m
+[31m-        return new Window(new AppShell());[m
+[32m+[m[32m        return new Window(new SplashPage());[m
+     }[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/CCT_USCF/CCT_USCF.csproj b/CCT_USCF/CCT_USCF.csproj[m
+[1mindex b23b845..931f2f0 100644[m
+[1m--- a/CCT_USCF/CCT_USCF.csproj[m
+[1m+++ b/CCT_USCF/CCT_USCF.csproj[m
+[36m@@ -64,15 +64,19 @@[m
+ [m
+     <!-- Application Icon -->[m
+     <MauiIcon[m
+[31m-      Include="Resources\AppIcon\appicon.svg"[m
+[31m-      ForegroundFile="Resources\AppIcon\appiconfg.svg"[m
+[31m-      Color="#009E2C" />[m
+[32m+[m[32m      Include="Resources\AppIcon\uscf_logo.png"[m
+[32m+[m[32m      Link="uscf_app_icon.png"[m
+[32m+[m[32m      LogicalName="uscf_app_icon.png"[m
+[32m+[m[32m      BaseSize="128,128"[m
+[32m+[m[32m      Color="#FFFFFF" />[m
+ [m
+     <!-- Splash Screen -->[m
+     <MauiSplashScreen[m
+[31m-      Include="Resources\Splash\splash.svg"[m
+[31m-      Color="#009E2C"[m
+[31m-      BaseSize="128,128" />[m
+[32m+[m[32m      Include="Resources\Splash\uscf_logo.png"[m
+[32m+[m[32m      Link="uscf_splash_screen.png"[m
+[32m+[m[32m      LogicalName="uscf_splash_screen.png"[m
+[32m+[m[32m      BaseSize="128,128"[m
+[32m+[m[32m      Color="#FFFFFF" />[m
+ [m
+     <!-- Images -->[m
+     <MauiImage Include="Resources\Images\*" />[m
+[1mdiff --git a/CCT_USCF/Pages/ProfilePage.xaml.cs b/CCT_USCF/Pages/ProfilePage.xaml.cs[m
+[1mindex 3a514fa..8e5d408 100644[m
+[1m--- a/CCT_USCF/Pages/ProfilePage.xaml.cs[m
+[1m+++ b/CCT_USCF/Pages/ProfilePage.xaml.cs[m
+[36m@@ -20,11 +20,16 @@[m [mpublic partial class ProfilePage : ContentPage[m
+     {[m
+         try[m
+         {[m
+[31m-            var user = await _authService.GetCurrentUserAsync();[m
+[32m+[m[32m            var user = MauiProgram.CurrentUser ?? await _authService.GetCurrentUserAsync();[m
+             if (user == null)[m
+             {[m
+[31m-                // not authenticated[m
+[31m-                await DisplayAlert("Not authenticated", "Please sign in.", "OK");[m
+[32m+[m[32m                FullNameLabel.Text = "Full Name: Not available";[m
+[32m+[m[32m                UsernameLabel.Text = "Username: Not available";[m
+[32m+[m[32m                EmailLabel.Text = "Email: Not available";[m
+[32m+[m[32m                RoleLabel.Text = "Role: Not available";[m
+[32m+[m[32m                RegionLabel.Text = "Region: Not available";[m
+[32m+[m[32m                DistrictLabel.Text = "District: Not available";[m
+[32m+[m[32m                BranchLabel.Text = "USCF Branch: Not available";[m
+                 return;[m
+             }[m
+ [m
+[36m@@ -32,13 +37,22 @@[m [mpublic partial class ProfilePage : ContentPage[m
+             UsernameLabel.Text = $"Username: {user.Username}";[m
+             EmailLabel.Text = $"Email: {user.Email}";[m
+             RoleLabel.Text = $"Role: {user.Role}";[m
+[31m-            RegionLabel.Text = $"Region: {user.Region ?? "N/A"}";[m
+[31m-            DistrictLabel.Text = $"District: {user.District ?? "N/A"}";[m
+[31m-            BranchLabel.Text = $"USCF Branch: {user.Branch ?? "N/A"}";[m
+[32m+[m[32m            RegionLabel.Text = $"Region: {user.Region ?? "Not available"}";[m
+[32m+[m[32m            DistrictLabel.Text = $"District: {user.District ?? "Not available"}";[m
+[32m+[m[32m            BranchLabel.Text = $"USCF Branch: {user.Branch ?? "Not available"}";[m
+[32m+[m
+[32m+[m[32m            MauiProgram.SetCurrentUser(user);[m
+         }[m
+         catch (Exception ex)[m
+         {[m
+[31m-            await DisplayAlert("Error", ex.Message, "OK");[m
+[32m+[m[32m            FullNameLabel.Text = "Full Name: Unable to load";[m
+[32m+[m[32m            UsernameLabel.Text = "Username: Unable to load";[m
+[32m+[m[32m            EmailLabel.Text = "Email: Unable to load";[m
+[32m+[m[32m            RoleLabel.Text = "Role: Unable to load";[m
+[32m+[m[32m            RegionLabel.Text = "Region: Unable to load";[m
+[32m+[m[32m            DistrictLabel.Text = "District: Unable to load";[m
+[32m+[m[32m            BranchLabel.Text = "USCF Branch: Unable to load";[m
+[32m+[m[32m            System.Diagnostics.Debug.WriteLine($"[PROFILE] Error loading profile: {ex}");[m
+         }[m
+     }[m
+ [m
+[1mdiff --git a/CCT_USCF/Platforms/Android/AndroidManifest.xml b/CCT_USCF/Platforms/Android/AndroidManifest.xml[m
+[1mindex f838dc7..573241f 100644[m
+[1m--- a/CCT_USCF/Platforms/Android/AndroidManifest.xml[m
+[1m+++ b/CCT_USCF/Platforms/Android/AndroidManifest.xml[m
+[36m@@ -2,9 +2,9 @@[m
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">[m
+     <application[m
+         android:allowBackup="true"[m
+[31m-        android:icon="@mipmap/appicon"[m
+[32m+[m[32m        android:icon="@mipmap/uscf_app_icon"[m
+         android:label="USCF"[m
+[31m-        android:roundIcon="@mipmap/appicon_round"[m
+[32m+[m[32m        android:roundIcon="@mipmap/uscf_app_icon_round"[m
+         android:supportsRtl="true"[m
+         android:networkSecurityConfig="@xml/network_security_config" />[m
+     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />[m
+[1mdiff --git a/CCT_USCF/Services/AuthService.cs b/CCT_USCF/Services/AuthService.cs[m
+[1mindex 5ffbd57..4b21262 100644[m
+[1m--- a/CCT_USCF/Services/AuthService.cs[m
+[1m+++ b/CCT_USCF/Services/AuthService.cs[m
+[36m@@ -70,6 +70,36 @@[m [mpublic class AuthService[m
+         public int DistrictId { get; set; }[m
+     }[m
+ [m
+[32m+[m[32m    private sealed class FirestoreUserProfileDocument : IFirestoreObject[m
+[32m+[m[32m    {[m
+[32m+[m[32m        [FirestoreDocumentId][m
+[32m+[m[32m        public string DocumentId { get; set; } = string.Empty;[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("fullName")][m
+[32m+[m[32m        public string FullName { get; set; } = string.Empty;[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("username")][m
+[32m+[m[32m        public string Username { get; set; } = string.Empty;[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("email")][m
+[32m+[m[32m        public string Email { get; set; } = string.Empty;[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("role")][m
+[32m+[m[32m        public string Role { get; set; } = string.Empty;[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("regionId")][m
+[32m+[m[32m        public int RegionId { get; set; }[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("districtId")][m
+[32m+[m[32m        public int DistrictId { get; set; }[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("branchId")][m
+[32m+[m[32m        public int BranchId { get; set; }[m
+[32m+[m
+[32m+[m[32m        [FirestoreProperty("createdAt")][m
+[32m+[m[32m        public string CreatedAt { get; set; } = string.Empty;[m
+[32m+[m[32m    }[m
+[32m+[m
+     // =========================================================[m
+     // LOGIN[m
+     // =========================================================[m
+[36m@@ -83,7 +113,7 @@[m [mpublic class AuthService[m
+             return new AuthResult[m
+             {[m
+                 Success = false,[m
+[31m-                Error = "Email is required.",[m
+[32m+[m[32m                Error = "Email or username is required.",[m
+                 StatusCode = 400[m
+             };[m
+         }[m
+[36m@@ -100,22 +130,35 @@[m [mpublic class AuthService[m
+ [m
+         try[m
+         {[m
+[31m-            /*[m
+[31m-             * Firebase Authentication uses email/password.[m
+[31m-             *[m
+[31m-             * The existing parameter is called[m
+[31m-             * usernameOrEmail because the old application[m
+[31m-             * supported both.[m
+[31m-             *[m
+[31m-             * For the Firebase migration, the value is treated[m
+[31m-             * as the Firebase email address.[m
+[31m-             */[m
+[32m+[m[32m            await FirebaseInit.Initialized;[m
+[32m+[m
+[32m+[m[32m            var identifier = usernameOrEmail.Trim();[m
+[32m+[m[32m            var normalizedIdentifier = identifier.Trim();[m
+[32m+[m[32m            var isEmailIdentifier = normalizedIdentifier.Contains('@');[m
+ [m
+[31m-            var email = usernameOrEmail.Trim();[m
+[32m+[m[32m            var emailToUse = isEmailIdentifier[m
+[32m+[m[32m                ? normalizedIdentifier.Trim().ToLowerInvariant()[m
+[32m+[m[32m                : string.Empty;[m
+[32m+[m
+[32m+[m[32m            if (!isEmailIdentifier)[m
+[32m+[m[32m            {[m
+[32m+[m[32m                var usernameProfile = await FindUserByUsernameAsync(normalizedIdentifier);[m
+[32m+[m[32m                if (usernameProfile == null || string.IsNullOrWhiteSpace(usernameProfile.Email))[m
+[32m+[m[32m                {[m
+[32m+[m[32m                    return new AuthResult[m
+[32m+[m[32m                    {[m
+[32m+[m[32m                        Success = false,[m
+[32m+[m[32m                        Error = "Username not found.",[m
+[32m+[m[32m                        StatusCode = 404[m
+[32m+[m[32m                    };[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                emailToUse = usernameProfile.Email.Trim().ToLowerInvariant();[m
+[32m+[m[32m            }[m
+ [m
+             var firebaseUser =[m
+                 await _auth.SignInWithEmailAndPasswordAsync([m
+[31m-                    email,[m
+[32m+[m[32m                    emailToUse,[m
+                     password);[m
+ [m
+             if (firebaseUser == null)[m
+[36m@@ -123,18 +166,11 @@[m [mpublic class AuthService[m
+                 return new AuthResult[m
+                 {[m
+                     Success = false,[m
+[31m-                    Error = "Invalid email or password.",[m
+[32m+[m[32m                    Error = "Incorrect username/email or password.",[m
+                     StatusCode = 401[m
+                 };[m
+             }[m
+ [m
+[31m-            /*[m
+[31m-             * Firebase owns the authentication session.[m
+[31m-             *[m
+[31m-             * No custom JWT is created here.[m
+[31m-             * No ASP.NET /api/auth/login request is made here.[m
+[31m-             */[m
+[31m-[m
+             var currentUser = await LoadCurrentUserAsync();[m
+             MauiProgram.SetCurrentUser(currentUser);[m
+ [m
+[36m@@ -245,18 +281,29 @@[m [mpublic class AuthService[m
+         if (string.IsNullOrWhiteSpace(password))[m
+             throw new Exception("Password is required.");[m
+ [m
+[32m+[m[32m        if (password.Length < 6)[m
+[32m+[m[32m            throw new Exception("Password must be at least 6 characters.");[m
+[32m+[m
+         if (password != confirm)[m
+             throw new Exception("Passwords do not match.");[m
+ [m
+[32m+[m[32m        var normalizedUsername = NormalizeUsername(username);[m
+[32m+[m[32m        if (normalizedUsername.Length < 3)[m
+[32m+[m[32m            throw new Exception("Username must be at least 3 characters.");[m
+[32m+[m
+[32m+[m[32m        var normalizedEmail = email.Trim();[m
+[32m+[m[32m        var normalizedRole = string.IsNullOrWhiteSpace(role) ? "Member" : role.Trim();[m
+[32m+[m
+         try[m
+         {[m
+[31m-            // =================================================[m
+[31m-            // CREATE FIREBASE AUTH ACCOUNT[m
+[31m-            // =================================================[m
+[32m+[m[32m            await FirebaseInit.Initialized;[m
+[32m+[m
+[32m+[m[32m            if (await IsUsernameTakenAsync(normalizedUsername))[m
+[32m+[m[32m                throw new Exception("Username is already registered.");[m
+ [m
+             var firebaseUser =[m
+                 await _auth.CreateUserAsync([m
+[31m-                    email.Trim(),[m
+[32m+[m[32m                    normalizedEmail,[m
+                     password);[m
+ [m
+             if (firebaseUser == null)[m
+[36m@@ -267,44 +314,70 @@[m [mpublic class AuthService[m
+ [m
+             var firebaseUid = firebaseUser.Uid;[m
+ [m
+[31m-            // =================================================[m
+[31m-            // CREATE FIRESTORE USER PROFILE[m
+[31m-            // =================================================[m
+[31m-[m
+[31m-            var userData =[m
+[31m-                new Dictionary<string, object>[m
+[32m+[m[32m            var profileDocument =[m
+[32m+[m[32m                new FirestoreUserProfileDocument[m
+                 {[m
+[31m-                    ["fullName"] = fullName.Trim(),[m
+[31m-[m
+[31m-                    ["username"] = username.Trim(),[m
+[31m-[m
+[31m-                    ["email"] = email.Trim(),[m
+[31m-[m
+[31m-                    ["role"] =[m
+[31m-                        string.IsNullOrWhiteSpace(role)[m
+[31m-                            ? "Member"[m
+[31m-                            : role.Trim(),[m
+[31m-[m
+[31m-                    ["regionId"] = regionId ?? 0,[m
+[31m-[m
+[31m-                    ["districtId"] = districtId ?? 0,[m
+[31m-[m
+[31m-                    ["branchId"] = branchId ?? 0,[m
+[31m-[m
+[31m-                    ["createdAt"] =[m
+[31m-                        DateTime.UtcNow.ToString("O")[m
+[32m+[m[32m                    DocumentId = firebaseUid,[m
+[32m+[m[32m                    FullName = fullName.Trim(),[m
+[32m+[m[32m                    Username = normalizedUsername,[m
+[32m+[m[32m                    Email = normalizedEmail,[m
+[32m+[m[32m                    Role = normalizedRole,[m
+[32m+[m[32m                    RegionId = regionId ?? 0,[m
+[32m+[m[32m                    DistrictId = districtId ?? 0,[m
+[32m+[m[32m                    BranchId = branchId ?? 0,[m
+[32m+[m[32m                    CreatedAt = DateTime.UtcNow.ToString("O")[m
+                 };[m
+ [m
+[31m-            await _firestore[m
+[31m-                .GetCollection("users")[m
+[31m-                .GetDocument(firebaseUid)[m
+[31m-                .SetDataAsync(userData);[m
+[32m+[m[32m            try[m
+[32m+[m[32m            {[m
+[32m+[m[32m                await _firestore[m
+[32m+[m[32m                    .GetCollection("users")[m
+[32m+[m[32m                    .GetDocument(firebaseUid)[m
+[32m+[m[32m                    .SetDataAsync(profileDocument);[m
+[32m+[m
+[32m+[m[32m                var savedDocument = await _firestore[m
+[32m+[m[32m                    .GetCollection("users")[m
+[32m+[m[32m                    .GetDocument(firebaseUid)[m
+[32m+[m[32m                    .GetDocumentSnapshotAsync<FirestoreUserProfileDocument>(Source.Default);[m
+[32m+[m
+[32m+[m[32m                var isProfileSaved = savedDocument?.Data != null &&[m
+[32m+[m[32m                    !string.IsNullOrWhiteSpace(savedDocument.Data.FullName) &&[m
+[32m+[m[32m                    !string.IsNullOrWhiteSpace(savedDocument.Data.Username) &&[m
+[32m+[m[32m                    !string.IsNullOrWhiteSpace(savedDocument.Data.Email) &&[m
+[32m+[m[32m                    !string.IsNullOrWhiteSpace(savedDocument.Data.Role) &&[m
+[32m+[m[32m                    (savedDocument.Data.RegionId > 0 || savedDocument.Data.DistrictId > 0 || savedDocument.Data.BranchId > 0 || string.Equals(savedDocument.Data.Role, "Member", StringComparison.OrdinalIgnoreCase));[m
+[32m+[m
+[32m+[m[32m                if (!isProfileSaved)[m
+[32m+[m[32m                {[m
+[32m+[m[32m                    throw new InvalidOperationException([m
+[32m+[m[32m                        "Profile verification failed after Firestore write.");[m
+[32m+[m[32m                }[m
+[32m+[m[32m        

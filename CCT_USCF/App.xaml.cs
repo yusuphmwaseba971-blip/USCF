@@ -1,5 +1,6 @@
 ﻿
 using Microsoft.Extensions.DependencyInjection;
+using CCT_USCF.Pages;
 using CCT_USCF.Services;
 
 namespace CCT_USCF;
@@ -40,6 +41,6 @@ public partial class App : Application
     protected override Window CreateWindow(
         IActivationState? activationState)
     {
-        return new Window(new AppShell());
+        return new Window(new SplashPage());
     }
 }
