@@ -75,12 +75,20 @@ public partial class RegisterPage : ContentPage
         var roleIndex =
             RolePicker.SelectedIndex;
 
+        var roleName = RolePicker.SelectedItem as string ?? "Unknown";
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] UpdateRoleUI: roleIndex={roleIndex}, role={roleName}");
+
         // -----------------------------------------------------
         // MEMBER
         // -----------------------------------------------------
 
         if (roleIndex == 0)
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Member selected - setting LocationSection.IsVisible=true");
+
             LeadershipSection.IsVisible = false;
             DutySection.IsVisible = false;
 
@@ -92,6 +100,9 @@ public partial class RegisterPage : ContentPage
             DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
             BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
 
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Member: LocationSection.IsVisible={LocationSection.IsVisible}, RegionPicker.IsVisible={RegionPicker.IsVisible}, DistrictPicker.IsVisible={DistrictPicker.IsVisible}, BranchPicker.IsVisible={BranchPicker.IsVisible}");
+
             return;
         }
 
@@ -99,10 +110,23 @@ public partial class RegisterPage : ContentPage
         // LEADER / PASTOR
         // -----------------------------------------------------
 
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] Leader or Pastor selected - setting LeadershipSection.IsVisible=true and LocationSection.IsVisible=true");
+
         LeadershipSection.IsVisible = true;
         LocationSection.IsVisible = true;
 
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] Before UpdateLocationFields: LocationSection.IsVisible={LocationSection.IsVisible}");
+
         UpdateLocationFields();
+
+        // CRITICAL: Ensure LocationSection remains visible after UpdateLocationFields.
+        // UpdateLocationFields may change child picker visibility, but should NEVER hide the parent.
+        LocationSection.IsVisible = true;
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] After UpdateLocationFields (with safety check): LocationSection.IsVisible={LocationSection.IsVisible}, RegionPicker.IsVisible={RegionPicker.IsVisible}, DistrictPicker.IsVisible={DistrictPicker.IsVisible}, BranchPicker.IsVisible={BranchPicker.IsVisible}");
     }
 
     // =========================================================
@@ -118,8 +142,20 @@ public partial class RegisterPage : ContentPage
 
     private void UpdateLocationFields()
     {
+        var roleIndex = RolePicker.SelectedIndex;
+        var levelIndex = LevelPicker.SelectedIndex;
+        var roleName = RolePicker.SelectedItem as string ?? "Unknown";
+        var levelName = LevelPicker.SelectedItem as string ?? "None";
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] UpdateLocationFields: roleIndex={roleIndex}, role={roleName}, levelIndex={levelIndex}, level={levelName}");
+
         if (RolePicker.SelectedIndex == 0)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] Member role detected - returning early");
             return;
+        }
 
         var hasLevelSelected = LevelPicker.SelectedIndex >= 0;
         DutySection.IsVisible = hasLevelSelected;
@@ -127,6 +163,9 @@ public partial class RegisterPage : ContentPage
         {
             DutyPicker.SelectedIndex = -1;
         }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] LocationSection.IsVisible={LocationSection.IsVisible}, hasLevelSelected={hasLevelSelected}");
 
         // Keep the USCF location controls visible for Leader and Pastor.
         // The location chain still remains available when the selected
@@ -138,6 +177,9 @@ public partial class RegisterPage : ContentPage
             // -------------------------------------------------
 
             case 0:
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[REGISTER] National level: hiding Region/District/Branch");
 
                 RegionPicker.IsVisible = false;
                 DistrictPicker.IsVisible = false;
@@ -151,6 +193,9 @@ public partial class RegisterPage : ContentPage
 
             case 1:
 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[REGISTER] Regional level: showing Region only");
+
                 RegionPicker.IsVisible = true;
                 DistrictPicker.IsVisible = false;
                 BranchPicker.IsVisible = false;
@@ -162,6 +207,9 @@ public partial class RegisterPage : ContentPage
             // -------------------------------------------------
 
             case 2:
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[REGISTER] District level: showing Region, District conditional on region selection");
 
                 RegionPicker.IsVisible = true;
                 DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
@@ -175,6 +223,9 @@ public partial class RegisterPage : ContentPage
 
             case 3:
 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[REGISTER] Branch/Local level: showing Region, District, Branch conditional on selections");
+
                 RegionPicker.IsVisible = true;
                 DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
                 BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
@@ -187,12 +238,18 @@ public partial class RegisterPage : ContentPage
 
             default:
 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[REGISTER] No level selected (default case): showing Region, District/Branch conditional");
+
                 RegionPicker.IsVisible = true;
                 DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
                 BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
 
                 break;
         }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[REGISTER] UpdateLocationFields end: LocationSection.IsVisible={LocationSection.IsVisible}, RegionPicker.IsVisible={RegionPicker.IsVisible}, DistrictPicker.IsVisible={DistrictPicker.IsVisible}, BranchPicker.IsVisible={BranchPicker.IsVisible}");
     }
 
     private async void OnDutyChanged(
