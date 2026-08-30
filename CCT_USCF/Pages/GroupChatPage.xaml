@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.GroupChatPage"
+    Title="Group Chat"
+    BackgroundColor="#F8FAFC">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="0">
+        <Border
+            Grid.Row="0"
+            BackgroundColor="#EEF2FF"
+            Padding="18,16"
+            StrokeThickness="0">
+            <VerticalStackLayout Spacing="4">
+                <Label x:Name="GroupTitleLabel" Text="Group Chat" FontSize="22" FontAttributes="Bold" TextColor="#1E40AF" />
+                <Label x:Name="GroupStatusLabel" Text="Loading group..." FontSize="12" TextColor="#475569" />
+            </VerticalStackLayout>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="12,8,12,0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Border
+                Grid.Column="0"
+                BackgroundColor="White"
+                Padding="12"
+                StrokeThickness="0">
+                <Label x:Name="MembersLabel" Text="Members" FontSize="12" TextColor="#475569" />
+            </Border>
+
+            <Button
+                x:Name="AddMemberButton"
+                Grid.Column="1"
+                Text="+ Add Member"
+                Padding="12,8"
+                FontSize="12"
+                BackgroundColor="#2563EB"
+                TextColor="White"
+                CornerRadius="10" />
+        </Grid>
+
+        <ScrollView Grid.Row="2" Padding="12,12,12,0">
+            <VerticalStackLayout x:Name="MessagesLayout" Spacing="10" />
+        </ScrollView>
+
+        <Border
+            Grid.Row="3"
+            BackgroundColor="White"
+            Padding="12,10"
+            StrokeThickness="0">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Entry
+                    x:Name="MessageEntry"
+                    Placeholder="Type a message..."
+                    BackgroundColor="#F8FAFC"
+                    TextColor="#0F172A" />
+                <Button
+                    Grid.Column="1"
+                    Text="Send"
+                    Clicked="OnSendClicked" />
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>
