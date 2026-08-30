@@ -147,28 +147,28 @@ public partial class ChurchGroupSelectionPage : ContentPage
         switch (level.Trim())
         {
             case "National":
-                groups.Add(new FirestoreGroupDocument { Name = "National Prayer Team", Level = "National" });
-                groups.Add(new FirestoreGroupDocument { Name = "National Choir Team", Level = "National" });
-                groups.Add(new FirestoreGroupDocument { Name = "National Uansho Team", Level = "National" });
-                groups.Add(new FirestoreGroupDocument { Name = "National Leader Group", Level = "National" });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "national-prayer-team", Name = "National Prayer Team", Level = "National" });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "national-choir-team", Name = "National Choir Team", Level = "National" });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "national-huamsho-team", Name = "National HUAMSHO Team", Level = "National" });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "national-leader-group", Name = "National Leader Group", Level = "National" });
                 break;
 
             case "Regional":
-                groups.Add(new FirestoreGroupDocument { Name = "Regional Prayer Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { Name = "Regional Choir Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { Name = "Regional Uansho Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { Name = "Regional Leader Group", Level = "Regional", RegionId = user.RegionId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-prayer-team", Name = "Regional Prayer Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-choir-team", Name = "Regional Choir Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-huamsho-team", Name = "Regional HUAMSHO Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-leader-group", Name = "Regional Leader Group", Level = "Regional", RegionId = user.RegionId ?? 0 });
                 break;
 
             case "District":
-                groups.Add(new FirestoreGroupDocument { Name = "District Prayer Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { Name = "District Choir Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { Name = "District Uansho Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { Name = "District Leader Group", Level = "District", DistrictId = user.DistrictId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "district-prayer-team", Name = "District Prayer Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "district-choir-team", Name = "District Choir Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "district-huamsho-team", Name = "District HUAMSHO Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = "district-leader-group", Name = "District Leader Group", Level = "District", DistrictId = user.DistrictId ?? 0 });
                 break;
 
             case "Branch":
-                groups.Add(new FirestoreGroupDocument { Name = user.Branch ?? "Branch Group", Level = "Branch", BranchId = user.BranchId ?? 0 });
+                groups.Add(new FirestoreGroupDocument { DocumentId = $"branch-{user.BranchId ?? 0}", Name = user.Branch ?? "Branch Group", Level = "Branch", BranchId = user.BranchId ?? 0 });
                 break;
         }
 
@@ -192,7 +192,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
             return group.Name.Contains("National", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(group.Name, "National Prayer Team", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(group.Name, "National Choir Team", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(group.Name, "National Uansho Team", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(group.Name, "National HUAMSHO Team", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(group.Name, "National Leader Group", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -335,22 +335,12 @@ public partial class ChurchGroupSelectionPage : ContentPage
             return;
         }
 
-        var memberNamesDisplay = await GetMembersForGroupAsync(group, user);
-        var memberSummary = memberNamesDisplay.Count > 0
-            ? string.Join(", ", memberNamesDisplay.Take(8))
-            : "No real members are assigned yet.";
-
-        var continuePosting = await DisplayAlert(
-            group.Name,
-            $"You are a member of this group.\n\nMembers: {memberSummary}",
-            "Continue",
-            "Cancel");
-
-        if (!continuePosting)
-            return;
+        var groupId = !string.IsNullOrWhiteSpace(group.DocumentId)
+            ? group.DocumentId
+            : group.Name.Replace(" ", "-").Replace("/", "-").Trim('-');
 
         await Shell.Current.GoToAsync(
-            $"{nameof(CreateHolyWordPage)}?destination={Uri.EscapeDataString(_destination)}&group={Uri.EscapeDataString(group.Name)}");
+            $"{nameof(GroupChatPage)}?groupId={Uri.EscapeDataString(groupId)}&groupName={Uri.EscapeDataString(group.Name)}&groupType={Uri.EscapeDataString(group.Name)}&organizationalLevel={Uri.EscapeDataString(group.Level)}&regionId={group.RegionId}&districtId={group.DistrictId}&branchId={group.BranchId ?? user.BranchId ?? 0}");
     }
 
     private bool IsMemberOfGroup(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)

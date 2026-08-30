@@ -1,4 +1,5 @@
 using CCT_USCF.Services;
+using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Plugin.Firebase.Auth;
@@ -15,6 +16,7 @@ public partial class BranchChatPage : ContentPage
     private readonly List<BranchChatMessageUi> _messages = new();
     private bool _isLoading;
     private bool _realtimeEnabled;
+    private bool _realtimeListenerAttached;
 
     public BranchChatPage()
     {
@@ -57,7 +59,7 @@ public partial class BranchChatPage : ContentPage
     {
         base.OnAppearing();
         _realtimeEnabled = true;
-        StartRealtimeRefresh();
+        AttachRealtimeListener();
 
         if (_branchId <= 0)
         {
@@ -69,6 +71,9 @@ public partial class BranchChatPage : ContentPage
             }
         }
 
+        if (_branchId > 0)
+            AttachRealtimeListener();
+
         await LoadBranchGroupAsync();
     }
 
@@ -78,16 +83,58 @@ public partial class BranchChatPage : ContentPage
         _realtimeEnabled = false;
     }
 
-    private void StartRealtimeRefresh()
+    private void AttachRealtimeListener()
     {
-        Device.StartTimer(TimeSpan.FromSeconds(3), () =>
-        {
-            if (!_realtimeEnabled)
-                return false;
+        if (_realtimeListenerAttached || !_realtimeEnabled || _branchId <= 0)
+            return;
 
-            _ = RefreshMessagesAsync();
-            return true;
-        });
+        _realtimeListenerAttached = true;
+
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Realtime listener attached for branch {_branchId}");
+            _firestore
+                .GetCollection($"branchChats/{_branchId}/messages")
+                .AddSnapshotListener<FirestoreBranchChatMessage>(
+                    snapshot =>
+                    {
+                        if (!_realtimeEnabled)
+                            return;
+
+                        var messages = snapshot.Documents
+                            .Select(document => document.Data)
+                            .Where(doc => doc != null && doc.BranchId == _branchId)
+                            .Select(doc => new BranchChatMessageUi
+                            {
+                                MessageId = doc!.MessageId,
+                                BranchId = doc.BranchId,
+                                SenderUid = doc.SenderUid,
+                                SenderName = string.IsNullOrWhiteSpace(doc.SenderName) ? "Member" : doc.SenderName,
+                                Text = doc.Text,
+                                CreatedAt = doc.CreatedAt == default ? doc.Timestamp : doc.CreatedAt
+                            })
+                            .OrderBy(doc => doc.CreatedAt)
+                            .ToList();
+
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            _messages.Clear();
+                            foreach (var message in messages)
+                                _messages.Add(message);
+                            RenderMessages();
+                        });
+                    },
+                    ex =>
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Realtime listener error for branch {_branchId}: {ex}");
+                    },
+                    false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Realtime listener setup failed: {ex}");
+            _realtimeListenerAttached = false;
+        }
     }
 
     private async Task LoadBranchGroupAsync()
@@ -111,7 +158,14 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
+            if (currentUser.BranchId is int userBranchId && userBranchId != _branchId)
+            {
+                BranchStatusLabel.Text = "Your account is not assigned to this branch.";
+                return;
+            }
+
             var members = await LoadBranchMembersAsync();
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Current Firebase UID={GetCurrentUserUid()} Current Branch ID={_branchId} Branch name={BranchName} Member query count={members.Count}");
             BranchStatusLabel.Text = members.Count == 1 ? "1 member in this Branch" : $"{members.Count} members in this Branch";
             MembersLabel.Text = members.Count == 1 ? "Members (1)" : $"Members ({members.Count})";
 
@@ -189,6 +243,7 @@ public partial class BranchChatPage : ContentPage
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Member query start: branchId={_branchId}");
             var snapshot = await _firestore
                 .GetCollection("users")
                 .GetDocumentsAsync<FirestoreUserProfileDocument>(Source.Default);
@@ -203,11 +258,13 @@ public partial class BranchChatPage : ContentPage
                 {
                     Uid = string.IsNullOrWhiteSpace(profile!.Uid) ? profile.DocumentId : profile.Uid,
                     DisplayName = !string.IsNullOrWhiteSpace(profile.FullName) ? profile.FullName : (!string.IsNullOrWhiteSpace(profile.Username) ? profile.Username : "Member"),
+                    Role = string.IsNullOrWhiteSpace(profile.Role) ? "Member" : profile.Role,
                     IsCurrentUser = string.Equals(GetCurrentUserUid(), string.IsNullOrWhiteSpace(profile.Uid) ? profile.DocumentId : profile.Uid, StringComparison.Ordinal)
                 })
                 .OrderBy(member => member.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Member count for branch {_branchId}: {members.Count}");
             return members;
         }
         catch (Exception ex)
@@ -351,7 +408,7 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            var details = string.Join(Environment.NewLine, members.Select(m => $"• {m.DisplayName}{(m.IsCurrentUser ? " - You" : " - Member")}"));
+            var details = string.Join(Environment.NewLine, members.Select(m => $"• {m.DisplayName}{(m.IsCurrentUser ? " - You" : $" - {m.Role}")}"));
             await DisplayAlert($"Branch Members ({members.Count})", details, "OK");
         }
         catch (Exception ex)
@@ -372,65 +429,68 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            var users = await _firestore.GetCollection("users").GetDocumentsAsync<FirestoreUserProfileDocument>(Source.Default);
-            var candidates = users.Documents
-                .Select(document => document.Data)
-                .Where(profile => profile != null && !string.IsNullOrWhiteSpace(profile.Uid) && profile.Uid != GetCurrentUserUid() && profile.BranchId != _branchId)
-                .Where(profile =>
-                    (currentUser.RegionId > 0 && profile!.RegionId == currentUser.RegionId) ||
-                    (currentUser.DistrictId > 0 && profile.DistrictId == currentUser.DistrictId) ||
-                    profile.BranchId == 0)
-                .Select(profile => new BranchMemberUi
-                {
-                    Uid = profile!.Uid,
-                    DisplayName = !string.IsNullOrWhiteSpace(profile.FullName) ? profile.FullName : (!string.IsNullOrWhiteSpace(profile.Username) ? profile.Username : "Member"),
-                    IsCurrentUser = false
-                })
-                .OrderBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            if (candidates.Count == 0)
+            if (currentUser.BranchId is int userBranchId && userBranchId != _branchId)
             {
-                await DisplayAlert("No candidates", "There are no other verified users available to add to this branch.", "OK");
+                await DisplayAlert("Access denied", "Your account is not assigned to this branch.", "OK");
                 return;
             }
 
-            var selected = await DisplayActionSheet("Add existing member to this branch", "Cancel", null, candidates.Select(c => c.DisplayName).ToArray());
-            if (string.IsNullOrWhiteSpace(selected) || selected == "Cancel")
-                return;
-
-            var chosen = candidates.FirstOrDefault(c => c.DisplayName == selected);
-            if (chosen == null)
-                return;
-
-            var allUsers = await _firestore.GetCollection("users").GetDocumentsAsync<FirestoreUserProfileDocument>(Source.Default);
-            var target = allUsers.Documents
-                .Select(document => document.Data)
-                .FirstOrDefault(profile => profile != null && (profile.Uid == chosen.Uid || profile.DocumentId == chosen.Uid));
-
-            if (target == null)
+            var invitationId = Guid.NewGuid().ToString("N");
+            var invitation = new BranchInvitationRecord
             {
-                await DisplayAlert("Member update failed", "That user profile could not be found.", "OK");
-                return;
-            }
+                InvitationId = invitationId,
+                BranchId = _branchId,
+                BranchName = BranchName,
+                CreatedByUid = GetCurrentUserUid(),
+                CreatedAt = DateTime.UtcNow,
+                Status = "active"
+            };
 
-            target.BranchId = _branchId;
-            var documentRef = _firestore.GetCollection("users").GetDocument(string.IsNullOrWhiteSpace(target.DocumentId) ? target.Uid : target.DocumentId);
-            await documentRef.SetDataAsync(target);
+            var invitationRef = _firestore.GetCollection("branchInvitations").GetDocument(invitationId);
+            await invitationRef.SetDataAsync(invitation);
 
-            await LoadBranchGroupAsync();
-            await DisplayAlert("Member added", $"{target.FullName ?? chosen.DisplayName} is now part of this branch.", "OK");
+            var deepLink = $"cctuscf://invite?branchId={_branchId}&invitationId={invitationId}";
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Invitation created: invitationId={invitationId} branchId={_branchId} createdByUid={GetCurrentUserUid()}");
+
+            await Share.Default.RequestAsync(new ShareTextRequest
+            {
+                Title = $"Invite people to {BranchName}",
+                Text = $"Join CCT-USCF and connect with the {BranchName}.\n\n{deepLink}"
+            });
+
+            await DisplayAlert("Invite people to " + BranchName, "The branch invitation link was created and shared.", "OK");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[BRANCH CHAT] Add member failed: {ex}");
-            await DisplayAlert("Member could not be added", "Please check your connection and try again.", "OK");
+            System.Diagnostics.Debug.WriteLine($"[BRANCH CHAT] Invitation creation failed: {ex}");
+            await DisplayAlert("Invitation could not be created", "Please check your connection and try again.", "OK");
         }
     }
 
     private string GetCurrentUserUid()
     {
         return _auth.CurrentUser?.Uid ?? string.Empty;
+    }
+
+    private sealed class BranchInvitationRecord : IFirestoreObject
+    {
+        [FirestoreDocumentId]
+        public string InvitationId { get; set; } = string.Empty;
+
+        [FirestoreProperty("branchId")]
+        public int BranchId { get; set; }
+
+        [FirestoreProperty("branchName")]
+        public string BranchName { get; set; } = string.Empty;
+
+        [FirestoreProperty("createdByUid")]
+        public string CreatedByUid { get; set; } = string.Empty;
+
+        [FirestoreProperty("createdAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [FirestoreProperty("status")]
+        public string Status { get; set; } = "active";
     }
 
     private sealed class FirestoreUserProfileDocument : IFirestoreObject
@@ -446,6 +506,9 @@ public partial class BranchChatPage : ContentPage
 
         [FirestoreProperty("username")]
         public string Username { get; set; } = string.Empty;
+
+        [FirestoreProperty("role")]
+        public string Role { get; set; } = string.Empty;
 
         [FirestoreProperty("branchId")]
         public int BranchId { get; set; }
@@ -495,6 +558,7 @@ public partial class BranchChatPage : ContentPage
     {
         public string Uid { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
+        public string Role { get; set; } = "Member";
         public bool IsCurrentUser { get; set; }
     }
 }
