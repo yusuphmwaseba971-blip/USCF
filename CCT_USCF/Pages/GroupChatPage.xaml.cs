@@ -1,4 +1,5 @@
 using CCT_USCF.Services;
+using CCT_USCF.Services.Appwrite;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
@@ -18,6 +19,7 @@ public partial class GroupChatPage : ContentPage
 {
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
+    private readonly CommunityService _communityService;
     private readonly List<GroupChatMessageUi> _messages = new();
     private bool _isLoading;
     private bool _realtimeEnabled;
@@ -28,6 +30,7 @@ public partial class GroupChatPage : ContentPage
         InitializeComponent();
         _auth = MauiProgram.Services.GetRequiredService<IFirebaseAuth>();
         _firestore = MauiProgram.Services.GetRequiredService<IFirebaseFirestore>();
+        _communityService = MauiProgram.Services.GetRequiredService<CommunityService>();
 
         var tap = new TapGestureRecognizer();
         tap.Tapped += MembersLabel_Tapped;
@@ -234,24 +237,18 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
-            var snapshot = await _firestore
-                .GetCollection($"groups/{_groupId}/messages")
-                .GetDocumentsAsync<FirestoreGroupChatMessage>(Source.Default);
+            var appwriteMessages = await _communityService.GetCommunityMessagesAsync(_groupId, 100);
 
-            if (snapshot == null)
-                return new List<GroupChatMessageUi>();
-
-            return snapshot.Documents
-                .Select(document => document.Data)
-                .Where(doc => doc != null)
-                .Select(doc => new GroupChatMessageUi
+            return appwriteMessages
+                .Where(message => string.Equals(message.CommunityId, _groupId, StringComparison.Ordinal))
+                .Select(message => new GroupChatMessageUi
                 {
-                    MessageId = doc!.MessageId,
-                    GroupId = doc.GroupId,
-                    SenderUid = doc.SenderUid,
-                    SenderName = string.IsNullOrWhiteSpace(doc.SenderName) ? "Member" : doc.SenderName,
-                    Text = doc.Text,
-                    CreatedAt = doc.CreatedAt == default ? doc.Timestamp : doc.CreatedAt
+                    MessageId = message.MessageId,
+                    GroupId = message.CommunityId,
+                    SenderUid = message.SenderUid,
+                    SenderName = string.IsNullOrWhiteSpace(message.SenderName) ? "Member" : message.SenderName,
+                    Text = message.Content,
+                    CreatedAt = message.CreatedAt
                 })
                 .OrderBy(doc => doc.CreatedAt)
                 .ToList();
@@ -460,23 +457,21 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            var messageId = Guid.NewGuid().ToString("N");
-            var message = new FirestoreGroupChatMessage
-            {
-                MessageId = messageId,
-                GroupId = _groupId,
-                SenderUid = currentUid,
-                SenderName = !string.IsNullOrWhiteSpace(currentUser.FullName) ? currentUser.FullName : currentUser.Username,
-                Text = text,
-                Timestamp = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var collection = _firestore.GetCollection($"groups/{_groupId}/messages");
-            await collection.GetDocument(messageId).SetDataAsync(message);
+            var createdMessage = await _communityService.CreateCommunityMessageAsync(
+                communityId: _groupId,
+                content: text,
+                messageType: "text",
+                branchId: _branchId > 0 ? _branchId.ToString() : null,
+                regionId: _regionId > 0 ? _regionId.ToString() : null,
+                districtId: _districtId > 0 ? _districtId.ToString() : null);
 
             MessageEntry.Text = string.Empty;
             await RefreshMessagesAsync();
+
+            if (createdMessage == null || string.IsNullOrWhiteSpace(createdMessage.MessageId))
+            {
+                await DisplayAlert("Unable to send message", "Unable to send message. Please try again.", "OK");
+            }
         }
         catch (Exception ex)
         {

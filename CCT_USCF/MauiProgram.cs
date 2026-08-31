@@ -1,6 +1,8 @@
 using Appwrite;
 using Appwrite.Services;
 
+using CCT_USCF.Services;
+using CCT_USCF.Services.Appwrite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
@@ -8,7 +10,6 @@ using Microsoft.Maui.LifecycleEvents;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Bundled.Shared;
 using Plugin.Firebase.Firestore;
-using CCT_USCF.Services;
 
 #if ANDROID
 using Plugin.Firebase.Bundled.Platforms.Android;
@@ -57,16 +58,6 @@ public static class MauiProgram
         return Services.GetRequiredService<
             CCT_USCF.Services.AuthService>();
     }
-
-    // =========================================================
-    // APPWRITE CONFIGURATION
-    // =========================================================
-
-    private const string AppwriteEndpoint =
-        "https://sgp.cloud.appwrite.io/v1";
-
-    private const string AppwriteProjectId =
-        "cct-uscf";
 
     // =========================================================
     // APPLICATION
@@ -177,23 +168,7 @@ public static class MauiProgram
         // Firebase Storage remains disabled.
         // =====================================================
 
-        var appwriteClient = new Client()
-            .SetEndpoint(AppwriteEndpoint)
-            .SetProject(AppwriteProjectId);
-
-        builder.Services.AddSingleton(appwriteClient);
-
-        // Appwrite Account
-        builder.Services.AddSingleton<Account>();
-
-        // Appwrite TablesDB
-        builder.Services.AddSingleton<TablesDB>();
-
-        // Appwrite Storage
-        builder.Services.AddSingleton<Storage>();
-
-        // Appwrite Functions
-        builder.Services.AddSingleton<Functions>();
+        builder.Services.AddSingleton<AppwriteService>();
 
         // =====================================================
         // CCT APPLICATION SERVICES

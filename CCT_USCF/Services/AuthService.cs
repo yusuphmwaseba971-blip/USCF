@@ -445,6 +445,11 @@ public class AuthService
     // GET CURRENT USER
     // =========================================================
 
+    public string? GetCurrentFirebaseUid()
+    {
+        return _auth.CurrentUser?.Uid;
+    }
+
     public async Task<CCT_USCF.Models.CurrentUser?>
         GetCurrentUserAsync()
     {
