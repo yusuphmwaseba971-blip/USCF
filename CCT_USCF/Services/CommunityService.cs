@@ -7,6 +7,7 @@ namespace CCT_USCF.Services
     public class CommunityService
     {
         private const string CommunityMessagesCollectionId = "community_messages";
+        private const string MessagesCollectionId = "messages";
         private const string PrayerRequestsCollectionId = "cct_prayers";
         private const string BiblePostsCollectionId = "cct_posts";
 
@@ -22,6 +23,152 @@ namespace CCT_USCF.Services
         public string GetCommunityMessagesChannel()
         {
             return $"databases.{AppwriteConfig.DatabaseId}.collections.{CommunityMessagesCollectionId}.documents";
+        }
+
+        public string GetMessagesChannel()
+        {
+            return $"databases.{AppwriteConfig.DatabaseId}.collections.{MessagesCollectionId}.documents";
+        }
+
+        public async Task<Message> SendMessageAsync(
+            string? receiverId,
+            string content,
+            string? groupId = null,
+            string messageType = "text",
+            string status = "sent")
+        {
+            var trimmed = content?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmed))
+                throw new ArgumentException("Message content is required.", nameof(content));
+
+            var firebaseUid = _authService.GetCurrentFirebaseUid();
+            if (string.IsNullOrWhiteSpace(firebaseUid))
+                throw new InvalidOperationException("The current Firebase user is not available.");
+
+            var normalizedReceiverId = string.IsNullOrWhiteSpace(receiverId) ? null : receiverId.Trim();
+            var normalizedGroupId = string.IsNullOrWhiteSpace(groupId) ? null : groupId.Trim();
+            var messageId = Guid.NewGuid().ToString("N");
+            var payload = new Dictionary<string, object?>
+            {
+                ["sender_id"] = firebaseUid,
+                ["content"] = trimmed,
+                ["created_at"] = DateTime.UtcNow.ToString("O"),
+                ["message_type"] = string.IsNullOrWhiteSpace(messageType) ? "text" : messageType,
+                ["status"] = string.IsNullOrWhiteSpace(status) ? "sent" : status
+            };
+
+            if (!string.IsNullOrWhiteSpace(normalizedReceiverId))
+            {
+                payload["receiver_id"] = normalizedReceiverId;
+                payload["conversation_id"] = BuildConversationId(firebaseUid, normalizedReceiverId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedGroupId))
+            {
+                payload["group_id"] = normalizedGroupId;
+            }
+
+            try
+            {
+                var document = await _appwriteService.Databases.CreateDocument(
+                    databaseId: AppwriteConfig.DatabaseId,
+                    collectionId: MessagesCollectionId,
+                    documentId: messageId,
+                    data: payload,
+                    permissions: null);
+
+                return MapMessageDocument(document);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[APPWRITE_MESSAGES] SendMessageAsync failed. Message={ex.Message}; Inner={ex.InnerException?.Message}; Details={ex}");
+                throw new InvalidOperationException("Unable to send message. Please try again.", ex);
+            }
+        }
+
+        public async Task<List<Message>> GetConversationMessagesAsync(string otherUserId, int limit = 100)
+        {
+            var firebaseUid = _authService.GetCurrentFirebaseUid();
+            if (string.IsNullOrWhiteSpace(firebaseUid))
+                throw new InvalidOperationException("The current Firebase user is not available.");
+
+            if (string.IsNullOrWhiteSpace(otherUserId))
+                throw new ArgumentException("A conversation partner is required.", nameof(otherUserId));
+
+            var conversationId = BuildConversationId(firebaseUid, otherUserId.Trim());
+            var queries = new List<string>
+            {
+                global::Appwrite.Query.Equal("conversation_id", conversationId),
+                global::Appwrite.Query.OrderAsc("created_at"),
+                global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
+            };
+
+            var result = await _appwriteService.Databases.ListDocuments(
+                AppwriteConfig.DatabaseId,
+                MessagesCollectionId,
+                queries,
+                null,
+                null,
+                Math.Clamp(limit, 1, 100));
+
+            return result.Documents.Select(MapMessageDocument).OrderBy(x => x.CreatedAt).ToList();
+        }
+
+        public async Task<List<Message>> GetGroupMessagesAsync(string groupId, int limit = 100)
+        {
+            if (string.IsNullOrWhiteSpace(groupId))
+                throw new ArgumentException("A group id is required.", nameof(groupId));
+
+            var queries = new List<string>
+            {
+                global::Appwrite.Query.Equal("group_id", groupId.Trim()),
+                global::Appwrite.Query.OrderAsc("created_at"),
+                global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
+            };
+
+            var result = await _appwriteService.Databases.ListDocuments(
+                AppwriteConfig.DatabaseId,
+                MessagesCollectionId,
+                queries,
+                null,
+                null,
+                Math.Clamp(limit, 1, 100));
+
+            return result.Documents.Select(MapMessageDocument).OrderBy(x => x.CreatedAt).ToList();
+        }
+
+        public async Task<Message?> MarkMessageAsReadAsync(string messageId)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+                throw new ArgumentException("A message id is required.", nameof(messageId));
+
+            var updated = await _appwriteService.Databases.UpdateDocument(
+                databaseId: AppwriteConfig.DatabaseId,
+                collectionId: MessagesCollectionId,
+                documentId: messageId,
+                data: new Dictionary<string, object?>
+                {
+                    ["status"] = "read",
+                    ["read_at"] = DateTime.UtcNow.ToString("O")
+                },
+                permissions: null,
+                transactionId: null);
+
+            return MapMessageDocument(updated);
+        }
+
+        public async Task<bool> DeleteMessageAsync(string messageId)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+                throw new ArgumentException("A message id is required.", nameof(messageId));
+
+            await _appwriteService.Databases.DeleteDocument(
+                databaseId: AppwriteConfig.DatabaseId,
+                collectionId: MessagesCollectionId,
+                documentId: messageId,
+                transactionId: null);
+
+            return true;
         }
 
         public async Task<CommunityMessage> CreateCommunityMessageAsync(
@@ -56,27 +203,35 @@ namespace CCT_USCF.Services
                 ["sender_name"] = string.IsNullOrWhiteSpace(senderName) ? "Community member" : senderName,
                 ["content"] = trimmed,
                 ["community_id"] = communityId,
-                ["branch_id"] = string.IsNullOrWhiteSpace(branchId) ? null : branchId,
-                ["region_id"] = string.IsNullOrWhiteSpace(regionId) ? null : regionId,
-                ["district_id"] = string.IsNullOrWhiteSpace(districtId) ? null : districtId,
                 ["message_type"] = string.IsNullOrWhiteSpace(messageType) ? "text" : messageType,
                 ["created_at"] = DateTime.UtcNow.ToString("O")
             };
 
+            if (!string.IsNullOrWhiteSpace(branchId))
+                payload["branch_id"] = branchId;
+
+            if (!string.IsNullOrWhiteSpace(regionId))
+                payload["region_id"] = regionId;
+
+            if (!string.IsNullOrWhiteSpace(districtId))
+                payload["district_id"] = districtId;
+
             try
             {
+                System.Diagnostics.Debug.WriteLine($"[COMMUNITY_MESSAGE] Sending Appwrite create: database={AppwriteConfig.DatabaseId}, collection={CommunityMessagesCollectionId}, messageId={messageId}, communityId={communityId}, senderUid={senderUid}");
+
                 var document = await _appwriteService.Databases.CreateDocument(
                     databaseId: AppwriteConfig.DatabaseId,
                     collectionId: CommunityMessagesCollectionId,
                     documentId: messageId,
                     data: payload,
-                    permissions: null,
-                    parentDocumentId: null);
+                    permissions: null);
 
                 return MapCommunityDocument(document);
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[COMMUNITY_MESSAGE] CreateDocument failed. Message={ex.Message}; Inner={ex.InnerException?.Message}; Details={ex}");
                 throw new InvalidOperationException("Unable to send message.", ex);
             }
         }
@@ -90,18 +245,18 @@ namespace CCT_USCF.Services
             {
                 var queries = new List<string>
                 {
-                    Appwrite.Query.Equal("community_id", communityId),
-                    Appwrite.Query.OrderAsc("created_at"),
-                    Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
+                    global::Appwrite.Query.Equal("community_id", communityId),
+                    global::Appwrite.Query.OrderAsc("created_at"),
+                    global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
                 };
 
                 var result = await _appwriteService.Databases.ListDocuments(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: CommunityMessagesCollectionId,
-                    queries: queries,
-                    cursor: null,
-                    cursorDirection: null,
-                    limit: Math.Clamp(limit, 1, 100));
+                    AppwriteConfig.DatabaseId,
+                    CommunityMessagesCollectionId,
+                    queries,
+                    null,
+                    null,
+                    Math.Clamp(limit, 1, 100));
 
                 return result.Documents.Select(MapCommunityDocument).OrderBy(x => x.CreatedAt).ToList();
             }
@@ -121,8 +276,7 @@ namespace CCT_USCF.Services
                 await _appwriteService.Databases.DeleteDocument(
                     databaseId: AppwriteConfig.DatabaseId,
                     collectionId: CommunityMessagesCollectionId,
-                    documentId: messageId,
-                    permissions: null);
+                    documentId: messageId);
 
                 return true;
             }
@@ -130,6 +284,35 @@ namespace CCT_USCF.Services
             {
                 throw new InvalidOperationException("Unable to delete message.", ex);
             }
+        }
+
+        private static string BuildConversationId(string senderId, string receiverId)
+        {
+            var participants = new[] { senderId.Trim(), receiverId.Trim() }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+
+            return participants.Length == 0 ? string.Empty : string.Join("_", participants);
+        }
+
+        private static Message MapMessageDocument(global::Appwrite.Models.Document document)
+        {
+            var data = document.Data ?? new Dictionary<string, object?>();
+            return new Message
+            {
+                Id = document.Id,
+                SenderId = TryGetString(data, "sender_id", string.Empty),
+                ReceiverId = TryGetString(data, "receiver_id", null),
+                GroupId = TryGetString(data, "group_id", null),
+                ConversationId = TryGetString(data, "conversation_id", string.Empty),
+                Content = TryGetString(data, "content", string.Empty),
+                MessageType = TryGetString(data, "message_type", "text"),
+                Status = TryGetString(data, "status", "sent"),
+                CreatedAt = TryGetDateTime(data, "created_at", document.CreatedAt),
+                ReadAt = TryGetNullableDateTime(data, "read_at")
+            };
         }
 
         public async Task<PrayerRequestDto?> CreatePrayerRequestAsync(string title, string description)
@@ -158,8 +341,7 @@ namespace CCT_USCF.Services
                     collectionId: PrayerRequestsCollectionId,
                     documentId: documentId,
                     data: payload,
-                    permissions: null,
-                    parentDocumentId: null);
+                    permissions: null);
 
                 return MapPrayerDocument(document);
             }
@@ -174,12 +356,12 @@ namespace CCT_USCF.Services
             try
             {
                 var result = await _appwriteService.Databases.ListDocuments(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: PrayerRequestsCollectionId,
-                    queries: new List<string> { Appwrite.Query.OrderDesc("$createdAt") },
-                    cursor: null,
-                    cursorDirection: null,
-                    limit: 50);
+                    AppwriteConfig.DatabaseId,
+                    PrayerRequestsCollectionId,
+                    new List<string> { global::Appwrite.Query.OrderDesc("$createdAt") },
+                    null,
+                    null,
+                    50);
 
                 return result.Documents.Select(MapPrayerDocument).ToList();
             }
@@ -200,16 +382,16 @@ namespace CCT_USCF.Services
             try
             {
                 var result = await _appwriteService.Databases.ListDocuments(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: PrayerRequestsCollectionId,
-                    queries: new List<string>
+                    AppwriteConfig.DatabaseId,
+                    PrayerRequestsCollectionId,
+                    new List<string>
                     {
-                        Appwrite.Query.Equal("user_id", userId),
-                        Appwrite.Query.OrderDesc("$createdAt")
+                        global::Appwrite.Query.Equal("user_id", userId),
+                        global::Appwrite.Query.OrderDesc("$createdAt")
                     },
-                    cursor: null,
-                    cursorDirection: null,
-                    limit: 50);
+                    null,
+                    null,
+                    50);
 
                 return result.Documents.Select(MapPrayerDocument).ToList();
             }
@@ -226,8 +408,7 @@ namespace CCT_USCF.Services
                 await _appwriteService.Databases.DeleteDocument(
                     databaseId: AppwriteConfig.DatabaseId,
                     collectionId: PrayerRequestsCollectionId,
-                    documentId: id.ToString(),
-                    permissions: null);
+                    documentId: id.ToString());
 
                 return true;
             }
@@ -242,17 +423,17 @@ namespace CCT_USCF.Services
             try
             {
                 var result = await _appwriteService.Databases.ListDocuments(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: BiblePostsCollectionId,
-                    queries: new List<string>
+                    AppwriteConfig.DatabaseId,
+                    BiblePostsCollectionId,
+                    new List<string>
                     {
-                        Appwrite.Query.Equal("post_type", "BibleVerse"),
-                        Appwrite.Query.OrderDesc("$createdAt"),
-                        Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
+                        global::Appwrite.Query.Equal("post_type", "BibleVerse"),
+                        global::Appwrite.Query.OrderDesc("$createdAt"),
+                        global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
                     },
-                    cursor: null,
-                    cursorDirection: null,
-                    limit: Math.Clamp(limit, 1, 100));
+                    null,
+                    null,
+                    Math.Clamp(limit, 1, 100));
 
                 return result.Documents.Select(MapBibleDocument).Where(x => x != null).Cast<BiblePostDto>().ToList();
             }
@@ -291,8 +472,7 @@ namespace CCT_USCF.Services
                     collectionId: BiblePostsCollectionId,
                     documentId: Guid.NewGuid().ToString("N"),
                     data: payload,
-                    permissions: null,
-                    parentDocumentId: null);
+                    permissions: null);
 
                 return MapBibleDocument(document);
             }
@@ -313,16 +493,16 @@ namespace CCT_USCF.Services
             try
             {
                 var result = await _appwriteService.Databases.ListDocuments(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: BiblePostsCollectionId,
-                    queries: new List<string>
+                    AppwriteConfig.DatabaseId,
+                    BiblePostsCollectionId,
+                    new List<string>
                     {
-                        Appwrite.Query.Equal("user_id", userId),
-                        Appwrite.Query.OrderDesc("$createdAt")
+                        global::Appwrite.Query.Equal("user_id", userId),
+                        global::Appwrite.Query.OrderDesc("$createdAt")
                     },
-                    cursor: null,
-                    cursorDirection: null,
-                    limit: 50);
+                    null,
+                    null,
+                    50);
 
                 return result.Documents.Select(MapBibleDocument).Where(x => x != null).Cast<BiblePostDto>().ToList();
             }
@@ -339,8 +519,7 @@ namespace CCT_USCF.Services
                 await _appwriteService.Databases.DeleteDocument(
                     databaseId: AppwriteConfig.DatabaseId,
                     collectionId: BiblePostsCollectionId,
-                    documentId: id.ToString(),
-                    permissions: null);
+                    documentId: id.ToString());
 
                 return true;
             }
