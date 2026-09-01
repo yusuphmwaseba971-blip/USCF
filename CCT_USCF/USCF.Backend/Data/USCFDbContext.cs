@@ -14,6 +14,8 @@ public class USCFDbContext : DbContext
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<District> Districts => Set<District>();
     public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<AppwriteTeamMapping> AppwriteTeamMappings => Set<AppwriteTeamMapping>();
+    public DbSet<AppwriteTeamMembership> AppwriteTeamMemberships => Set<AppwriteTeamMembership>();
 
     // Community
     public DbSet<Post> Posts => Set<Post>();
@@ -21,6 +23,7 @@ public class USCFDbContext : DbContext
     public DbSet<BibleVerse> BibleVerses => Set<BibleVerse>();
     public DbSet<PrayerRequest> PrayerRequests => Set<PrayerRequest>();
     public DbSet<USCF.Backend.Models.BiblePost> BiblePosts => Set<USCF.Backend.Models.BiblePost>();
+    public DbSet<FirebaseAppwriteIdentityMapping> FirebaseAppwriteIdentityMappings => Set<FirebaseAppwriteIdentityMapping>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,5 +76,25 @@ public class USCFDbContext : DbContext
 
         modelBuilder.Entity<PrayerRequest>()
             .HasIndex(p => new { p.UserId, p.CreatedAtUtc });
+
+        modelBuilder.Entity<FirebaseAppwriteIdentityMapping>()
+            .HasIndex(mapping => mapping.FirebaseUid)
+            .IsUnique();
+
+        modelBuilder.Entity<FirebaseAppwriteIdentityMapping>()
+            .HasIndex(mapping => mapping.AppwriteUserId)
+            .IsUnique();
+
+        modelBuilder.Entity<AppwriteTeamMapping>()
+            .HasIndex(mapping => new { mapping.OrganizationType, mapping.OrganizationId })
+            .IsUnique();
+
+        modelBuilder.Entity<AppwriteTeamMapping>()
+            .HasIndex(mapping => mapping.AppwriteTeamId)
+            .IsUnique();
+
+        modelBuilder.Entity<AppwriteTeamMembership>()
+            .HasIndex(membership => new { membership.TeamMappingId, membership.AppwriteUserId })
+            .IsUnique();
     }
 }

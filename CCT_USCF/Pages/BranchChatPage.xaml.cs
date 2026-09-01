@@ -1,4 +1,8 @@
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using CCT_USCF.Services;
+using CCT_USCF.Services.Appwrite;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
@@ -13,16 +17,20 @@ public partial class BranchChatPage : ContentPage
 {
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
+    private readonly CommunityService _communityService;
     private readonly List<BranchChatMessageUi> _messages = new();
     private bool _isLoading;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
+    private ClientWebSocket? _appwriteRealtimeSocket;
+    private CancellationTokenSource? _appwriteRealtimeCts;
 
     public BranchChatPage()
     {
         InitializeComponent();
         _auth = MauiProgram.Services.GetRequiredService<IFirebaseAuth>();
         _firestore = MauiProgram.Services.GetRequiredService<IFirebaseFirestore>();
+        _communityService = MauiProgram.Services.GetRequiredService<CommunityService>();
 
         var tap = new TapGestureRecognizer();
         tap.Tapped += MembersLabel_Tapped;
@@ -81,6 +89,7 @@ public partial class BranchChatPage : ContentPage
     {
         base.OnDisappearing();
         _realtimeEnabled = false;
+        DisposeRealtimeListener();
     }
 
     private void AttachRealtimeListener()
@@ -92,49 +101,157 @@ public partial class BranchChatPage : ContentPage
 
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Realtime listener attached for branch {_branchId}");
-            _firestore
-                .GetCollection($"branchChats/{_branchId}/messages")
-                .AddSnapshotListener<FirestoreBranchChatMessage>(
-                    snapshot =>
-                    {
-                        if (!_realtimeEnabled)
-                            return;
+            _appwriteRealtimeCts?.Cancel();
+            _appwriteRealtimeCts?.Dispose();
+            _appwriteRealtimeCts = new CancellationTokenSource();
 
-                        var messages = snapshot.Documents
-                            .Select(document => document.Data)
-                            .Where(doc => doc != null && doc.BranchId == _branchId)
-                            .Select(doc => new BranchChatMessageUi
-                            {
-                                MessageId = doc!.MessageId,
-                                BranchId = doc.BranchId,
-                                SenderUid = doc.SenderUid,
-                                SenderName = string.IsNullOrWhiteSpace(doc.SenderName) ? "Member" : doc.SenderName,
-                                Text = doc.Text,
-                                CreatedAt = doc.CreatedAt == default ? doc.Timestamp : doc.CreatedAt
-                            })
-                            .OrderBy(doc => doc.CreatedAt)
-                            .ToList();
-
-                        MainThread.BeginInvokeOnMainThread(() =>
-                        {
-                            _messages.Clear();
-                            foreach (var message in messages)
-                                _messages.Add(message);
-                            RenderMessages();
-                        });
-                    },
-                    ex =>
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Realtime listener error for branch {_branchId}: {ex}");
-                    },
-                    false);
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Appwrite realtime listener attached for branch {_branchId}");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ListenForAppwriteMessagesAsync(_appwriteRealtimeCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Appwrite realtime listener cancelled for branch {_branchId}");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Appwrite realtime listener error for branch {_branchId}: {ex}");
+                    _realtimeListenerAttached = false;
+                }
+            });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Realtime listener setup failed: {ex}");
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Appwrite realtime listener setup failed: {ex}");
             _realtimeListenerAttached = false;
         }
+    }
+
+    private void DisposeRealtimeListener()
+    {
+        _realtimeListenerAttached = false;
+        _appwriteRealtimeCts?.Cancel();
+        _appwriteRealtimeCts?.Dispose();
+        _appwriteRealtimeCts = null;
+
+        try
+        {
+            _appwriteRealtimeSocket?.Abort();
+            _appwriteRealtimeSocket?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Appwrite realtime disconnect failed: {ex}");
+        }
+
+        _appwriteRealtimeSocket = null;
+    }
+
+    private async Task ListenForAppwriteMessagesAsync(CancellationToken cancellationToken)
+    {
+        var socket = new ClientWebSocket();
+        _appwriteRealtimeSocket = socket;
+
+        var uriBuilder = new UriBuilder(AppwriteConfig.Endpoint)
+        {
+            Scheme = Uri.UriSchemeWss,
+            Path = "/v1/realtime",
+            Query = $"project={Uri.EscapeDataString(AppwriteConfig.ProjectId)}"
+        };
+
+        var channel = _communityService.GetMessagesChannel();
+        var subscription = JsonSerializer.Serialize(new
+        {
+            type = "register",
+            channels = new[] { channel }
+        });
+
+        await socket.ConnectAsync(uriBuilder.Uri, cancellationToken);
+        await socket.SendAsync(Encoding.UTF8.GetBytes(subscription), WebSocketMessageType.Text, true, cancellationToken);
+
+        var buffer = new byte[16 * 1024];
+        var messageBuilder = new StringBuilder();
+
+        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        {
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+            if (result.MessageType == WebSocketMessageType.Close)
+                break;
+
+            var chunk = Encoding.UTF8.GetString(buffer, 0, result.Count);
+            messageBuilder.Append(chunk);
+
+            if (!result.EndOfMessage)
+                continue;
+
+            var rawMessage = messageBuilder.ToString();
+            messageBuilder.Clear();
+            ProcessRealtimeMessage(rawMessage);
+        }
+    }
+
+    private void ProcessRealtimeMessage(string rawMessage)
+    {
+        if (string.IsNullOrWhiteSpace(rawMessage))
+            return;
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawMessage);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("type", out var typeElement) ||
+                !string.Equals(typeElement.GetString(), "event", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (!root.TryGetProperty("payload", out var payload) && !root.TryGetProperty("data", out payload))
+                return;
+
+            if (payload.ValueKind != JsonValueKind.Object)
+                return;
+
+            var groupId = TryGetString(payload, "group_id");
+            if (string.IsNullOrWhiteSpace(groupId))
+                groupId = TryGetString(payload, "community_id");
+
+            if (!string.Equals(groupId, _branchId.ToString(), StringComparison.Ordinal))
+                return;
+
+            var message = new BranchChatMessageUi
+            {
+                MessageId = TryGetString(payload, "message_id"),
+                BranchId = _branchId,
+                SenderUid = TryGetString(payload, "sender_id"),
+                SenderName = string.IsNullOrWhiteSpace(TryGetString(payload, "sender_name")) ? "Member" : TryGetString(payload, "sender_name"),
+                Text = TryGetString(payload, "content"),
+                CreatedAt = DateTime.TryParse(TryGetString(payload, "created_at"), out var createdAt) ? createdAt : DateTime.UtcNow
+            };
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (_messages.Any(existing => string.Equals(existing.MessageId, message.MessageId, StringComparison.Ordinal)))
+                    return;
+
+                _messages.Add(message);
+                _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
+                RenderMessages();
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT] Appwrite realtime payload parse failed: {ex}");
+        }
+    }
+
+    private static string TryGetString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind != JsonValueKind.Null && value.ValueKind != JsonValueKind.Undefined
+            ? value.ToString()
+            : string.Empty;
     }
 
     private async Task LoadBranchGroupAsync()
@@ -210,24 +327,18 @@ public partial class BranchChatPage : ContentPage
     {
         try
         {
-            var snapshot = await _firestore
-                .GetCollection($"branchChats/{_branchId}/messages")
-                .GetDocumentsAsync<FirestoreBranchChatMessage>(Source.Default);
+            var messages = await _communityService.GetGroupMessagesAsync(_branchId.ToString(), 100);
 
-            if (snapshot == null)
-                return new List<BranchChatMessageUi>();
-
-            return snapshot.Documents
-                .Select(document => document.Data)
-                .Where(doc => doc != null && doc.BranchId == _branchId)
-                .Select(doc => new BranchChatMessageUi
+            return messages
+                .Where(message => string.Equals(message.GroupId, _branchId.ToString(), StringComparison.Ordinal))
+                .Select(message => new BranchChatMessageUi
                 {
-                    MessageId = doc!.MessageId,
-                    BranchId = doc.BranchId,
-                    SenderUid = doc.SenderUid,
-                    SenderName = string.IsNullOrWhiteSpace(doc.SenderName) ? "Member" : doc.SenderName,
-                    Text = doc.Text,
-                    CreatedAt = doc.CreatedAt == default ? doc.Timestamp : doc.CreatedAt
+                    MessageId = message.Id,
+                    BranchId = _branchId,
+                    SenderUid = message.SenderId,
+                    SenderName = string.IsNullOrWhiteSpace(message.SenderId) ? "Member" : message.SenderId,
+                    Text = message.Content,
+                    CreatedAt = message.CreatedAt
                 })
                 .OrderBy(doc => doc.CreatedAt)
                 .ToList();
@@ -372,23 +483,20 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            var messageId = Guid.NewGuid().ToString("N");
-            var message = new FirestoreBranchChatMessage
-            {
-                MessageId = messageId,
-                BranchId = _branchId,
-                SenderUid = currentUid,
-                SenderName = !string.IsNullOrWhiteSpace(currentUser.FullName) ? currentUser.FullName : currentUser.Username,
-                Text = text,
-                Timestamp = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var collection = _firestore.GetCollection($"branchChats/{_branchId}/messages");
-            await collection.GetDocument(messageId).SetDataAsync(message);
+            var createdMessage = await _communityService.CreateCommunityMessageAsync(
+                communityId: _branchId.ToString(),
+                content: text,
+                messageType: "text",
+                branchId: _branchId.ToString(),
+                organizationalLevel: "Branch");
 
             MessageEntry.Text = string.Empty;
             await RefreshMessagesAsync();
+
+            if (string.IsNullOrWhiteSpace(createdMessage.MessageId))
+            {
+                await DisplayAlert("Unable to send message", "Unable to send message. Please try again.", "OK");
+            }
         }
         catch (Exception ex)
         {

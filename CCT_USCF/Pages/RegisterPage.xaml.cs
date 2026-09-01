@@ -70,6 +70,17 @@ public partial class RegisterPage : ContentPage
         UpdateRoleUI();
     }
 
+    private bool RequiresLocationSelection()
+    {
+        if (RolePicker.SelectedIndex == 0)
+            return true;
+
+        if (LevelPicker.SelectedIndex < 0)
+            return true;
+
+        return LevelPicker.SelectedIndex != 0;
+    }
+
     private void UpdateRoleUI()
     {
         var roleIndex =
@@ -111,22 +122,13 @@ public partial class RegisterPage : ContentPage
         // -----------------------------------------------------
 
         System.Diagnostics.Debug.WriteLine(
-            $"[REGISTER] Leader or Pastor selected - setting LeadershipSection.IsVisible=true and LocationSection.IsVisible=true");
+            $"[REGISTER] Leader or Pastor selected - updating leadership/location visibility");
 
         LeadershipSection.IsVisible = true;
-        LocationSection.IsVisible = true;
-
-        System.Diagnostics.Debug.WriteLine(
-            $"[REGISTER] Before UpdateLocationFields: LocationSection.IsVisible={LocationSection.IsVisible}");
-
         UpdateLocationFields();
 
-        // CRITICAL: Ensure LocationSection remains visible after UpdateLocationFields.
-        // UpdateLocationFields may change child picker visibility, but should NEVER hide the parent.
-        LocationSection.IsVisible = true;
-
         System.Diagnostics.Debug.WriteLine(
-            $"[REGISTER] After UpdateLocationFields (with safety check): LocationSection.IsVisible={LocationSection.IsVisible}, RegionPicker.IsVisible={RegionPicker.IsVisible}, DistrictPicker.IsVisible={DistrictPicker.IsVisible}, BranchPicker.IsVisible={BranchPicker.IsVisible}");
+            $"[REGISTER] After UpdateLocationFields: LocationSection.IsVisible={LocationSection.IsVisible}, RegionPicker.IsVisible={RegionPicker.IsVisible}, DistrictPicker.IsVisible={DistrictPicker.IsVisible}, BranchPicker.IsVisible={BranchPicker.IsVisible}");
     }
 
     // =========================================================
@@ -152,10 +154,26 @@ public partial class RegisterPage : ContentPage
 
         if (RolePicker.SelectedIndex == 0)
         {
+            LocationSection.IsVisible = true;
             System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] Member role detected - returning early");
+                $"[REGISTER] Member role detected - keeping location section visible");
             return;
         }
+
+        var requiresLocation = RequiresLocationSelection();
+        if (!requiresLocation)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[REGISTER] National leadership level selected - hiding the complete location section");
+
+            LocationSection.IsVisible = false;
+            RegionPicker.IsVisible = false;
+            DistrictPicker.IsVisible = false;
+            BranchPicker.IsVisible = false;
+            return;
+        }
+
+        LocationSection.IsVisible = true;
 
         var hasLevelSelected = LevelPicker.SelectedIndex >= 0;
         DutySection.IsVisible = hasLevelSelected;
@@ -167,9 +185,9 @@ public partial class RegisterPage : ContentPage
         System.Diagnostics.Debug.WriteLine(
             $"[REGISTER] LocationSection.IsVisible={LocationSection.IsVisible}, hasLevelSelected={hasLevelSelected}");
 
-        // Keep the USCF location controls visible for Leader and Pastor.
-        // The location chain still remains available when the selected
-        // leadership level requires Region, District, or Branch data.
+        // Keep the USCF location controls visible for Leader and Pastor whenever the
+        // selected leadership level actually needs a location. The parent section stays
+        // visible while the child pickers are toggled based on the current hierarchy.
         switch (LevelPicker.SelectedIndex)
         {
             // -------------------------------------------------

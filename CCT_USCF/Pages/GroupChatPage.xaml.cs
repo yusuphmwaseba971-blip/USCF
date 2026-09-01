@@ -1,3 +1,6 @@
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
 using CCT_USCF.Services;
 using CCT_USCF.Services.Appwrite;
 using Microsoft.Maui.ApplicationModel;
@@ -24,6 +27,8 @@ public partial class GroupChatPage : ContentPage
     private bool _isLoading;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
+    private ClientWebSocket? _appwriteRealtimeSocket;
+    private CancellationTokenSource? _appwriteRealtimeCts;
 
     public GroupChatPage()
     {
@@ -108,6 +113,7 @@ public partial class GroupChatPage : ContentPage
     {
         base.OnDisappearing();
         _realtimeEnabled = false;
+        DisposeRealtimeListener();
     }
 
     private void AttachRealtimeListener()
@@ -119,49 +125,176 @@ public partial class GroupChatPage : ContentPage
 
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Realtime listener attached for group {_groupId}");
-            _firestore
-                .GetCollection($"groups/{_groupId}/messages")
-                .AddSnapshotListener<FirestoreGroupChatMessage>(
-                    snapshot =>
-                    {
-                        if (!_realtimeEnabled)
-                            return;
+            _appwriteRealtimeCts?.Cancel();
+            _appwriteRealtimeCts?.Dispose();
+            _appwriteRealtimeCts = new CancellationTokenSource();
 
-                        var messages = snapshot.Documents
-                            .Select(document => document.Data)
-                            .Where(doc => doc != null)
-                            .Select(doc => new GroupChatMessageUi
-                            {
-                                MessageId = doc!.MessageId,
-                                GroupId = doc.GroupId,
-                                SenderUid = doc.SenderUid,
-                                SenderName = string.IsNullOrWhiteSpace(doc.SenderName) ? "Member" : doc.SenderName,
-                                Text = doc.Text,
-                                CreatedAt = doc.CreatedAt == default ? doc.Timestamp : doc.CreatedAt
-                            })
-                            .OrderBy(doc => doc.CreatedAt)
-                            .ToList();
-
-                        MainThread.BeginInvokeOnMainThread(() =>
-                        {
-                            _messages.Clear();
-                            foreach (var message in messages)
-                                _messages.Add(message);
-                            RenderMessages();
-                        });
-                    },
-                    ex =>
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Realtime listener error for group {_groupId}: {ex}");
-                    },
-                    false);
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener attached for group {_groupId}");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ListenForAppwriteMessagesAsync(_appwriteRealtimeCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener cancelled for group {_groupId}");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener error for group {_groupId}: {ex}");
+                    _realtimeListenerAttached = false;
+                }
+            });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Realtime listener setup failed: {ex}");
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener setup failed: {ex}");
             _realtimeListenerAttached = false;
         }
+    }
+
+    private void DisposeRealtimeListener()
+    {
+        _realtimeListenerAttached = false;
+        _appwriteRealtimeCts?.Cancel();
+        _appwriteRealtimeCts?.Dispose();
+        _appwriteRealtimeCts = null;
+
+        try
+        {
+            _appwriteRealtimeSocket?.Abort();
+            _appwriteRealtimeSocket?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime disconnect failed: {ex}");
+        }
+
+        _appwriteRealtimeSocket = null;
+    }
+
+    private async Task ListenForAppwriteMessagesAsync(CancellationToken cancellationToken)
+    {
+        var socket = new ClientWebSocket();
+        _appwriteRealtimeSocket = socket;
+
+        var uriBuilder = new UriBuilder(AppwriteConfig.Endpoint)
+        {
+            Scheme = Uri.UriSchemeWss,
+            Path = "/v1/realtime",
+            Query = $"project={Uri.EscapeDataString(AppwriteConfig.ProjectId)}"
+        };
+
+        var channel = _communityService.GetCommunityMessagesChannel();
+        var subscription = JsonSerializer.Serialize(new
+        {
+            type = "register",
+            channels = new[] { channel }
+        });
+
+        await socket.ConnectAsync(uriBuilder.Uri, cancellationToken);
+        await socket.SendAsync(Encoding.UTF8.GetBytes(subscription), WebSocketMessageType.Text, true, cancellationToken);
+
+        var buffer = new byte[16 * 1024];
+        var messageBuilder = new StringBuilder();
+
+        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        {
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                break;
+            }
+
+            var chunk = Encoding.UTF8.GetString(buffer, 0, result.Count);
+            messageBuilder.Append(chunk);
+
+            if (!result.EndOfMessage)
+                continue;
+
+            var rawMessage = messageBuilder.ToString();
+            messageBuilder.Clear();
+            ProcessRealtimeMessage(rawMessage);
+        }
+    }
+
+    private void ProcessRealtimeMessage(string rawMessage)
+    {
+        if (string.IsNullOrWhiteSpace(rawMessage))
+            return;
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawMessage);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("type", out var typeElement) ||
+                !string.Equals(typeElement.GetString(), "event", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (!root.TryGetProperty("payload", out var payload) && !root.TryGetProperty("data", out payload))
+                return;
+
+            if (payload.ValueKind != JsonValueKind.Object)
+                return;
+
+            var messageId = TryGetString(payload, "message_id");
+            var groupId = TryGetString(payload, "group_id");
+            if (string.IsNullOrWhiteSpace(groupId))
+                groupId = TryGetString(payload, "community_id");
+
+            if (!string.Equals(groupId, _groupId, StringComparison.Ordinal))
+                return;
+
+            var senderUid = TryGetString(payload, "sender_id");
+            if (string.IsNullOrWhiteSpace(senderUid))
+                senderUid = TryGetString(payload, "sender_uid");
+
+            var senderName = TryGetString(payload, "sender_name");
+            var content = TryGetString(payload, "content");
+            var createdAtValue = TryGetDateTime(payload, "created_at");
+
+            var adaptiveMessage = new GroupChatMessageUi
+            {
+                MessageId = string.IsNullOrWhiteSpace(messageId) ? Guid.NewGuid().ToString("N") : messageId,
+                GroupId = groupId,
+                SenderUid = senderUid,
+                SenderName = string.IsNullOrWhiteSpace(senderName) ? "Member" : senderName,
+                Text = content,
+                CreatedAt = createdAtValue == default ? DateTime.UtcNow : createdAtValue
+            };
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (_messages.Any(message => string.Equals(message.MessageId, adaptiveMessage.MessageId, StringComparison.Ordinal)))
+                    return;
+
+                _messages.Add(adaptiveMessage);
+                _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
+                RenderMessages();
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime payload parse failed: {ex}");
+        }
+    }
+
+    private static string TryGetString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind != JsonValueKind.Null && value.ValueKind != JsonValueKind.Undefined
+            ? value.ToString()
+            : string.Empty;
+    }
+
+    private static DateTime TryGetDateTime(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined)
+            return default;
+
+        return DateTime.TryParse(value.ToString(), out var dateTime) ? dateTime : default;
     }
 
     private async Task LoadGroupAsync()
@@ -237,10 +370,16 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
-            var appwriteMessages = await _communityService.GetCommunityMessagesAsync(_groupId, 100);
+            var appwriteMessages = await _communityService.GetCommunityMessagesAsync(
+                communityId: GetBackendCommunityId(),
+                limit: 100,
+                organizationalLevel: OrganizationalLevel,
+                branchId: _branchId > 0 ? _branchId.ToString() : null,
+                regionId: _regionId > 0 ? _regionId.ToString() : null,
+                districtId: _districtId > 0 ? _districtId.ToString() : null);
 
             return appwriteMessages
-                .Where(message => string.Equals(message.CommunityId, _groupId, StringComparison.Ordinal))
+                .Where(message => string.Equals(message.CommunityId, GetBackendCommunityId(), StringComparison.Ordinal))
                 .Select(message => new GroupChatMessageUi
                 {
                     MessageId = message.MessageId,
@@ -458,12 +597,13 @@ public partial class GroupChatPage : ContentPage
             }
 
             var createdMessage = await _communityService.CreateCommunityMessageAsync(
-                communityId: _groupId,
+                communityId: GetBackendCommunityId(),
                 content: text,
                 messageType: "text",
                 branchId: _branchId > 0 ? _branchId.ToString() : null,
                 regionId: _regionId > 0 ? _regionId.ToString() : null,
-                districtId: _districtId > 0 ? _districtId.ToString() : null);
+                districtId: _districtId > 0 ? _districtId.ToString() : null,
+                organizationalLevel: OrganizationalLevel);
 
             MessageEntry.Text = string.Empty;
             await RefreshMessagesAsync();
@@ -666,6 +806,22 @@ public partial class GroupChatPage : ContentPage
         }
     }
 
+    private string GetBackendCommunityId()
+    {
+        var normalizedLevel = NormalizeLevel(OrganizationalLevel);
+
+        if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase) && _districtId > 0)
+            return _districtId.ToString();
+
+        if ((string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(normalizedLevel, "Region", StringComparison.OrdinalIgnoreCase)) && _regionId > 0)
+            return _regionId.ToString();
+
+        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase) && _branchId > 0)
+            return _branchId.ToString();
+
+        return _groupId;
+    }
     private bool IsLeaderGroup() =>
         GroupName.Contains("Leader Group", StringComparison.OrdinalIgnoreCase)
         || GroupType.Contains("Leader Group", StringComparison.OrdinalIgnoreCase);

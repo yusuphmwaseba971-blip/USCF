@@ -6,6 +6,7 @@ namespace CCT_USCF.Services.Appwrite;
 public sealed class AppwriteService
 {
     public Client Client { get; }
+    public Account Account { get; }
     public Databases Databases { get; }
     public Storage Storage { get; }
 
@@ -15,6 +16,7 @@ public sealed class AppwriteService
             .SetEndpoint(AppwriteConfig.Endpoint)
             .SetProject(AppwriteConfig.ProjectId);
 
+        Account = new Account(Client);
         Databases = new Databases(Client);
         Storage = new Storage(Client);
     }

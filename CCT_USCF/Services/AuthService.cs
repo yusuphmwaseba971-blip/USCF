@@ -450,6 +450,24 @@ public class AuthService
         return _auth.CurrentUser?.Uid;
     }
 
+    public async Task<string> GetCurrentFirebaseIdTokenAsync(
+        bool forceRefresh = false)
+    {
+        var firebaseUser = _auth.CurrentUser;
+        if (firebaseUser == null)
+            throw new InvalidOperationException(
+                "An authenticated Firebase user is required to obtain an ID token.");
+
+        var tokenResult = await firebaseUser.GetIdTokenResultAsync(forceRefresh);
+        var token = tokenResult?.Token;
+
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException(
+                "Firebase did not return a valid ID token for the current user.");
+
+        return token;
+    }
+
     public async Task<CCT_USCF.Models.CurrentUser?>
         GetCurrentUserAsync()
     {
