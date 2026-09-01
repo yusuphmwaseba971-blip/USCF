@@ -179,11 +179,11 @@ public partial class GroupChatPage : ContentPage
         var socket = new ClientWebSocket();
         _appwriteRealtimeSocket = socket;
 
-        var uriBuilder = new UriBuilder(AppwriteConfig.Endpoint)
+        var uriBuilder = new UriBuilder(AppwriteService.Endpoint)
         {
             Scheme = Uri.UriSchemeWss,
             Path = "/v1/realtime",
-            Query = $"project={Uri.EscapeDataString(AppwriteConfig.ProjectId)}"
+            Query = $"project={Uri.EscapeDataString(AppwriteService.ProjectId)}"
         };
 
         var channel = _communityService.GetCommunityMessagesChannel();
@@ -240,12 +240,12 @@ public partial class GroupChatPage : ContentPage
             if (payload.ValueKind != JsonValueKind.Object)
                 return;
 
-            var messageId = TryGetString(payload, "message_id");
+            var messageId = GetAppwriteDocumentId(payload);
             var groupId = TryGetString(payload, "group_id");
             if (string.IsNullOrWhiteSpace(groupId))
                 groupId = TryGetString(payload, "community_id");
 
-            if (!string.Equals(groupId, _groupId, StringComparison.Ordinal))
+            if (!string.Equals(groupId, GetBackendCommunityId(), StringComparison.Ordinal))
                 return;
 
             var senderUid = TryGetString(payload, "sender_id");
@@ -282,6 +282,13 @@ public partial class GroupChatPage : ContentPage
         }
     }
 
+    private static string GetAppwriteDocumentId(JsonElement element)
+    {
+        var id = TryGetString(element, "$id");
+        return string.IsNullOrWhiteSpace(id)
+            ? TryGetString(element, "message_id")
+            : id;
+    }
     private static string TryGetString(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var value) && value.ValueKind != JsonValueKind.Null && value.ValueKind != JsonValueKind.Undefined
@@ -471,10 +478,7 @@ public partial class GroupChatPage : ContentPage
     private bool IsProfileEligibleForGroup(FirestoreUserProfileDocument profile, string currentUid)
     {
         var normalizedLevel = NormalizeLevel(OrganizationalLevel);
-        if (string.IsNullOrWhiteSpace(normalizedLevel))
-            return false;
-
-        if (profile == null)
+        if (string.IsNullOrWhiteSpace(normalizedLevel) || profile == null)
             return false;
 
         if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase))
@@ -485,6 +489,15 @@ public partial class GroupChatPage : ContentPage
         if (string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase))
         {
             return profile.RegionId > 0 && RegionId > 0 && profile.RegionId == RegionId;
+        }
+
+        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase))
+        {
+            var selectedBranchId = BranchId > 0 ? BranchId : TryParseBranchIdFromGroupId(_groupId);
+            if (selectedBranchId <= 0)
+                return false;
+
+            return profile.BranchId > 0 && profile.BranchId == selectedBranchId;
         }
 
         if (string.Equals(normalizedLevel, "National", StringComparison.OrdinalIgnoreCase))
@@ -571,6 +584,9 @@ public partial class GroupChatPage : ContentPage
             return;
         }
 
+        string backendCommunityId = string.Empty;
+        string currentUid = string.Empty;
+
         try
         {
             await FirebaseInit.Initialized;
@@ -589,15 +605,19 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            var currentUid = GetCurrentUserUid();
+            currentUid = GetCurrentUserUid();
             if (string.IsNullOrWhiteSpace(currentUid))
             {
                 await DisplayAlert("Not authenticated", "Firebase authentication is required to send a message.", "OK");
                 return;
             }
 
+            backendCommunityId = GetBackendCommunityId();
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Send start: GroupId={_groupId}, GroupName={GroupName}, GroupType={GroupType}, OrganizationalLevel={OrganizationalLevel}, BranchId={_branchId}, RegionId={_regionId}, DistrictId={_districtId}, BackendCommunityId={backendCommunityId}, FirebaseUid={currentUid}");
+
             var createdMessage = await _communityService.CreateCommunityMessageAsync(
-                communityId: GetBackendCommunityId(),
+                communityId: backendCommunityId,
                 content: text,
                 messageType: "text",
                 branchId: _branchId > 0 ? _branchId.ToString() : null,
@@ -605,21 +625,41 @@ public partial class GroupChatPage : ContentPage
                 districtId: _districtId > 0 ? _districtId.ToString() : null,
                 organizationalLevel: OrganizationalLevel);
 
-            MessageEntry.Text = string.Empty;
-            await RefreshMessagesAsync();
-
             if (createdMessage == null || string.IsNullOrWhiteSpace(createdMessage.MessageId))
             {
-                await DisplayAlert("Unable to send message", "Unable to send message. Please try again.", "OK");
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP_CHAT] Send returned no valid message id: GroupId={_groupId}, GroupName={GroupName}, GroupType={GroupType}, OrganizationalLevel={OrganizationalLevel}, BranchId={_branchId}, RegionId={_regionId}, DistrictId={_districtId}, BackendCommunityId={backendCommunityId}, FirebaseUid={currentUid}");
+
+                await DisplayAlert("Message Not Sent", "Message could not be sent. Please check your connection and try again.", "OK");
+                return;
             }
+
+            MessageEntry.Text = string.Empty;
+            await RefreshMessagesAsync();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Send message failed: {ex}");
-            await DisplayAlert("Message could not be sent", "Please check your connection and try again.", "OK");
+            LogSendFailure(ex, backendCommunityId, currentUid);
+            await DisplayAlert("Message Not Sent", "Message could not be sent. Please check your connection and try again.", "OK");
         }
     }
 
+    private void LogSendFailure(Exception ex, string backendCommunityId, string firebaseUid)
+    {
+        System.Diagnostics.Debug.WriteLine("[GROUP_CHAT] Send message failed.");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] ExceptionType={ex.GetType().FullName}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] ExceptionMessage={ex.Message}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] GroupId={_groupId}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] GroupName={GroupName}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] GroupType={GroupType}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] OrganizationalLevel={OrganizationalLevel}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] BranchId={_branchId}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] RegionId={_regionId}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] DistrictId={_districtId}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] BackendCommunityId={backendCommunityId}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] FirebaseUid={firebaseUid}");
+        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] FullException={ex}");
+    }
     private async void MembersLabel_Tapped(object? sender, EventArgs e)
     {
         try
@@ -810,6 +850,16 @@ public partial class GroupChatPage : ContentPage
     {
         var normalizedLevel = NormalizeLevel(OrganizationalLevel);
 
+        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_branchId > 0)
+                return _branchId.ToString();
+
+            var parsedBranchId = TryParseBranchIdFromGroupId(_groupId);
+            if (parsedBranchId > 0)
+                return parsedBranchId.ToString();
+        }
+
         if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase) && _districtId > 0)
             return _districtId.ToString();
 
@@ -817,10 +867,18 @@ public partial class GroupChatPage : ContentPage
              string.Equals(normalizedLevel, "Region", StringComparison.OrdinalIgnoreCase)) && _regionId > 0)
             return _regionId.ToString();
 
-        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase) && _branchId > 0)
-            return _branchId.ToString();
-
         return _groupId;
+    }
+
+    private static int TryParseBranchIdFromGroupId(string? groupId)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            return 0;
+
+        var digits = new string(groupId.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, out var parsed) && parsed > 0
+            ? parsed
+            : 0;
     }
     private bool IsLeaderGroup() =>
         GroupName.Contains("Leader Group", StringComparison.OrdinalIgnoreCase)

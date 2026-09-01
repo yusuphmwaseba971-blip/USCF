@@ -155,11 +155,11 @@ public partial class BranchChatPage : ContentPage
         var socket = new ClientWebSocket();
         _appwriteRealtimeSocket = socket;
 
-        var uriBuilder = new UriBuilder(AppwriteConfig.Endpoint)
+        var uriBuilder = new UriBuilder(AppwriteService.Endpoint)
         {
             Scheme = Uri.UriSchemeWss,
             Path = "/v1/realtime",
-            Query = $"project={Uri.EscapeDataString(AppwriteConfig.ProjectId)}"
+            Query = $"project={Uri.EscapeDataString(AppwriteService.ProjectId)}"
         };
 
         var channel = _communityService.GetMessagesChannel();
@@ -223,7 +223,7 @@ public partial class BranchChatPage : ContentPage
 
             var message = new BranchChatMessageUi
             {
-                MessageId = TryGetString(payload, "message_id"),
+                MessageId = GetAppwriteDocumentId(payload),
                 BranchId = _branchId,
                 SenderUid = TryGetString(payload, "sender_id"),
                 SenderName = string.IsNullOrWhiteSpace(TryGetString(payload, "sender_name")) ? "Member" : TryGetString(payload, "sender_name"),
@@ -247,6 +247,13 @@ public partial class BranchChatPage : ContentPage
         }
     }
 
+    private static string GetAppwriteDocumentId(JsonElement element)
+    {
+        var id = TryGetString(element, "$id");
+        return string.IsNullOrWhiteSpace(id)
+            ? TryGetString(element, "message_id")
+            : id;
+    }
     private static string TryGetString(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var value) && value.ValueKind != JsonValueKind.Null && value.ValueKind != JsonValueKind.Undefined
@@ -330,13 +337,13 @@ public partial class BranchChatPage : ContentPage
             var messages = await _communityService.GetGroupMessagesAsync(_branchId.ToString(), 100);
 
             return messages
-                .Where(message => string.Equals(message.GroupId, _branchId.ToString(), StringComparison.Ordinal))
+                .Where(message => string.Equals(message.CommunityId, _branchId.ToString(), StringComparison.Ordinal))
                 .Select(message => new BranchChatMessageUi
                 {
-                    MessageId = message.Id,
+                    MessageId = string.IsNullOrWhiteSpace(message.MessageId) ? message.Id : message.MessageId,
                     BranchId = _branchId,
-                    SenderUid = message.SenderId,
-                    SenderName = string.IsNullOrWhiteSpace(message.SenderId) ? "Member" : message.SenderId,
+                    SenderUid = message.SenderUid,
+                    SenderName = string.IsNullOrWhiteSpace(message.SenderName) ? "Member" : message.SenderName,
                     Text = message.Content,
                     CreatedAt = message.CreatedAt
                 })
@@ -490,13 +497,30 @@ public partial class BranchChatPage : ContentPage
                 branchId: _branchId.ToString(),
                 organizationalLevel: "Branch");
 
-            MessageEntry.Text = string.Empty;
-            await RefreshMessagesAsync();
-
-            if (string.IsNullOrWhiteSpace(createdMessage.MessageId))
+            if (createdMessage == null || string.IsNullOrWhiteSpace(createdMessage.MessageId))
             {
-                await DisplayAlert("Unable to send message", "Unable to send message. Please try again.", "OK");
+                await DisplayAlert("Unable to send message", "The message was not accepted by the server. Please try again.", "OK");
+                return;
             }
+
+            var uiMessage = new BranchChatMessageUi
+            {
+                MessageId = createdMessage.MessageId,
+                BranchId = _branchId,
+                SenderUid = createdMessage.SenderUid,
+                SenderName = string.IsNullOrWhiteSpace(createdMessage.SenderName) ? "You" : createdMessage.SenderName,
+                Text = createdMessage.Content,
+                CreatedAt = createdMessage.CreatedAt
+            };
+
+            if (!_messages.Any(existing => string.Equals(existing.MessageId, uiMessage.MessageId, StringComparison.Ordinal)))
+            {
+                _messages.Add(uiMessage);
+                _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
+                RenderMessages();
+            }
+
+            MessageEntry.Text = string.Empty;
         }
         catch (Exception ex)
         {
@@ -626,30 +650,6 @@ public partial class BranchChatPage : ContentPage
 
         [FirestoreProperty("districtId")]
         public int DistrictId { get; set; }
-    }
-
-    private sealed class FirestoreBranchChatMessage : IFirestoreObject
-    {
-        [FirestoreDocumentId]
-        public string MessageId { get; set; } = string.Empty;
-
-        [FirestoreProperty("branchId")]
-        public int BranchId { get; set; }
-
-        [FirestoreProperty("senderUid")]
-        public string SenderUid { get; set; } = string.Empty;
-
-        [FirestoreProperty("senderName")]
-        public string SenderName { get; set; } = string.Empty;
-
-        [FirestoreProperty("text")]
-        public string Text { get; set; } = string.Empty;
-
-        [FirestoreProperty("createdAt")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        [FirestoreProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
 
     private class BranchChatMessageUi

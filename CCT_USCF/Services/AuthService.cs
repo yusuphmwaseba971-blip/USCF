@@ -1064,62 +1064,66 @@ public class AuthService
     //     Audio/media files
     //
     // =========================================================
+// =========================================================
+// POST HOLY WORD
+// =========================================================
 
-    public async Task<bool> PostHolyWordAsync(
-        string content,
-        string? caption,
-        string? audioFilePath,
-        double? trimStart,
-        double? trimEnd)
+public async Task<bool> PostHolyWordAsync(
+    string content,
+    string? caption,
+    string? audioFilePath,
+    double? trimStart,
+    double? trimEnd)
+{
+    var firebaseUser = _auth.CurrentUser;
+
+    if (firebaseUser == null)
+        throw new Exception("Not authenticated.");
+
+    if (string.IsNullOrWhiteSpace(content))
+        throw new Exception("Content is required.");
+
+    var post = new Dictionary<string, object>
     {
-        var firebaseUser = _auth.CurrentUser;
+        ["authorId"] = firebaseUser.Uid,
+        ["content"] = content.Trim(),
+        ["caption"] = caption?.Trim() ?? string.Empty,
+        ["createdAt"] = DateTime.UtcNow.ToString("O")
+    };
 
-        if (firebaseUser == null)
-            throw new Exception("Not authenticated.");
+    if (trimStart.HasValue)
+        post["trimStart"] = trimStart.Value;
 
-        if (string.IsNullOrWhiteSpace(content))
-            throw new Exception("Content is required.");
+    if (trimEnd.HasValue)
+        post["trimEnd"] = trimEnd.Value;
 
-        var post =
-            new Dictionary<string, object>
-            {
-                ["authorId"] =
-                    firebaseUser.Uid,
+    if (!string.IsNullOrWhiteSpace(audioFilePath))
+    {
+        post["audioFileName"] =
+            System.IO.Path.GetFileName(audioFilePath);
+    }
 
-                ["content"] =
-                    content.Trim(),
-
-                ["caption"] =
-                    caption?.Trim() ?? string.Empty,
-
-                ["createdAt"] =
-                    DateTime.UtcNow.ToString("O")
-            };
-
-        if (trimStart.HasValue)
-            post["trimStart"] = trimStart.Value;
-
-        if (trimEnd.HasValue)
-            post["trimEnd"] = trimEnd.Value;
-
-        if (!string.IsNullOrWhiteSpace(audioFilePath))
-        {
-            /*
-             * The actual audio upload belongs to Appwrite.
-             *
-             * We only keep the filename here until the
-             * Appwrite media service is connected.
-             */
-            post["audioFileName"] =
-                System.IO.Path.GetFileName(audioFilePath);
-        }
-
+    try
+    {
         await _firestore
             .GetCollection("posts")
             .AddDocumentAsync(post);
 
+        System.Diagnostics.Debug.WriteLine(
+            "[FIREBASE POST] Holy Word posted successfully.");
+
         return true;
     }
+    catch (Exception ex)
+    {
+        System.Diagnostics.Debug.WriteLine(
+            $"[FIREBASE POST] Failed to send Holy Word: {ex}");
+
+        // Do NOT sign the user out.
+        // Do NOT delete the user's session.
+        throw;
+    }
+}
 
     // =========================================================
     // LOCATION LOOKUP
