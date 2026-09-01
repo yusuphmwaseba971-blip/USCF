@@ -3,10 +3,21 @@ using USCF.Backend.Data;
 using USCF.Backend.Options;
 using USCF.Backend.Services;
 using USCF.Backend.Services.Appwrite;
+using USCF.Backend.Services.Community;
+using USCF.Backend.Services.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<AppwriteService>();
+builder.Services.AddSingleton<IFirebaseTokenVerifier, FirebaseAdminTokenVerifier>();
+builder.Services.AddScoped<IAppwriteUserGateway, AppwriteUserGateway>();
+builder.Services.AddScoped<FirebaseIdentityBridgeService>();
+builder.Services.AddScoped<CommunityIdentityService>();
+builder.Services.AddScoped<CctOrganizationAuthorizationService>();
+builder.Services.AddScoped<AppwriteTeamResolverService>();
+builder.Services.AddScoped<AppwriteMembershipSynchronizationService>();
+builder.Services.AddScoped<GroupMessageService>();
+builder.Services.AddSingleton<IAppwriteCommunityGateway, AppwriteCommunityGateway>();
 
 builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.SectionName));
 builder.Services.Configure<UserRetentionOptions>(builder.Configuration.GetSection(UserRetentionOptions.SectionName));
@@ -110,6 +121,15 @@ using (var scope = app.Services.CreateScope())
     {
         db.Database.Migrate();
         Console.WriteLine("[Startup] Database migrations applied successfully.");
+
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        await FirebaseIdentityBridgeSchemaInitializer.EnsureCreatedAsync(
+            db,
+            loggerFactory.CreateLogger("FirebaseIdentityBridgeSchema"));
+
+        await AppwriteCommunitySchemaInitializer.EnsureCreatedAsync(
+            db,
+            loggerFactory.CreateLogger("AppwriteCommunitySchema"));
     }
     catch (Exception ex)
     {
@@ -134,4 +154,3 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-

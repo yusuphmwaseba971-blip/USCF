@@ -166,12 +166,16 @@
   <ItemGroup>
 
     <Compile Remove="USCF.Backend\**\*.cs" />
+    <Compile Remove="USCF.Backend.Tests\**\*.cs" />
 
     <EmbeddedResource Remove="USCF.Backend\**\*" />
+    <EmbeddedResource Remove="USCF.Backend.Tests\**\*" />
 
     <MauiAsset Remove="USCF.Backend\**\*" />
+    <MauiAsset Remove="USCF.Backend.Tests\**\*" />
 
     <None Remove="USCF.Backend\**\*" />
+    <None Remove="USCF.Backend.Tests\**\*" />
 
   </ItemGroup>
 

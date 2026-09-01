@@ -1,4 +1,7 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
+using Appwrite;
 using CCT_USCF.Models;
 using CCT_USCF.Services.Appwrite;
 
@@ -6,29 +9,49 @@ namespace CCT_USCF.Services
 {
     public class CommunityService
     {
-        private const string CommunityMessagesCollectionId = "community_messages";
         private const string MessagesCollectionId = "messages";
+        private const string CommunityMessagesCollectionId = MessagesCollectionId;
         private const string PrayerRequestsCollectionId = "cct_prayers";
         private const string BiblePostsCollectionId = "cct_posts";
 
         private readonly AuthService _authService;
         private readonly AppwriteService _appwriteService;
+        private readonly HttpClient _httpClient;
 
-        public CommunityService(AuthService authService, AppwriteService appwriteService)
+        public CommunityService(
+            AuthService authService,
+            AppwriteService appwriteService,
+            HttpClient httpClient)
         {
-            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-            _appwriteService = appwriteService ?? throw new ArgumentNullException(nameof(appwriteService));
+            _authService = authService
+                ?? throw new ArgumentNullException(nameof(authService));
+
+            _appwriteService = appwriteService
+                ?? throw new ArgumentNullException(nameof(appwriteService));
+
+            _httpClient = httpClient
+                ?? throw new ArgumentNullException(nameof(httpClient));
         }
+
+        // ============================================================
+        // APPWRITE REALTIME CHANNELS
+        // ============================================================
 
         public string GetCommunityMessagesChannel()
         {
-            return $"databases.{AppwriteConfig.DatabaseId}.collections.{CommunityMessagesCollectionId}.documents";
+            return $"databases.{AppwriteConfig.DatabaseId}" +
+                   $".collections.{CommunityMessagesCollectionId}.documents";
         }
 
         public string GetMessagesChannel()
         {
-            return $"databases.{AppwriteConfig.DatabaseId}.collections.{MessagesCollectionId}.documents";
+            return $"databases.{AppwriteConfig.DatabaseId}" +
+                   $".collections.{MessagesCollectionId}.documents";
         }
+
+        // ============================================================
+        // PRIVATE MESSAGE
+        // ============================================================
 
         public async Task<Message> SendMessageAsync(
             string? receiverId,
@@ -38,29 +61,57 @@ namespace CCT_USCF.Services
             string status = "sent")
         {
             var trimmed = content?.Trim() ?? string.Empty;
+
             if (string.IsNullOrWhiteSpace(trimmed))
-                throw new ArgumentException("Message content is required.", nameof(content));
+            {
+                throw new ArgumentException(
+                    "Message content is required.",
+                    nameof(content));
+            }
 
             var firebaseUid = _authService.GetCurrentFirebaseUid();
-            if (string.IsNullOrWhiteSpace(firebaseUid))
-                throw new InvalidOperationException("The current Firebase user is not available.");
 
-            var normalizedReceiverId = string.IsNullOrWhiteSpace(receiverId) ? null : receiverId.Trim();
-            var normalizedGroupId = string.IsNullOrWhiteSpace(groupId) ? null : groupId.Trim();
+            if (string.IsNullOrWhiteSpace(firebaseUid))
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
+
+            var normalizedReceiverId =
+                string.IsNullOrWhiteSpace(receiverId)
+                    ? null
+                    : receiverId.Trim();
+
+            var normalizedGroupId =
+                string.IsNullOrWhiteSpace(groupId)
+                    ? null
+                    : groupId.Trim();
+
             var messageId = Guid.NewGuid().ToString("N");
+
             var payload = new Dictionary<string, object?>
             {
                 ["sender_id"] = firebaseUid,
                 ["content"] = trimmed,
                 ["created_at"] = DateTime.UtcNow.ToString("O"),
-                ["message_type"] = string.IsNullOrWhiteSpace(messageType) ? "text" : messageType,
-                ["status"] = string.IsNullOrWhiteSpace(status) ? "sent" : status
+                ["message_type"] =
+                    string.IsNullOrWhiteSpace(messageType)
+                        ? "text"
+                        : messageType,
+                ["status"] =
+                    string.IsNullOrWhiteSpace(status)
+                        ? "sent"
+                        : status
             };
 
             if (!string.IsNullOrWhiteSpace(normalizedReceiverId))
             {
                 payload["receiver_id"] = normalizedReceiverId;
-                payload["conversation_id"] = BuildConversationId(firebaseUid, normalizedReceiverId);
+
+                payload["conversation_id"] =
+                    BuildConversationId(
+                        firebaseUid,
+                        normalizedReceiverId);
             }
 
             if (!string.IsNullOrWhiteSpace(normalizedGroupId))
@@ -68,108 +119,378 @@ namespace CCT_USCF.Services
                 payload["group_id"] = normalizedGroupId;
             }
 
+            var permissions =
+                await BuildPrivateMessagePermissionsAsync(
+                    firebaseUid,
+                    normalizedReceiverId);
+
             try
             {
-                var document = await _appwriteService.Databases.CreateDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: MessagesCollectionId,
-                    documentId: messageId,
-                    data: payload,
-                    permissions: null);
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_MESSAGES] Creating private message.");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Database={AppwriteConfig.DatabaseId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Collection={MessagesCollectionId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"MessageId={messageId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Sender={firebaseUid}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Receiver={normalizedReceiverId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Group={normalizedGroupId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"PermissionCount={permissions.Count}");
+
+                var document =
+                    await _appwriteService.Databases.CreateDocument(
+                        databaseId: AppwriteConfig.DatabaseId,
+                        collectionId: MessagesCollectionId,
+                        documentId: messageId,
+                        data: payload,
+                        permissions: permissions);
 
                 return MapMessageDocument(document);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[APPWRITE_MESSAGES] SendMessageAsync failed. Message={ex.Message}; Inner={ex.InnerException?.Message}; Details={ex}");
-                throw new InvalidOperationException("Unable to send message. Please try again.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_MESSAGES] SendMessageAsync failed.");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Message={ex.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Inner={ex.InnerException?.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Details={ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to send message. Please try again.",
+                    ex);
             }
         }
 
-        public async Task<List<Message>> GetConversationMessagesAsync(string otherUserId, int limit = 100)
+        // ============================================================
+        // LOAD PRIVATE CONVERSATION
+        // ============================================================
+
+        public async Task<List<Message>> GetConversationMessagesAsync(
+            string otherUserId,
+            int limit = 100)
         {
-            var firebaseUid = _authService.GetCurrentFirebaseUid();
+            var firebaseUid =
+                _authService.GetCurrentFirebaseUid();
+
             if (string.IsNullOrWhiteSpace(firebaseUid))
-                throw new InvalidOperationException("The current Firebase user is not available.");
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
 
             if (string.IsNullOrWhiteSpace(otherUserId))
-                throw new ArgumentException("A conversation partner is required.", nameof(otherUserId));
-
-            var conversationId = BuildConversationId(firebaseUid, otherUserId.Trim());
-            var queries = new List<string>
             {
-                global::Appwrite.Query.Equal("conversation_id", conversationId),
-                global::Appwrite.Query.OrderAsc("created_at"),
-                global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
-            };
+                throw new ArgumentException(
+                    "A conversation partner is required.",
+                    nameof(otherUserId));
+            }
 
-            var result = await _appwriteService.Databases.ListDocuments(
-                AppwriteConfig.DatabaseId,
-                MessagesCollectionId,
-                queries,
-                null,
-                null,
-                Math.Clamp(limit, 1, 100));
+            var normalizedOtherUserId =
+                otherUserId.Trim();
 
-            return result.Documents.Select(MapMessageDocument).OrderBy(x => x.CreatedAt).ToList();
-        }
+            var conversationId =
+                BuildConversationId(
+                    firebaseUid,
+                    normalizedOtherUserId);
 
-        public async Task<List<Message>> GetGroupMessagesAsync(string groupId, int limit = 100)
-        {
-            if (string.IsNullOrWhiteSpace(groupId))
-                throw new ArgumentException("A group id is required.", nameof(groupId));
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
 
             var queries = new List<string>
             {
-                global::Appwrite.Query.Equal("group_id", groupId.Trim()),
-                global::Appwrite.Query.OrderAsc("created_at"),
-                global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
+                global::Appwrite.Query.Equal(
+                    "conversation_id",
+                    conversationId),
+
+                global::Appwrite.Query.OrderAsc(
+                    "created_at"),
+
+                global::Appwrite.Query.Limit(
+                    safeLimit)
             };
 
-            var result = await _appwriteService.Databases.ListDocuments(
-                AppwriteConfig.DatabaseId,
-                MessagesCollectionId,
-                queries,
-                null,
-                null,
-                Math.Clamp(limit, 1, 100));
+            try
+            {
+                var result =
+                    await _appwriteService.Databases.ListDocuments(
+                        AppwriteConfig.DatabaseId,
+                        MessagesCollectionId,
+                        queries,
+                        null,
+                        null,
+                        safeLimit);
 
-            return result.Documents.Select(MapMessageDocument).OrderBy(x => x.CreatedAt).ToList();
+                return result.Documents
+                    .Select(MapMessageDocument)
+                    .OrderBy(x => x.CreatedAt)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[APPWRITE_MESSAGES] Load conversation failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to load conversation messages.",
+                    ex);
+            }
         }
 
-        public async Task<Message?> MarkMessageAsReadAsync(string messageId)
-        {
-            if (string.IsNullOrWhiteSpace(messageId))
-                throw new ArgumentException("A message id is required.", nameof(messageId));
+        // ============================================================
+        // LOAD GROUP MESSAGES
+        // ============================================================
 
-            var updated = await _appwriteService.Databases.UpdateDocument(
-                databaseId: AppwriteConfig.DatabaseId,
-                collectionId: MessagesCollectionId,
-                documentId: messageId,
-                data: new Dictionary<string, object?>
+        public async Task<List<Message>> GetGroupMessagesAsync(
+            string groupId,
+            int limit = 100)
+        {
+            var messages = await GetCommunityMessagesAsync(
+                communityId: groupId,
+                limit: limit,
+                organizationalLevel: "Branch",
+                branchId: groupId);
+
+            return messages
+                .Select(message => new Message
                 {
-                    ["status"] = "read",
-                    ["read_at"] = DateTime.UtcNow.ToString("O")
-                },
-                permissions: null,
-                transactionId: null);
-
-            return MapMessageDocument(updated);
+                    Id = message.MessageId,
+                    SenderId = message.SenderUid,
+                    GroupId = message.CommunityId,
+                    ConversationId = message.CommunityId,
+                    Content = message.Content,
+                    MessageType = message.MessageType,
+                    Status = "sent",
+                    CreatedAt = message.CreatedAt
+                })
+                .OrderBy(message => message.CreatedAt)
+                .ToList();
         }
 
-        public async Task<bool> DeleteMessageAsync(string messageId)
+        private async Task<T> SendAuthorizedCommunityApiAsync<T>(
+            HttpMethod method,
+            string requestUri,
+            object? body = null)
+        {
+            var firebaseIdToken =
+                await _authService.GetCurrentFirebaseIdTokenAsync();
+
+            using var request =
+                new HttpRequestMessage(method, requestUri);
+
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", firebaseIdToken);
+
+            if (body != null)
+            {
+                request.Content =
+                    JsonContent.Create(body);
+            }
+
+            using var response =
+                await _httpClient.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                throw new UnauthorizedAccessException(
+                    "You are not authorized for this community group.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var details =
+                    await response.Content.ReadAsStringAsync();
+
+                throw new InvalidOperationException(
+                    $"Community API request failed with status {(int)response.StatusCode}: {details}");
+            }
+
+            var result =
+                await response.Content.ReadFromJsonAsync<T>(
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+            return result
+                ?? throw new InvalidOperationException(
+                    "Community API returned an empty response.");
+        }
+
+        // ============================================================
+        // MARK PRIVATE MESSAGE AS READ
+        // ============================================================
+
+        public async Task<Message?> MarkMessageAsReadAsync(
+            string messageId)
         {
             if (string.IsNullOrWhiteSpace(messageId))
-                throw new ArgumentException("A message id is required.", nameof(messageId));
+            {
+                throw new ArgumentException(
+                    "A message id is required.",
+                    nameof(messageId));
+            }
 
-            await _appwriteService.Databases.DeleteDocument(
-                databaseId: AppwriteConfig.DatabaseId,
-                collectionId: MessagesCollectionId,
-                documentId: messageId,
-                transactionId: null);
+            var currentFirebaseUid =
+                _authService.GetCurrentFirebaseUid();
 
-            return true;
+            if (string.IsNullOrWhiteSpace(currentFirebaseUid))
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
+
+            try
+            {
+                var document =
+                    await _appwriteService.Databases.GetDocument(
+                        databaseId: AppwriteConfig.DatabaseId,
+                        collectionId: MessagesCollectionId,
+                        documentId: messageId);
+
+                var data =
+                    document.Data ??
+                    new Dictionary<string, object?>();
+
+                var senderId =
+                    TryGetString(data, "sender_id", string.Empty);
+                var receiverId =
+                    TryGetString(data, "receiver_id", null);
+                var groupId =
+                    TryGetString(data, "group_id", null);
+
+                var isAuthorized =
+                    string.Equals(senderId, currentFirebaseUid, StringComparison.Ordinal) ||
+                    string.Equals(receiverId, currentFirebaseUid, StringComparison.Ordinal) ||
+                    (!string.IsNullOrWhiteSpace(groupId) &&
+                     await IsCurrentUserAuthorizedForGroupAsync(currentFirebaseUid, groupId));
+
+                if (!isAuthorized)
+                {
+                    throw new UnauthorizedAccessException(
+                        "You are not authorized to update this message.");
+                }
+
+                var updated =
+                    await _appwriteService.Databases.UpdateDocument(
+                        databaseId: AppwriteConfig.DatabaseId,
+                        collectionId: MessagesCollectionId,
+                        documentId: messageId,
+                        data: new Dictionary<string, object?>
+                        {
+                            ["status"] = "read",
+                            ["read_at"] =
+                                DateTime.UtcNow.ToString("O")
+                        },
+                        permissions: null,
+                        transactionId: null);
+
+                return MapMessageDocument(updated);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[APPWRITE_MESSAGES] Mark read failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to mark message as read.",
+                    ex);
+            }
         }
+
+        // ============================================================
+        // DELETE PRIVATE MESSAGE
+        // ============================================================
+
+        public async Task<bool> DeleteMessageAsync(
+            string messageId)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                throw new ArgumentException(
+                    "A message id is required.",
+                    nameof(messageId));
+            }
+
+            var currentFirebaseUid =
+                _authService.GetCurrentFirebaseUid();
+
+            if (string.IsNullOrWhiteSpace(currentFirebaseUid))
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
+
+            try
+            {
+                var document =
+                    await _appwriteService.Databases.GetDocument(
+                        databaseId: AppwriteConfig.DatabaseId,
+                        collectionId: MessagesCollectionId,
+                        documentId: messageId);
+
+                var data =
+                    document.Data ??
+                    new Dictionary<string, object?>();
+
+                var senderId =
+                    TryGetString(data, "sender_id", string.Empty);
+
+                if (!string.Equals(senderId, currentFirebaseUid, StringComparison.Ordinal))
+                {
+                    throw new UnauthorizedAccessException(
+                        "You are not authorized to delete this message.");
+                }
+
+                await _appwriteService.Databases.DeleteDocument(
+                    databaseId: AppwriteConfig.DatabaseId,
+                    collectionId: MessagesCollectionId,
+                    documentId: messageId,
+                    transactionId: null);
+
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[APPWRITE_MESSAGES] Delete failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to delete message.",
+                    ex);
+            }
+        }
+
+        // ============================================================
+        // CREATE COMMUNITY MESSAGE
+        // ============================================================
 
         public async Task<CommunityMessage> CreateCommunityMessageAsync(
             string communityId,
@@ -177,231 +498,566 @@ namespace CCT_USCF.Services
             string messageType = "text",
             string? branchId = null,
             string? regionId = null,
-            string? districtId = null)
+            string? districtId = null,
+            string? organizationalLevel = null)
         {
             if (string.IsNullOrWhiteSpace(communityId))
-                throw new ArgumentException("A community id is required.", nameof(communityId));
+            {
+                throw new ArgumentException(
+                    "A community id is required.",
+                    nameof(communityId));
+            }
 
             var trimmed = content?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(trimmed))
-                throw new ArgumentException("Message content is required.", nameof(content));
+            {
+                throw new ArgumentException(
+                    "Message content is required.",
+                    nameof(content));
+            }
+
+            var normalizedCommunityId = communityId.Trim();
+            var normalizedLevel = NormalizeCommunityLevel(organizationalLevel, branchId, districtId, regionId);
+
+            var request = new
+            {
+                communityId = normalizedCommunityId,
+                organizationalLevel = normalizedLevel,
+                branchId = TryParsePositiveInt(branchId),
+                districtId = TryParsePositiveInt(districtId),
+                regionId = TryParsePositiveInt(regionId),
+                content = trimmed,
+                messageType = string.IsNullOrWhiteSpace(messageType) ? "text" : messageType.Trim()
+            };
+
+            try
+            {
+                return await SendAuthorizedCommunityApiAsync<CommunityMessage>(
+                    HttpMethod.Post,
+                    "api/community/messages/group",
+                    request);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[COMMUNITY_MESSAGE] Backend create failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to send message.",
+                    ex);
+            }
+        }
+
+        // ============================================================
+        // LOAD COMMUNITY MESSAGES
+        // ============================================================
+
+        public async Task<List<CommunityMessage>>
+            GetCommunityMessagesAsync(
+                string communityId,
+                int limit = 50,
+                string? organizationalLevel = null,
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null)
+        {
+            if (string.IsNullOrWhiteSpace(communityId))
+            {
+                throw new ArgumentException(
+                    "A community id is required.",
+                    nameof(communityId));
+            }
+
+            var normalizedCommunityId = communityId.Trim();
+            var safeLimit = Math.Clamp(limit, 1, 100);
+            var normalizedLevel = NormalizeCommunityLevel(organizationalLevel, branchId, districtId, regionId);
+            var query =
+                $"api/community/messages/group?communityId={Uri.EscapeDataString(normalizedCommunityId)}" +
+                $"&organizationalLevel={Uri.EscapeDataString(normalizedLevel)}" +
+                $"&limit={safeLimit}";
+
+            var parsedBranchId = TryParsePositiveInt(branchId);
+            if (parsedBranchId.HasValue)
+                query += $"&branchId={parsedBranchId.Value}";
+
+            var parsedDistrictId = TryParsePositiveInt(districtId);
+            if (parsedDistrictId.HasValue)
+                query += $"&districtId={parsedDistrictId.Value}";
+
+            var parsedRegionId = TryParsePositiveInt(regionId);
+            if (parsedRegionId.HasValue)
+                query += $"&regionId={parsedRegionId.Value}";
+
+            try
+            {
+                var messages = await SendAuthorizedCommunityApiAsync<List<CommunityMessage>>(
+                    HttpMethod.Get,
+                    query);
+
+                return messages
+                    .OrderBy(message => message.CreatedAt)
+                    .ToList();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[COMMUNITY_MESSAGE] Backend load failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to load community messages.",
+                    ex);
+            }
+        }
+
+        private static int? TryParsePositiveInt(string? value)
+        {
+            return int.TryParse(value, out var parsed) && parsed > 0
+                ? parsed
+                : null;
+        }
+
+        private static string NormalizeCommunityLevel(
+            string? organizationalLevel,
+            string? branchId,
+            string? districtId,
+            string? regionId)
+        {
+            if (!string.IsNullOrWhiteSpace(organizationalLevel))
+            {
+                return organizationalLevel.Trim() switch
+                {
+                    "Regional" => "Region",
+                    "Regional Group" => "Region",
+                    "Region" => "Region",
+                    "District Group" => "District",
+                    "District" => "District",
+                    "Branch Group" => "Branch",
+                    "Branch" => "Branch",
+                    var value => value
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(regionId))
+                return "Region";
+
+            if (!string.IsNullOrWhiteSpace(districtId))
+                return "District";
+
+            return "Branch";
+        }
+
+        // ============================================================
+        // DELETE COMMUNITY MESSAGE
+        // ============================================================
+
+        public Task<bool> DeleteCommunityMessageAsync(
+            string messageId)
+        {
+            throw new UnauthorizedAccessException(
+                "Community message deletion is not available until a server-side deletion authority is defined.");
+        }
+
+        // ============================================================
+        // CONVERSATION ID
+        // ============================================================
+
+        private static string BuildConversationId(
+            string senderId,
+            string receiverId)
+        {
+            var participants =
+                new[]
+                {
+                    senderId.Trim(),
+                    receiverId.Trim()
+                }
+                .Where(value =>
+                    !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(
+                    value => value,
+                    StringComparer.Ordinal)
+                .ToArray();
+
+            return participants.Length == 0
+                ? string.Empty
+                : string.Join("_", participants);
+        }
+
+        private static bool IsCurrentUserAuthorizedForGroup(
+            CCT_USCF.Models.CurrentUser currentUser,
+            string groupId)
+        {
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                return false;
+            }
+
+            var normalizedGroupId = groupId.Trim();
+
+            if (currentUser.BranchId.HasValue &&
+                string.Equals(
+                    currentUser.BranchId.Value.ToString(),
+                    normalizedGroupId,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (currentUser.DistrictId.HasValue &&
+                string.Equals(
+                    currentUser.DistrictId.Value.ToString(),
+                    normalizedGroupId,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (currentUser.RegionId.HasValue &&
+                string.Equals(
+                    currentUser.RegionId.Value.ToString(),
+                    normalizedGroupId,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task<bool> IsCurrentUserAuthorizedForGroupAsync(
+            string currentFirebaseUid,
+            string? groupId)
+        {
+            if (string.IsNullOrWhiteSpace(currentFirebaseUid) ||
+                string.IsNullOrWhiteSpace(groupId))
+            {
+                return false;
+            }
 
             var currentUser = await _authService.GetCurrentUserAsync();
             if (currentUser == null)
-                throw new InvalidOperationException("You must be signed in to send a community message.");
-
-            var senderUid = _authService.GetCurrentFirebaseUid() ?? currentUser.Email ?? currentUser.Id.ToString();
-            var senderName = !string.IsNullOrWhiteSpace(currentUser.FullName)
-                ? currentUser.FullName
-                : currentUser.Username;
-
-            var messageId = Guid.NewGuid().ToString("N");
-            var payload = new Dictionary<string, object?>
             {
-                ["message_id"] = messageId,
-                ["sender_uid"] = senderUid,
-                ["sender_name"] = string.IsNullOrWhiteSpace(senderName) ? "Community member" : senderName,
-                ["content"] = trimmed,
-                ["community_id"] = communityId,
-                ["message_type"] = string.IsNullOrWhiteSpace(messageType) ? "text" : messageType,
-                ["created_at"] = DateTime.UtcNow.ToString("O")
+                return false;
+            }
+
+            return IsCurrentUserAuthorizedForGroup(currentUser, groupId);
+        }
+
+        private async Task<List<string>> BuildPrivateMessagePermissionsAsync(
+            string senderUid,
+            string? receiverUid)
+        {
+            var appwriteUserId =
+                await RequireAppwriteUserIdAsync();
+
+            var permissions = new List<string>
+            {
+                Permission.Read(Role.User(appwriteUserId)),
+                Permission.Update(Role.User(appwriteUserId)),
+                Permission.Delete(Role.User(appwriteUserId))
             };
 
-            if (!string.IsNullOrWhiteSpace(branchId))
-                payload["branch_id"] = branchId;
-
-            if (!string.IsNullOrWhiteSpace(regionId))
-                payload["region_id"] = regionId;
-
-            if (!string.IsNullOrWhiteSpace(districtId))
-                payload["district_id"] = districtId;
-
-            try
+            if (!string.IsNullOrWhiteSpace(receiverUid))
             {
-                System.Diagnostics.Debug.WriteLine($"[COMMUNITY_MESSAGE] Sending Appwrite create: database={AppwriteConfig.DatabaseId}, collection={CommunityMessagesCollectionId}, messageId={messageId}, communityId={communityId}, senderUid={senderUid}");
+                var receiverAppwriteUserId =
+                    await TryResolveAppwriteUserIdAsync(receiverUid);
 
-                var document = await _appwriteService.Databases.CreateDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: CommunityMessagesCollectionId,
-                    documentId: messageId,
-                    data: payload,
-                    permissions: null);
-
-                return MapCommunityDocument(document);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[COMMUNITY_MESSAGE] CreateDocument failed. Message={ex.Message}; Inner={ex.InnerException?.Message}; Details={ex}");
-                throw new InvalidOperationException("Unable to send message.", ex);
-            }
-        }
-
-        public async Task<List<CommunityMessage>> GetCommunityMessagesAsync(string communityId, int limit = 50)
-        {
-            if (string.IsNullOrWhiteSpace(communityId))
-                throw new ArgumentException("A community id is required.", nameof(communityId));
-
-            try
-            {
-                var queries = new List<string>
+                if (string.IsNullOrWhiteSpace(receiverAppwriteUserId))
                 {
-                    global::Appwrite.Query.Equal("community_id", communityId),
-                    global::Appwrite.Query.OrderAsc("created_at"),
-                    global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
-                };
+                    throw new InvalidOperationException(
+                        "Appwrite document permissions cannot be created for a private message because this project does not have a valid Appwrite user/session mapping for Firebase UIDs.");
+                }
 
-                var result = await _appwriteService.Databases.ListDocuments(
-                    AppwriteConfig.DatabaseId,
-                    CommunityMessagesCollectionId,
-                    queries,
-                    null,
-                    null,
-                    Math.Clamp(limit, 1, 100));
+                permissions.Add(
+                    Permission.Read(Role.User(receiverAppwriteUserId)));
+            }
 
-                return result.Documents.Select(MapCommunityDocument).OrderBy(x => x.CreatedAt).ToList();
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("Unable to load community messages.", ex);
-            }
+            return permissions;
         }
 
-        public async Task<bool> DeleteCommunityMessageAsync(string messageId)
+        private async Task<List<string>> BuildCommunityMessagePermissionsAsync(
+            string senderUid,
+            string groupId,
+            string? branchId = null,
+            string? regionId = null,
+            string? districtId = null)
         {
-            if (string.IsNullOrWhiteSpace(messageId))
-                throw new ArgumentException("A message id is required.", nameof(messageId));
+            var appwriteUserId =
+                await RequireAppwriteUserIdAsync();
 
-            try
+            if (string.IsNullOrWhiteSpace(appwriteUserId))
             {
-                await _appwriteService.Databases.DeleteDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: CommunityMessagesCollectionId,
-                    documentId: messageId);
+                throw new InvalidOperationException(
+                    "Appwrite community message permissions require a valid Appwrite user/session identity.");
+            }
 
-                return true;
-            }
-            catch (Exception ex)
+            if (string.IsNullOrWhiteSpace(groupId))
             {
-                throw new InvalidOperationException("Unable to delete message.", ex);
+                throw new InvalidOperationException(
+                    "A group/community identifier is required for Appwrite document permissions.");
             }
+
+            throw new InvalidOperationException(
+                "Community/group messaging requires an Appwrite team/role membership model for branch members. The current project only authenticates through Firebase and has no Appwrite team mapping configured for authorized branch members.");
         }
 
-        private static string BuildConversationId(string senderId, string receiverId)
+        private Task<string> RequireAppwriteUserIdAsync()
         {
-            var participants = new[] { senderId.Trim(), receiverId.Trim() }
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .ToArray();
-
-            return participants.Length == 0 ? string.Empty : string.Join("_", participants);
+            return Task.FromResult(
+                string.Empty);
         }
 
-        private static Message MapMessageDocument(global::Appwrite.Models.Document document)
+        private Task<string> TryResolveAppwriteUserIdAsync(string firebaseUid)
         {
-            var data = document.Data ?? new Dictionary<string, object?>();
+            return Task.FromResult(string.Empty);
+        }
+
+        // ============================================================
+        // MAP PRIVATE MESSAGE
+        // ============================================================
+
+        private static Message MapMessageDocument(
+            global::Appwrite.Models.Document document)
+        {
+            var data =
+                document.Data
+                ?? new Dictionary<string, object?>();
+
             return new Message
             {
                 Id = document.Id,
-                SenderId = TryGetString(data, "sender_id", string.Empty),
-                ReceiverId = TryGetString(data, "receiver_id", null),
-                GroupId = TryGetString(data, "group_id", null),
-                ConversationId = TryGetString(data, "conversation_id", string.Empty),
-                Content = TryGetString(data, "content", string.Empty),
-                MessageType = TryGetString(data, "message_type", "text"),
-                Status = TryGetString(data, "status", "sent"),
-                CreatedAt = TryGetDateTime(data, "created_at", document.CreatedAt),
-                ReadAt = TryGetNullableDateTime(data, "read_at")
+
+                SenderId =
+                    TryGetString(
+                        data,
+                        "sender_id",
+                        string.Empty),
+
+                ReceiverId =
+                    TryGetString(
+                        data,
+                        "receiver_id",
+                        null),
+
+                GroupId =
+                    TryGetString(
+                        data,
+                        "group_id",
+                        null),
+
+                ConversationId =
+                    TryGetString(
+                        data,
+                        "conversation_id",
+                        string.Empty),
+
+                Content =
+                    TryGetString(
+                        data,
+                        "content",
+                        string.Empty),
+
+                MessageType =
+                    TryGetString(
+                        data,
+                        "message_type",
+                        "text"),
+
+                Status =
+                    TryGetString(
+                        data,
+                        "status",
+                        "sent"),
+
+                CreatedAt =
+                    TryGetDateTime(
+                        data,
+                        "created_at",
+                        document.CreatedAt),
+
+                ReadAt =
+                    TryGetNullableDateTime(
+                        data,
+                        "read_at")
             };
         }
 
-        public async Task<PrayerRequestDto?> CreatePrayerRequestAsync(string title, string description)
+        // ============================================================
+        // CREATE PRAYER REQUEST
+        // ============================================================
+
+        public async Task<PrayerRequestDto?>
+            CreatePrayerRequestAsync(
+                string title,
+                string description)
         {
-            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description))
-                throw new ArgumentException("Prayer request title or description is required.", nameof(title));
-
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser == null)
-                throw new InvalidOperationException("You must be signed in to submit a prayer request.");
-
-            var documentId = Guid.NewGuid().ToString("N");
-            var payload = new Dictionary<string, object?>
+            if (string.IsNullOrWhiteSpace(title) &&
+                string.IsNullOrWhiteSpace(description))
             {
-                ["user_id"] = _authService.GetCurrentFirebaseUid() ?? currentUser.Email ?? currentUser.Id.ToString(),
-                ["content"] = BuildPrayerContent(title, description),
-                ["leader_id"] = null,
-                ["is_private"] = false,
-                ["status"] = "Open"
-            };
+                throw new ArgumentException(
+                    "Prayer request title or description is required.",
+                    nameof(title));
+            }
+
+            var currentUser =
+                await _authService.GetCurrentUserAsync();
+
+            if (currentUser == null)
+            {
+                throw new InvalidOperationException(
+                    "You must be signed in to submit a prayer request.");
+            }
+
+            var documentId =
+                Guid.NewGuid().ToString("N");
+
+            var userId =
+                _authService.GetCurrentFirebaseUid()
+                ?? currentUser.Email
+                ?? currentUser.Id.ToString();
+
+            var payload =
+                new Dictionary<string, object?>
+                {
+                    ["user_id"] = userId,
+                    ["content"] =
+                        BuildPrayerContent(
+                            title,
+                            description),
+                    ["leader_id"] = null,
+                    ["is_private"] = false,
+                    ["status"] = "Open"
+                };
 
             try
             {
-                var document = await _appwriteService.Databases.CreateDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: PrayerRequestsCollectionId,
-                    documentId: documentId,
-                    data: payload,
-                    permissions: null);
+                var document =
+                    await _appwriteService.Databases.CreateDocument(
+                        databaseId: AppwriteConfig.DatabaseId,
+                        collectionId: PrayerRequestsCollectionId,
+                        documentId: documentId,
+                        data: payload,
+                        permissions: null);
 
                 return MapPrayerDocument(document);
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to create prayer request.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[PRAYER] Create failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to create prayer request.",
+                    ex);
             }
         }
 
-        public async Task<List<PrayerRequestDto>> GetAllPrayerRequestsAsync()
+        // ============================================================
+        // GET ALL PRAYER REQUESTS
+        // ============================================================
+
+        public async Task<List<PrayerRequestDto>>
+            GetAllPrayerRequestsAsync()
         {
             try
             {
-                var result = await _appwriteService.Databases.ListDocuments(
-                    AppwriteConfig.DatabaseId,
-                    PrayerRequestsCollectionId,
-                    new List<string> { global::Appwrite.Query.OrderDesc("$createdAt") },
-                    null,
-                    null,
-                    50);
+                var result =
+                    await _appwriteService.Databases.ListDocuments(
+                        AppwriteConfig.DatabaseId,
+                        PrayerRequestsCollectionId,
+                        new List<string>
+                        {
+                            global::Appwrite.Query.OrderDesc(
+                                "$createdAt")
+                        },
+                        null,
+                        null,
+                        50);
 
-                return result.Documents.Select(MapPrayerDocument).ToList();
+                return result.Documents
+                    .Select(MapPrayerDocument)
+                    .ToList();
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to load prayer requests.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[PRAYER] Load all failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to load prayer requests.",
+                    ex);
             }
         }
 
-        public async Task<List<PrayerRequestDto>> GetMyPrayerRequestsAsync()
+        // ============================================================
+        // GET MY PRAYER REQUESTS
+        // ============================================================
+
+        public async Task<List<PrayerRequestDto>>
+            GetMyPrayerRequestsAsync()
         {
-            var currentUser = await _authService.GetCurrentUserAsync();
+            var currentUser =
+                await _authService.GetCurrentUserAsync();
+
             if (currentUser == null)
+            {
                 return new List<PrayerRequestDto>();
+            }
 
-            var userId = _authService.GetCurrentFirebaseUid() ?? currentUser.Email ?? currentUser.Id.ToString();
+            var userId =
+                _authService.GetCurrentFirebaseUid()
+                ?? currentUser.Email
+                ?? currentUser.Id.ToString();
 
             try
             {
-                var result = await _appwriteService.Databases.ListDocuments(
-                    AppwriteConfig.DatabaseId,
-                    PrayerRequestsCollectionId,
-                    new List<string>
-                    {
-                        global::Appwrite.Query.Equal("user_id", userId),
-                        global::Appwrite.Query.OrderDesc("$createdAt")
-                    },
-                    null,
-                    null,
-                    50);
+                var result =
+                    await _appwriteService.Databases.ListDocuments(
+                        AppwriteConfig.DatabaseId,
+                        PrayerRequestsCollectionId,
+                        new List<string>
+                        {
+                            global::Appwrite.Query.Equal(
+                                "user_id",
+                                userId),
 
-                return result.Documents.Select(MapPrayerDocument).ToList();
+                            global::Appwrite.Query.OrderDesc(
+                                "$createdAt")
+                        },
+                        null,
+                        null,
+                        50);
+
+                return result.Documents
+                    .Select(MapPrayerDocument)
+                    .ToList();
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to load your prayer requests.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[PRAYER] Load mine failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to load your prayer requests.",
+                    ex);
             }
         }
 
-        public async Task<bool> DeletePrayerRequestAsync(Guid id)
+        // ============================================================
+        // DELETE PRAYER REQUEST
+        // ============================================================
+
+        public async Task<bool>
+            DeletePrayerRequestAsync(Guid id)
         {
             try
             {
@@ -414,105 +1070,194 @@ namespace CCT_USCF.Services
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to delete prayer request.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[PRAYER] Delete failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to delete prayer request.",
+                    ex);
             }
         }
 
-        public async Task<List<BiblePostDto>> GetBiblePostsAsync(int limit = 50)
+        // ============================================================
+        // GET BIBLE POSTS
+        // ============================================================
+
+        public async Task<List<BiblePostDto>>
+            GetBiblePostsAsync(int limit = 50)
         {
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
+
             try
             {
-                var result = await _appwriteService.Databases.ListDocuments(
-                    AppwriteConfig.DatabaseId,
-                    BiblePostsCollectionId,
-                    new List<string>
-                    {
-                        global::Appwrite.Query.Equal("post_type", "BibleVerse"),
-                        global::Appwrite.Query.OrderDesc("$createdAt"),
-                        global::Appwrite.Query.Limit(Math.Clamp(limit, 1, 100))
-                    },
-                    null,
-                    null,
-                    Math.Clamp(limit, 1, 100));
+                var result =
+                    await _appwriteService.Databases.ListDocuments(
+                        AppwriteConfig.DatabaseId,
+                        BiblePostsCollectionId,
+                        new List<string>
+                        {
+                            global::Appwrite.Query.Equal(
+                                "post_type",
+                                "BibleVerse"),
 
-                return result.Documents.Select(MapBibleDocument).Where(x => x != null).Cast<BiblePostDto>().ToList();
+                            global::Appwrite.Query.OrderDesc(
+                                "$createdAt"),
+
+                            global::Appwrite.Query.Limit(
+                                safeLimit)
+                        },
+                        null,
+                        null,
+                        safeLimit);
+
+                return result.Documents
+                    .Select(MapBibleDocument)
+                    .Where(x => x != null)
+                    .Cast<BiblePostDto>()
+                    .ToList();
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to load Bible posts.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BIBLE] Load failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to load Bible posts.",
+                    ex);
             }
         }
 
-        public async Task<BiblePostDto?> CreateBiblePostAsync(BiblePostCreateDto dto)
+        // ============================================================
+        // CREATE BIBLE POST
+        // ============================================================
+
+        public async Task<BiblePostDto?>
+            CreateBiblePostAsync(
+                BiblePostCreateDto dto)
         {
             if (dto == null)
-                throw new ArgumentNullException(nameof(dto));
-
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser == null)
-                throw new InvalidOperationException("You must be signed in to publish a Bible post.");
-
-            var payload = new Dictionary<string, object?>
             {
-                ["user_id"] = _authService.GetCurrentFirebaseUid() ?? currentUser.Email ?? currentUser.Id.ToString(),
-                ["post_type"] = "BibleVerse",
-                ["content"] = JsonSerializer.Serialize(new
+                throw new ArgumentNullException(
+                    nameof(dto));
+            }
+
+            var currentUser =
+                await _authService.GetCurrentUserAsync();
+
+            if (currentUser == null)
+            {
+                throw new InvalidOperationException(
+                    "You must be signed in to publish a Bible post.");
+            }
+
+            var userId =
+                _authService.GetCurrentFirebaseUid()
+                ?? currentUser.Email
+                ?? currentUser.Id.ToString();
+
+            var payload =
+                new Dictionary<string, object?>
                 {
-                    dto.BookId,
-                    dto.ChapterNumber,
-                    dto.VerseStart,
-                    dto.VerseEnd
-                })
-            };
+                    ["user_id"] = userId,
+                    ["post_type"] = "BibleVerse",
+                    ["content"] =
+                        JsonSerializer.Serialize(
+                            new
+                            {
+                                dto.BookId,
+                                dto.ChapterNumber,
+                                dto.VerseStart,
+                                dto.VerseEnd
+                            })
+                };
 
             try
             {
-                var document = await _appwriteService.Databases.CreateDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: BiblePostsCollectionId,
-                    documentId: Guid.NewGuid().ToString("N"),
-                    data: payload,
-                    permissions: null);
+                var document =
+                    await _appwriteService.Databases.CreateDocument(
+                        databaseId: AppwriteConfig.DatabaseId,
+                        collectionId: BiblePostsCollectionId,
+                        documentId:
+                            Guid.NewGuid().ToString("N"),
+                        data: payload,
+                        permissions: null);
 
                 return MapBibleDocument(document);
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to create Bible post.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BIBLE] Create failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to create Bible post.",
+                    ex);
             }
         }
 
-        public async Task<List<BiblePostDto>> GetMyBiblePostsAsync()
-        {
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser == null)
-                return new List<BiblePostDto>();
+        // ============================================================
+        // GET MY BIBLE POSTS
+        // ============================================================
 
-            var userId = _authService.GetCurrentFirebaseUid() ?? currentUser.Email ?? currentUser.Id.ToString();
+        public async Task<List<BiblePostDto>>
+            GetMyBiblePostsAsync()
+        {
+            var currentUser =
+                await _authService.GetCurrentUserAsync();
+
+            if (currentUser == null)
+            {
+                return new List<BiblePostDto>();
+            }
+
+            var userId =
+                _authService.GetCurrentFirebaseUid()
+                ?? currentUser.Email
+                ?? currentUser.Id.ToString();
 
             try
             {
-                var result = await _appwriteService.Databases.ListDocuments(
-                    AppwriteConfig.DatabaseId,
-                    BiblePostsCollectionId,
-                    new List<string>
-                    {
-                        global::Appwrite.Query.Equal("user_id", userId),
-                        global::Appwrite.Query.OrderDesc("$createdAt")
-                    },
-                    null,
-                    null,
-                    50);
+                var result =
+                    await _appwriteService.Databases.ListDocuments(
+                        AppwriteConfig.DatabaseId,
+                        BiblePostsCollectionId,
+                        new List<string>
+                        {
+                            global::Appwrite.Query.Equal(
+                                "user_id",
+                                userId),
 
-                return result.Documents.Select(MapBibleDocument).Where(x => x != null).Cast<BiblePostDto>().ToList();
+                            global::Appwrite.Query.OrderDesc(
+                                "$createdAt")
+                        },
+                        null,
+                        null,
+                        50);
+
+                return result.Documents
+                    .Select(MapBibleDocument)
+                    .Where(x => x != null)
+                    .Cast<BiblePostDto>()
+                    .ToList();
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to load your Bible posts.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BIBLE] Load mine failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to load your Bible posts.",
+                    ex);
             }
         }
 
-        public async Task<bool> DeleteBiblePostAsync(Guid id)
+        // ============================================================
+        // DELETE BIBLE POST
+        // ============================================================
+
+        public async Task<bool>
+            DeleteBiblePostAsync(Guid id)
         {
             try
             {
@@ -525,144 +1270,407 @@ namespace CCT_USCF.Services
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Unable to delete Bible post.", ex);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BIBLE] Delete failed: {ex}");
+
+                throw new InvalidOperationException(
+                    "Unable to delete Bible post.",
+                    ex);
             }
         }
 
-        private static CommunityMessage MapCommunityDocument(global::Appwrite.Models.Document document)
+        // ============================================================
+        // MAP COMMUNITY MESSAGE
+        // ============================================================
+
+        private static CommunityMessage
+            MapCommunityDocument(
+                global::Appwrite.Models.Document document)
         {
-            var data = document.Data ?? new Dictionary<string, object?>();
-            var createdAt = TryGetDateTime(data, "created_at", document.CreatedAt);
+            var data =
+                document.Data
+                ?? new Dictionary<string, object?>();
+
+            var createdAt =
+                TryGetDateTime(
+                    data,
+                    "created_at",
+                    document.CreatedAt);
+
+            var senderUid =
+                TryGetString(
+                    data,
+                    "sender_id",
+                    TryGetString(
+                        data,
+                        "sender_uid",
+                        string.Empty));
+
+            var communityId =
+                TryGetString(
+                    data,
+                    "group_id",
+                    TryGetString(
+                        data,
+                        "community_id",
+                        string.Empty));
 
             return new CommunityMessage
             {
                 Id = document.Id,
-                MessageId = TryGetString(data, "message_id", document.Id),
-                SenderUid = TryGetString(data, "sender_uid", string.Empty),
-                SenderName = TryGetString(data, "sender_name", "Community member"),
-                Content = TryGetString(data, "content", string.Empty),
-                CommunityId = TryGetString(data, "community_id", string.Empty),
-                BranchId = TryGetString(data, "branch_id", null),
-                RegionId = TryGetString(data, "region_id", null),
-                DistrictId = TryGetString(data, "district_id", null),
-                MessageType = TryGetString(data, "message_type", "text"),
+
+                MessageId =
+                    TryGetString(
+                        data,
+                        "message_id",
+                        document.Id),
+
+                SenderUid = senderUid,
+
+                SenderName =
+                    TryGetString(
+                        data,
+                        "sender_name",
+                        "Community member"),
+
+                Content =
+                    TryGetString(
+                        data,
+                        "content",
+                        string.Empty),
+
+                CommunityId = communityId,
+
+                BranchId =
+                    TryGetString(
+                        data,
+                        "branch_id",
+                        null),
+
+                RegionId =
+                    TryGetString(
+                        data,
+                        "region_id",
+                        null),
+
+                DistrictId =
+                    TryGetString(
+                        data,
+                        "district_id",
+                        null),
+
+                MessageType =
+                    TryGetString(
+                        data,
+                        "message_type",
+                        "text"),
+
                 CreatedAt = createdAt,
-                UpdatedAt = TryGetNullableDateTime(data, "$updatedAt")
+
+                UpdatedAt =
+                    TryGetNullableDateTime(
+                        data,
+                        "$updatedAt")
             };
         }
 
-        private static PrayerRequestDto MapPrayerDocument(global::Appwrite.Models.Document document)
+        // ============================================================
+        // MAP PRAYER DOCUMENT
+        // ============================================================
+
+        private static PrayerRequestDto
+            MapPrayerDocument(
+                global::Appwrite.Models.Document document)
         {
-            var data = document.Data ?? new Dictionary<string, object?>();
-            var content = TryGetString(data, "content", string.Empty);
-            var title = string.Empty;
-            var description = string.Empty;
+            var data =
+                document.Data
+                ?? new Dictionary<string, object?>();
+
+            var content =
+                TryGetString(
+                    data,
+                    "content",
+                    string.Empty);
+
+            var title =
+                string.Empty;
+
+            var description =
+                string.Empty;
 
             if (!string.IsNullOrWhiteSpace(content))
             {
-                var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                var lines =
+                    content.Split(
+                        new[]
+                        {
+                            "\r\n",
+                            "\n"
+                        },
+                        StringSplitOptions.RemoveEmptyEntries);
+
                 if (lines.Length > 0)
                 {
-                    title = lines[0].Trim();
-                    description = string.Join(Environment.NewLine, lines.Skip(1)).Trim();
+                    title =
+                        lines[0].Trim();
+
+                    description =
+                        string.Join(
+                            Environment.NewLine,
+                            lines.Skip(1)).Trim();
                 }
                 else
                 {
-                    title = content.Trim();
+                    title =
+                        content.Trim();
                 }
             }
 
             return new PrayerRequestDto
             {
-                Id = Guid.TryParse(document.Id, out var id) ? id : Guid.NewGuid(),
-                UserId = Guid.TryParse(TryGetString(data, "user_id", string.Empty), out var userId) ? userId : Guid.Empty,
+                Id =
+                    Guid.TryParse(
+                        document.Id,
+                        out var id)
+                        ? id
+                        : Guid.NewGuid(),
+
+                UserId =
+                    Guid.TryParse(
+                        TryGetString(
+                            data,
+                            "user_id",
+                            string.Empty),
+                        out var userId)
+                        ? userId
+                        : Guid.Empty,
+
                 Title = title,
+
                 Description = description,
-                Status = TryGetString(data, "status", "Open"),
-                CreatedAtUtc = TryGetDateTime(data, "$createdAt", document.CreatedAt),
-                UpdatedAtUtc = TryGetDateTime(data, "$updatedAt", document.CreatedAt),
+
+                Status =
+                    TryGetString(
+                        data,
+                        "status",
+                        "Open"),
+
+                CreatedAtUtc =
+                    TryGetDateTime(
+                        data,
+                        "$createdAt",
+                        document.CreatedAt),
+
+                UpdatedAtUtc =
+                    TryGetDateTime(
+                        data,
+                        "$updatedAt",
+                        document.CreatedAt),
+
                 IsDeleted = false
             };
         }
 
-        private static BiblePostDto? MapBibleDocument(global::Appwrite.Models.Document document)
+        // ============================================================
+        // MAP BIBLE DOCUMENT
+        // ============================================================
+
+        private static BiblePostDto?
+            MapBibleDocument(
+                global::Appwrite.Models.Document document)
         {
-            var data = document.Data ?? new Dictionary<string, object?>();
-            var content = TryGetString(data, "content", string.Empty);
-            var payload = new BiblePostPayload();
+            var data =
+                document.Data
+                ?? new Dictionary<string, object?>();
+
+            var content =
+                TryGetString(
+                    data,
+                    "content",
+                    string.Empty);
+
+            var payload =
+                new BiblePostPayload();
 
             if (!string.IsNullOrWhiteSpace(content))
             {
                 try
                 {
-                    payload = JsonSerializer.Deserialize<BiblePostPayload>(content) ?? payload;
+                    payload =
+                        JsonSerializer.Deserialize<BiblePostPayload>(
+                            content)
+                        ?? payload;
                 }
                 catch
                 {
-                    payload = new BiblePostPayload();
+                    payload =
+                        new BiblePostPayload();
                 }
             }
 
             return new BiblePostDto
             {
-                Id = Guid.TryParse(document.Id, out var id) ? id : Guid.NewGuid(),
-                UserId = Guid.TryParse(TryGetString(data, "user_id", string.Empty), out var userId) ? userId : Guid.Empty,
-                PostType = TryGetString(data, "post_type", "BibleVerse"),
-                BookId = payload.BookId,
-                ChapterNumber = payload.ChapterNumber,
-                VerseStart = payload.VerseStart,
-                VerseEnd = payload.VerseEnd,
-                CreatedAtUtc = TryGetDateTime(data, "$createdAt", document.CreatedAt)
+                Id =
+                    Guid.TryParse(
+                        document.Id,
+                        out var id)
+                        ? id
+                        : Guid.NewGuid(),
+
+                UserId =
+                    Guid.TryParse(
+                        TryGetString(
+                            data,
+                            "user_id",
+                            string.Empty),
+                        out var userId)
+                        ? userId
+                        : Guid.Empty,
+
+                PostType =
+                    TryGetString(
+                        data,
+                        "post_type",
+                        "BibleVerse"),
+
+                BookId =
+                    payload.BookId,
+
+                ChapterNumber =
+                    payload.ChapterNumber,
+
+                VerseStart =
+                    payload.VerseStart,
+
+                VerseEnd =
+                    payload.VerseEnd,
+
+                CreatedAtUtc =
+                    TryGetDateTime(
+                        data,
+                        "$createdAt",
+                        document.CreatedAt)
             };
         }
 
-        private static string? TryGetString(Dictionary<string, object?> data, string key, string? fallback)
+        // ============================================================
+        // STRING HELPER
+        // ============================================================
+
+        private static string?
+            TryGetString(
+                Dictionary<string, object?> data,
+                string key,
+                string? fallback)
         {
-            if (data.TryGetValue(key, out var value) && value is not null)
+            if (data.TryGetValue(
+                    key,
+                    out var value) &&
+                value is not null)
+            {
                 return Convert.ToString(value);
+            }
 
             return fallback;
         }
 
-        private static DateTime TryGetDateTime(Dictionary<string, object?> data, string key, string fallback)
+        // ============================================================
+        // DATE HELPER
+        // ============================================================
+
+        private static DateTime
+            TryGetDateTime(
+                Dictionary<string, object?> data,
+                string key,
+                string fallback)
         {
-            if (data.TryGetValue(key, out var value) && value is not null)
+            if (data.TryGetValue(
+                    key,
+                    out var value) &&
+                value is not null)
             {
-                return DateTime.TryParse(Convert.ToString(value), out var dt)
+                return DateTime.TryParse(
+                    Convert.ToString(value),
+                    out var dt)
                     ? dt
-                    : DateTime.TryParse(fallback, out var parsedFallback)
-                        ? parsedFallback
+                    : DateTime.TryParse(
+                        fallback,
+                        out var fallbackDate)
+                        ? fallbackDate
                         : DateTime.UtcNow;
             }
 
-            return DateTime.TryParse(fallback, out var fallbackParsed)
-                ? fallbackParsed
+            return DateTime.TryParse(
+                fallback,
+                out var parsedFallback)
+                ? parsedFallback
                 : DateTime.UtcNow;
         }
 
-        private static DateTime? TryGetNullableDateTime(Dictionary<string, object?> data, string key)
+        // ============================================================
+        // NULLABLE DATE HELPER
+        // ============================================================
+
+        private static DateTime?
+            TryGetNullableDateTime(
+                Dictionary<string, object?> data,
+                string key)
         {
-            if (data.TryGetValue(key, out var value) && value is not null)
+            if (data.TryGetValue(
+                    key,
+                    out var value) &&
+                value is not null)
             {
-                return DateTime.TryParse(Convert.ToString(value), out var dt) ? dt : null;
+                return DateTime.TryParse(
+                    Convert.ToString(value),
+                    out var dt)
+                    ? dt
+                    : null;
             }
 
             return null;
         }
 
-        private static string BuildPrayerContent(string title, string description)
+        // ============================================================
+        // PRAYER CONTENT
+        // ============================================================
+
+        private static string
+            BuildPrayerContent(
+                string title,
+                string description)
         {
-            var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(title)) parts.Add(title.Trim());
-            if (!string.IsNullOrWhiteSpace(description)) parts.Add(description.Trim());
-            return string.Join(Environment.NewLine, parts);
+            var parts =
+                new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                parts.Add(title.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                parts.Add(description.Trim());
+            }
+
+            return string.Join(
+                Environment.NewLine,
+                parts);
         }
+
+        // ============================================================
+        // BIBLE POST PAYLOAD
+        // ============================================================
 
         private sealed class BiblePostPayload
         {
-            public string BookId { get; set; } = string.Empty;
+            public string BookId { get; set; } =
+                string.Empty;
+
             public int ChapterNumber { get; set; }
+
             public int VerseStart { get; set; }
+
             public int VerseEnd { get; set; }
         }
     }
