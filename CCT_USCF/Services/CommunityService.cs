@@ -486,22 +486,38 @@ namespace CCT_USCF.Services
 
                 return MapMessageDocument(updated);
             }
-            catch (UnauthorizedAccessException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[APPWRITE_MESSAGES] Mark read failed: {ex}");
+                       catch (UnauthorizedAccessException)
+                       {
+                           throw;
+                       }
+                       catch (Exception ex)
+                       {
+                           System.Diagnostics.Debug.WriteLine(
+                               "========== APPWRITE COMMUNITY MESSAGE ERROR ==========");
 
-                throw new InvalidOperationException(
-                    "Unable to mark message as read.",
-                    ex);
-            }
-        }
+                           System.Diagnostics.Debug.WriteLine(
+                               $"Exception Type: {ex.GetType().FullName}");
 
-        // ============================================================
+                           System.Diagnostics.Debug.WriteLine(
+                               $"Message: {ex.Message}");
+
+                           System.Diagnostics.Debug.WriteLine(
+                               $"Inner Exception: {ex.InnerException?.Message}");
+
+                           System.Diagnostics.Debug.WriteLine(
+                               $"Full Exception: {ex}");
+
+                           System.Diagnostics.Debug.WriteLine(
+                               "======================================================");
+
+                           // IMPORTANT:
+                           // Do NOT replace/wrap the original exception.
+                           // Let BranchChatPage receive the real Appwrite exception.
+                           throw;
+                       }
+                   }
+
+                   // ============================================================
         // DELETE PRIVATE MESSAGE
         // ============================================================
 
