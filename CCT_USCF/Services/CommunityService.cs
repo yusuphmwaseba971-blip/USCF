@@ -1,3 +1,4 @@
+csharp
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -9,10 +10,17 @@ namespace CCT_USCF.Services
 {
     public class CommunityService
     {
-        private const string MessagesCollectionId = AppwriteService.MessagesCollectionId;
-        private const string CommunityMessagesCollectionId = MessagesCollectionId;
-        private const string PrayerRequestsCollectionId = "cct_prayers";
-        private const string BiblePostsCollectionId = "cct_posts";
+        private const string MessagesCollectionId =
+            AppwriteService.MessagesCollectionId;
+
+        private const string CommunityMessagesCollectionId =
+            MessagesCollectionId;
+
+        private const string PrayerRequestsCollectionId =
+            "cct_prayers";
+
+        private const string BiblePostsCollectionId =
+            "cct_posts";
 
         private readonly AuthService _authService;
         private readonly AppwriteService _appwriteService;
@@ -53,6 +61,7 @@ namespace CCT_USCF.Services
         // PRIVATE MESSAGE
         // ============================================================
 
+        [Obsolete]
         public async Task<Message> SendMessageAsync(
             string? receiverId,
             string content,
@@ -60,7 +69,8 @@ namespace CCT_USCF.Services
             string messageType = "text",
             string status = "sent")
         {
-            var trimmed = content?.Trim() ?? string.Empty;
+            var trimmed =
+                content?.Trim() ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(trimmed))
             {
@@ -69,7 +79,8 @@ namespace CCT_USCF.Services
                     nameof(content));
             }
 
-            var firebaseUid = _authService.GetCurrentFirebaseUid();
+            var firebaseUid =
+                _authService.GetCurrentFirebaseUid();
 
             if (string.IsNullOrWhiteSpace(firebaseUid))
             {
@@ -87,26 +98,30 @@ namespace CCT_USCF.Services
                     ? null
                     : groupId.Trim();
 
-            var messageId = Guid.NewGuid().ToString("N");
+            var messageId =
+                Guid.NewGuid().ToString("N");
 
-            var payload = new Dictionary<string, object?>
-            {
-                ["sender_id"] = firebaseUid,
-                ["content"] = trimmed,
-                ["created_at"] = DateTime.UtcNow.ToString("O"),
-                ["message_type"] =
-                    string.IsNullOrWhiteSpace(messageType)
-                        ? "text"
-                        : messageType,
-                ["status"] =
-                    string.IsNullOrWhiteSpace(status)
-                        ? "sent"
-                        : status
-            };
+            var payload =
+                new Dictionary<string, object?>
+                {
+                    ["sender_id"] = firebaseUid,
+                    ["content"] = trimmed,
+                    ["created_at"] =
+                        DateTime.UtcNow.ToString("O"),
+                    ["message_type"] =
+                        string.IsNullOrWhiteSpace(messageType)
+                            ? "text"
+                            : messageType,
+                    ["status"] =
+                        string.IsNullOrWhiteSpace(status)
+                            ? "sent"
+                            : status
+                };
 
             if (!string.IsNullOrWhiteSpace(normalizedReceiverId))
             {
-                payload["receiver_id"] = normalizedReceiverId;
+                payload["receiver_id"] =
+                    normalizedReceiverId;
 
                 payload["conversation_id"] =
                     BuildConversationId(
@@ -116,7 +131,8 @@ namespace CCT_USCF.Services
 
             if (!string.IsNullOrWhiteSpace(normalizedGroupId))
             {
-                payload["group_id"] = normalizedGroupId;
+                payload["group_id"] =
+                    normalizedGroupId;
             }
 
             var permissions =
@@ -184,6 +200,7 @@ namespace CCT_USCF.Services
         // LOAD PRIVATE CONVERSATION
         // ============================================================
 
+        [Obsolete]
         public async Task<List<Message>> GetConversationMessagesAsync(
             string otherUserId,
             int limit = 100)
@@ -215,18 +232,19 @@ namespace CCT_USCF.Services
             var safeLimit =
                 Math.Clamp(limit, 1, 100);
 
-            var queries = new List<string>
-            {
-                global::Appwrite.Query.Equal(
-                    "conversation_id",
-                    conversationId),
+            var queries =
+                new List<string>
+                {
+                    global::Appwrite.Query.Equal(
+                        "conversation_id",
+                        conversationId),
 
-                global::Appwrite.Query.OrderAsc(
-                    "created_at"),
+                    global::Appwrite.Query.OrderAsc(
+                        "created_at"),
 
-                global::Appwrite.Query.Limit(
-                    safeLimit)
-            };
+                    global::Appwrite.Query.Limit(
+                        safeLimit)
+                };
 
             try
             {
@@ -263,16 +281,21 @@ namespace CCT_USCF.Services
             string groupId,
             int limit = 100)
         {
-            var messages = await GetCommunityMessagesAsync(
-                communityId: groupId,
-                limit: limit,
-                organizationalLevel: "Branch",
-                branchId: groupId);
+            var messages =
+                await GetCommunityMessagesAsync(
+                    communityId: groupId,
+                    limit: limit,
+                    organizationalLevel: "Branch",
+                    branchId: groupId);
 
             return messages
                 .OrderBy(message => message.CreatedAt)
                 .ToList();
         }
+
+        // ============================================================
+        // AUTHORIZED COMMUNITY API
+        // ============================================================
 
         private async Task<T> SendAuthorizedCommunityApiAsync<T>(
             HttpMethod method,
@@ -283,10 +306,14 @@ namespace CCT_USCF.Services
                 await _authService.GetCurrentFirebaseIdTokenAsync();
 
             using var request =
-                new HttpRequestMessage(method, requestUri);
+                new HttpRequestMessage(
+                    method,
+                    requestUri);
 
             request.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", firebaseIdToken);
+                new AuthenticationHeaderValue(
+                    "Bearer",
+                    firebaseIdToken);
 
             if (body != null)
             {
@@ -297,8 +324,10 @@ namespace CCT_USCF.Services
             using var response =
                 await _httpClient.SendAsync(request);
 
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
-                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            if (response.StatusCode ==
+                    System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode ==
+                    System.Net.HttpStatusCode.Forbidden)
             {
                 throw new UnauthorizedAccessException(
                     "You are not authorized for this community group.");
@@ -310,38 +339,58 @@ namespace CCT_USCF.Services
                     await response.Content.ReadAsStringAsync();
 
                 throw new InvalidOperationException(
-                    $"Community API request failed with status {(int)response.StatusCode}: {details}");
+                    $"Community API request failed with status " +
+                    $"{(int)response.StatusCode}: {details}");
             }
 
-            var rawJson = await response.Content.ReadAsStringAsync();
+            var rawJson =
+                await response.Content.ReadAsStringAsync();
+
             if (string.IsNullOrWhiteSpace(rawJson))
             {
                 throw new InvalidOperationException(
                     "Community API returned an empty response.");
             }
 
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
+            var options =
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
 
             if (typeof(T) == typeof(CommunityMessage))
             {
-                var message = DeserializeCommunityMessage(rawJson, options);
+                var message =
+                    DeserializeCommunityMessage(
+                        rawJson,
+                        options);
+
                 return (T)(object)message;
             }
 
             if (typeof(T) == typeof(List<CommunityMessage>))
             {
-                var messages = DeserializeCommunityMessages(rawJson, options);
+                var messages =
+                    DeserializeCommunityMessages(
+                        rawJson,
+                        options);
+
                 return (T)(object)messages;
             }
 
-            var result = JsonSerializer.Deserialize<T>(rawJson, options);
+            var result =
+                JsonSerializer.Deserialize<T>(
+                    rawJson,
+                    options);
+
             return result
                 ?? throw new InvalidOperationException(
                     "Community API returned an empty response.");
         }
+
+        // ============================================================
+        // DESERIALIZE COMMUNITY MESSAGE
+        // ============================================================
 
         private static CommunityMessage DeserializeCommunityMessage(
             string json,
@@ -349,27 +398,47 @@ namespace CCT_USCF.Services
         {
             try
             {
-                var root = JsonDocument.Parse(json).RootElement;
+                var root =
+                    JsonDocument.Parse(json).RootElement;
 
-                if (root.ValueKind == JsonValueKind.Object)
+                if (root.ValueKind ==
+                    JsonValueKind.Object)
                 {
-                    if (root.TryGetProperty("message", out var messageValue) &&
-                        messageValue.ValueKind != JsonValueKind.Null)
+                    if (root.TryGetProperty(
+                            "message",
+                            out var messageValue) &&
+                        messageValue.ValueKind !=
+                            JsonValueKind.Null)
                     {
-                        return JsonSerializer.Deserialize<CommunityMessage>(messageValue.GetRawText(), options)
-                            ?? throw new JsonException("Community API message payload was empty.");
+                        return
+                            JsonSerializer.Deserialize<CommunityMessage>(
+                                messageValue.GetRawText(),
+                                options)
+                            ?? throw new JsonException(
+                                "Community API message payload was empty.");
                     }
 
-                    if (root.TryGetProperty("data", out var dataValue) &&
-                        dataValue.ValueKind != JsonValueKind.Null)
+                    if (root.TryGetProperty(
+                            "data",
+                            out var dataValue) &&
+                        dataValue.ValueKind !=
+                            JsonValueKind.Null)
                     {
-                        return JsonSerializer.Deserialize<CommunityMessage>(dataValue.GetRawText(), options)
-                            ?? throw new JsonException("Community API data payload was empty.");
+                        return
+                            JsonSerializer.Deserialize<CommunityMessage>(
+                                dataValue.GetRawText(),
+                                options)
+                            ?? throw new JsonException(
+                                "Community API data payload was empty.");
                     }
                 }
 
-                return JsonSerializer.Deserialize<CommunityMessage>(json, options)
-                    ?? throw new JsonException("Community API returned an empty message payload.");
+                return
+                    JsonSerializer.Deserialize<CommunityMessage>(
+                        json,
+                        options)
+                    ?? throw new JsonException(
+                        "Community API returned an empty message payload.");
             }
             catch (JsonException)
             {
@@ -377,38 +446,65 @@ namespace CCT_USCF.Services
             }
         }
 
-        private static List<CommunityMessage> DeserializeCommunityMessages(
-            string json,
-            JsonSerializerOptions options)
+        // ============================================================
+        // DESERIALIZE COMMUNITY MESSAGES
+        // ============================================================
+
+        private static List<CommunityMessage>
+            DeserializeCommunityMessages(
+                string json,
+                JsonSerializerOptions options)
         {
             try
             {
-                var root = JsonDocument.Parse(json).RootElement;
+                var root =
+                    JsonDocument.Parse(json).RootElement;
 
-                if (root.ValueKind == JsonValueKind.Array)
+                if (root.ValueKind ==
+                    JsonValueKind.Array)
                 {
-                    return JsonSerializer.Deserialize<List<CommunityMessage>>(root.GetRawText(), options)
+                    return
+                        JsonSerializer.Deserialize<
+                            List<CommunityMessage>>(
+                                root.GetRawText(),
+                                options)
                         ?? new List<CommunityMessage>();
                 }
 
-                if (root.ValueKind == JsonValueKind.Object)
+                if (root.ValueKind ==
+                    JsonValueKind.Object)
                 {
-                    if (root.TryGetProperty("messages", out var messagesValue) &&
-                        messagesValue.ValueKind == JsonValueKind.Array)
+                    if (root.TryGetProperty(
+                            "messages",
+                            out var messagesValue) &&
+                        messagesValue.ValueKind ==
+                            JsonValueKind.Array)
                     {
-                        return JsonSerializer.Deserialize<List<CommunityMessage>>(messagesValue.GetRawText(), options)
+                        return
+                            JsonSerializer.Deserialize<
+                                List<CommunityMessage>>(
+                                    messagesValue.GetRawText(),
+                                    options)
                             ?? new List<CommunityMessage>();
                     }
 
-                    if (root.TryGetProperty("data", out var dataValue) &&
-                        dataValue.ValueKind == JsonValueKind.Array)
+                    if (root.TryGetProperty(
+                            "data",
+                            out var dataValue) &&
+                        dataValue.ValueKind ==
+                            JsonValueKind.Array)
                     {
-                        return JsonSerializer.Deserialize<List<CommunityMessage>>(dataValue.GetRawText(), options)
+                        return
+                            JsonSerializer.Deserialize<
+                                List<CommunityMessage>>(
+                                    dataValue.GetRawText(),
+                                    options)
                             ?? new List<CommunityMessage>();
                     }
                 }
 
-                throw new JsonException("Community API response did not contain a message list.");
+                throw new JsonException(
+                    "Community API response did not contain a message list.");
             }
             catch (JsonException)
             {
@@ -420,6 +516,7 @@ namespace CCT_USCF.Services
         // MARK PRIVATE MESSAGE AS READ
         // ============================================================
 
+        [Obsolete]
         public async Task<Message?> MarkMessageAsReadAsync(
             string messageId)
         {
@@ -452,17 +549,36 @@ namespace CCT_USCF.Services
                     new Dictionary<string, object?>();
 
                 var senderId =
-                    TryGetString(data, "sender_id", string.Empty);
+                    TryGetString(
+                        data,
+                        "sender_id",
+                        string.Empty);
+
                 var receiverId =
-                    TryGetString(data, "receiver_id", null);
+                    TryGetString(
+                        data,
+                        "receiver_id",
+                        null);
+
                 var groupId =
-                    TryGetString(data, "group_id", null);
+                    TryGetString(
+                        data,
+                        "group_id",
+                        null);
 
                 var isAuthorized =
-                    string.Equals(senderId, currentFirebaseUid, StringComparison.Ordinal) ||
-                    string.Equals(receiverId, currentFirebaseUid, StringComparison.Ordinal) ||
+                    string.Equals(
+                        senderId,
+                        currentFirebaseUid,
+                        StringComparison.Ordinal) ||
+                    string.Equals(
+                        receiverId,
+                        currentFirebaseUid,
+                        StringComparison.Ordinal) ||
                     (!string.IsNullOrWhiteSpace(groupId) &&
-                     await IsCurrentUserAuthorizedForGroupAsync(currentFirebaseUid, groupId));
+                     await IsCurrentUserAuthorizedForGroupAsync(
+                         currentFirebaseUid,
+                         groupId));
 
                 if (!isAuthorized)
                 {
@@ -475,52 +591,51 @@ namespace CCT_USCF.Services
                         databaseId: AppwriteService.DatabaseId,
                         collectionId: MessagesCollectionId,
                         documentId: messageId,
-                        data: new Dictionary<string, object?>
-                        {
-                            ["status"] = "read",
-                            ["read_at"] =
-                                DateTime.UtcNow.ToString("O")
-                        },
+                        data:
+                            new Dictionary<string, object?>
+                            {
+                                ["status"] = "read",
+                                ["read_at"] =
+                                    DateTime.UtcNow.ToString("O")
+                            },
                         permissions: null,
                         transactionId: null);
 
                 return MapMessageDocument(updated);
             }
-                       catch (UnauthorizedAccessException)
-                       {
-                           throw;
-                       }
-                       catch (Exception ex)
-                       {
-                           System.Diagnostics.Debug.WriteLine(
-                               "========== APPWRITE COMMUNITY MESSAGE ERROR ==========");
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "========== APPWRITE COMMUNITY MESSAGE ERROR ==========");
 
-                           System.Diagnostics.Debug.WriteLine(
-                               $"Exception Type: {ex.GetType().FullName}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"Exception Type: {ex.GetType().FullName}");
 
-                           System.Diagnostics.Debug.WriteLine(
-                               $"Message: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"Message: {ex.Message}");
 
-                           System.Diagnostics.Debug.WriteLine(
-                               $"Inner Exception: {ex.InnerException?.Message}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"Inner Exception: {ex.InnerException?.Message}");
 
-                           System.Diagnostics.Debug.WriteLine(
-                               $"Full Exception: {ex}");
+                System.Diagnostics.Debug.WriteLine(
+                    $"Full Exception: {ex}");
 
-                           System.Diagnostics.Debug.WriteLine(
-                               "======================================================");
+                System.Diagnostics.Debug.WriteLine(
+                    "======================================================");
 
-                           // IMPORTANT:
-                           // Do NOT replace/wrap the original exception.
-                           // Let BranchChatPage receive the real Appwrite exception.
-                           throw;
-                       }
-                   }
+                throw;
+            }
+        }
 
-                   // ============================================================
+        // ============================================================
         // DELETE PRIVATE MESSAGE
         // ============================================================
 
+        [Obsolete]
         public async Task<bool> DeleteMessageAsync(
             string messageId)
         {
@@ -553,9 +668,15 @@ namespace CCT_USCF.Services
                     new Dictionary<string, object?>();
 
                 var senderId =
-                    TryGetString(data, "sender_id", string.Empty);
+                    TryGetString(
+                        data,
+                        "sender_id",
+                        string.Empty);
 
-                if (!string.Equals(senderId, currentFirebaseUid, StringComparison.Ordinal))
+                if (!string.Equals(
+                        senderId,
+                        currentFirebaseUid,
+                        StringComparison.Ordinal))
                 {
                     throw new UnauthorizedAccessException(
                         "You are not authorized to delete this message.");
@@ -588,14 +709,16 @@ namespace CCT_USCF.Services
         // CREATE COMMUNITY MESSAGE
         // ============================================================
 
-        public async Task<CommunityMessage> CreateCommunityMessageAsync(
-            string communityId,
-            string content,
-            string messageType = "text",
-            string? branchId = null,
-            string? regionId = null,
-            string? districtId = null,
-            string? organizationalLevel = null)
+        [Obsolete]
+        public async Task<CommunityMessage>
+            CreateCommunityMessageAsync(
+                string communityId,
+                string content,
+                string messageType = "text",
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null,
+                string? organizationalLevel = null)
         {
             if (string.IsNullOrWhiteSpace(communityId))
             {
@@ -604,7 +727,9 @@ namespace CCT_USCF.Services
                     nameof(communityId));
             }
 
-            var trimmed = content?.Trim() ?? string.Empty;
+            var trimmed =
+                content?.Trim() ?? string.Empty;
+
             if (string.IsNullOrWhiteSpace(trimmed))
             {
                 throw new ArgumentException(
@@ -612,56 +737,122 @@ namespace CCT_USCF.Services
                     nameof(content));
             }
 
-            var firebaseUid = _authService.GetCurrentFirebaseUid();
+            var firebaseUid =
+                _authService.GetCurrentFirebaseUid();
+
             if (string.IsNullOrWhiteSpace(firebaseUid))
             {
                 throw new InvalidOperationException(
                     "The current Firebase user is not available.");
             }
 
-            var normalizedCommunityId = communityId.Trim();
-            var normalizedLevel = NormalizeCommunityLevel(organizationalLevel, branchId, districtId, regionId);
-            var groupId = ResolveCommunityMessageGroupId(
-                normalizedCommunityId,
-                normalizedLevel,
-                branchId,
-                regionId,
-                districtId);
+            var normalizedCommunityId =
+                communityId.Trim();
 
-            if (!await IsCurrentUserAuthorizedForGroupAsync(firebaseUid, groupId))
+            var normalizedLevel =
+                NormalizeCommunityLevel(
+                    organizationalLevel,
+                    branchId,
+                    districtId,
+                    regionId);
+
+            var groupId =
+                ResolveCommunityMessageGroupId(
+                    normalizedCommunityId,
+                    normalizedLevel,
+                    branchId,
+                    regionId,
+                    districtId);
+
+            if (!await IsCurrentUserAuthorizedForGroupAsync(
+                    firebaseUid,
+                    groupId))
             {
                 throw new UnauthorizedAccessException(
                     "You are not authorized for this community group.");
             }
 
-            var createdAt = DateTime.UtcNow;
-            var normalizedMessageType = string.IsNullOrWhiteSpace(messageType)
-                ? "text"
-                : messageType.Trim();
+            var createdAt =
+                DateTime.UtcNow;
 
-            var payload = new Dictionary<string, object?>
-            {
-                ["sender_id"] = firebaseUid,
-                ["receiver_id"] = null,
-                ["group_id"] = groupId,
-                ["conversation_id"] = BuildGroupConversationId(groupId),
-                ["content"] = trimmed,
-                ["created_at"] = createdAt.ToString("O"),
-                ["message_type"] = normalizedMessageType,
-                ["status"] = "sent",
-                ["read_at"] = null
-            };
+            var normalizedMessageType =
+                string.IsNullOrWhiteSpace(messageType)
+                    ? "text"
+                    : messageType.Trim();
+
+            // The same ID is used for:
+            // 1. Appwrite document ID
+            // 2. Required message_id attribute
+            var messageId =
+                Guid.NewGuid().ToString("N");
+
+            var payload =
+                new Dictionary<string, object?>
+                {
+                    ["message_id"] = messageId,
+                    ["sender_id"] = firebaseUid,
+                    ["receiver_id"] = null,
+                    ["group_id"] = groupId,
+                    ["conversation_id"] =
+                        BuildGroupConversationId(groupId),
+                    ["content"] = trimmed,
+                    ["created_at"] =
+                        createdAt.ToString("O"),
+                    ["message_type"] =
+                        normalizedMessageType,
+                    ["status"] = "sent",
+                    ["read_at"] = null
+                };
 
             try
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[APPWRITE_COMMUNITY_MESSAGE] Create start: endpoint={AppwriteService.Endpoint}, project={AppwriteService.ProjectId}, database={AppwriteService.DatabaseId}, collection={MessagesCollectionId}, communityId={normalizedCommunityId}, resolvedGroupId={groupId}, organizationalLevel={normalizedLevel}, branchId={branchId}, regionId={regionId}, districtId={districtId}, senderUid={firebaseUid}, messageType={normalizedMessageType}");
+                    "[APPWRITE_COMMUNITY_MESSAGE] Create start:");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"endpoint={AppwriteService.Endpoint}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"project={AppwriteService.ProjectId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"database={AppwriteService.DatabaseId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"collection={MessagesCollectionId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"communityId={normalizedCommunityId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"resolvedGroupId={groupId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"organizationalLevel={normalizedLevel}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"branchId={branchId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"regionId={regionId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"districtId={districtId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"senderUid={firebaseUid}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"messageId={messageId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"messageType={normalizedMessageType}");
 
                 var document =
                     await _appwriteService.Databases.CreateDocument(
                         databaseId: AppwriteService.DatabaseId,
                         collectionId: MessagesCollectionId,
-                        documentId: Guid.NewGuid().ToString("N"),
+                        documentId: messageId,
                         data: payload,
                         permissions: null);
 
@@ -681,10 +872,12 @@ namespace CCT_USCF.Services
                     ex);
             }
         }
+
         // ============================================================
         // LOAD COMMUNITY MESSAGES
         // ============================================================
 
+        [Obsolete]
         public async Task<List<CommunityMessage>>
             GetCommunityMessagesAsync(
                 string communityId,
@@ -701,15 +894,23 @@ namespace CCT_USCF.Services
                     nameof(communityId));
             }
 
-            var normalizedLevel = NormalizeCommunityLevel(organizationalLevel, branchId, districtId, regionId);
-            var groupId = ResolveCommunityMessageGroupId(
-                communityId.Trim(),
-                normalizedLevel,
-                branchId,
-                regionId,
-                districtId);
+            var normalizedLevel =
+                NormalizeCommunityLevel(
+                    organizationalLevel,
+                    branchId,
+                    districtId,
+                    regionId);
 
-            var safeLimit = Math.Clamp(limit, 1, 100);
+            var groupId =
+                ResolveCommunityMessageGroupId(
+                    communityId.Trim(),
+                    normalizedLevel,
+                    branchId,
+                    regionId,
+                    districtId);
+
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
 
             try
             {
@@ -749,6 +950,10 @@ namespace CCT_USCF.Services
             }
         }
 
+        // ============================================================
+        // RESOLVE COMMUNITY GROUP ID
+        // ============================================================
+
         private static string ResolveCommunityMessageGroupId(
             string communityId,
             string organizationalLevel,
@@ -756,20 +961,32 @@ namespace CCT_USCF.Services
             string? regionId,
             string? districtId)
         {
-            if (string.Equals(organizationalLevel, "Branch", StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(
+                    organizationalLevel,
+                    "Branch",
+                    StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(branchId))
             {
                 return branchId.Trim();
             }
 
-            if (string.Equals(organizationalLevel, "District", StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(
+                    organizationalLevel,
+                    "District",
+                    StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(districtId))
             {
                 return districtId.Trim();
             }
 
-            if ((string.Equals(organizationalLevel, "Region", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(organizationalLevel, "Regional", StringComparison.OrdinalIgnoreCase)) &&
+            if ((string.Equals(
+                     organizationalLevel,
+                     "Region",
+                     StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(
+                     organizationalLevel,
+                     "Regional",
+                     StringComparison.OrdinalIgnoreCase)) &&
                 !string.IsNullOrWhiteSpace(regionId))
             {
                 return regionId.Trim();
@@ -777,12 +994,25 @@ namespace CCT_USCF.Services
 
             return communityId.Trim();
         }
-        private static int? TryParsePositiveInt(string? value)
+
+        // ============================================================
+        // PARSE POSITIVE INTEGER
+        // ============================================================
+
+        private static int? TryParsePositiveInt(
+            string? value)
         {
-            return int.TryParse(value, out var parsed) && parsed > 0
+            return int.TryParse(
+                       value,
+                       out var parsed) &&
+                   parsed > 0
                 ? parsed
                 : null;
         }
+
+        // ============================================================
+        // NORMALIZE COMMUNITY LEVEL
+        // ============================================================
 
         private static string NormalizeCommunityLevel(
             string? organizationalLevel,
@@ -790,26 +1020,46 @@ namespace CCT_USCF.Services
             string? districtId,
             string? regionId)
         {
-            if (!string.IsNullOrWhiteSpace(organizationalLevel))
+            if (!string.IsNullOrWhiteSpace(
+                    organizationalLevel))
             {
                 return organizationalLevel.Trim() switch
                 {
-                    "Regional" => "Region",
-                    "Regional Group" => "Region",
-                    "Region" => "Region",
-                    "District Group" => "District",
-                    "District" => "District",
-                    "Branch Group" => "Branch",
-                    "Branch" => "Branch",
-                    var value => value
+                    "Regional" =>
+                        "Region",
+
+                    "Regional Group" =>
+                        "Region",
+
+                    "Region" =>
+                        "Region",
+
+                    "District Group" =>
+                        "District",
+
+                    "District" =>
+                        "District",
+
+                    "Branch Group" =>
+                        "Branch",
+
+                    "Branch" =>
+                        "Branch",
+
+                    var value =>
+                        value
                 };
             }
 
             if (!string.IsNullOrWhiteSpace(regionId))
+            {
                 return "Region";
+            }
 
             if (!string.IsNullOrWhiteSpace(districtId))
+            {
                 return "District";
+            }
 
             return "Branch";
         }
@@ -826,13 +1076,15 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
-        // CONVERSATION ID
+        // CONVERSATION IDs
         // ============================================================
 
-        private static string BuildGroupConversationId(string groupId)
+        private static string BuildGroupConversationId(
+            string groupId)
         {
             return $"branch:{groupId.Trim()}";
         }
+
         private static string BuildConversationId(
             string senderId,
             string receiverId)
@@ -853,8 +1105,14 @@ namespace CCT_USCF.Services
 
             return participants.Length == 0
                 ? string.Empty
-                : string.Join("_", participants);
+                : string.Join(
+                    "_",
+                    participants);
         }
+
+        // ============================================================
+        // GROUP AUTHORIZATION
+        // ============================================================
 
         private static bool IsCurrentUserAuthorizedForGroup(
             CCT_USCF.Models.CurrentUser currentUser,
@@ -865,7 +1123,8 @@ namespace CCT_USCF.Services
                 return false;
             }
 
-            var normalizedGroupId = groupId.Trim();
+            var normalizedGroupId =
+                groupId.Trim();
 
             if (currentUser.BranchId.HasValue &&
                 string.Equals(
@@ -897,74 +1156,103 @@ namespace CCT_USCF.Services
             return false;
         }
 
-        private async Task<bool> IsCurrentUserAuthorizedForGroupAsync(
-            string currentFirebaseUid,
-            string? groupId)
+        private async Task<bool>
+            IsCurrentUserAuthorizedForGroupAsync(
+                string currentFirebaseUid,
+                string? groupId)
         {
-            if (string.IsNullOrWhiteSpace(currentFirebaseUid) ||
+            if (string.IsNullOrWhiteSpace(
+                    currentFirebaseUid) ||
                 string.IsNullOrWhiteSpace(groupId))
             {
                 return false;
             }
 
-            var currentUser = await _authService.GetCurrentUserAsync();
+            var currentUser =
+                await _authService.GetCurrentUserAsync();
+
             if (currentUser == null)
             {
                 return false;
             }
 
-            return IsCurrentUserAuthorizedForGroup(currentUser, groupId);
+            return IsCurrentUserAuthorizedForGroup(
+                currentUser,
+                groupId);
         }
 
-        private async Task<List<string>> BuildPrivateMessagePermissionsAsync(
-            string senderUid,
-            string? receiverUid)
+        // ============================================================
+        // PRIVATE MESSAGE PERMISSIONS
+        // ============================================================
+
+        private async Task<List<string>>
+            BuildPrivateMessagePermissionsAsync(
+                string senderUid,
+                string? receiverUid)
         {
             var appwriteUserId =
                 await RequireAppwriteUserIdAsync();
 
-            var permissions = new List<string>
-            {
-                Permission.Read(Role.User(appwriteUserId)),
-                Permission.Update(Role.User(appwriteUserId)),
-                Permission.Delete(Role.User(appwriteUserId))
-            };
+            var permissions =
+                new List<string>
+                {
+                    Permission.Read(
+                        Role.User(appwriteUserId)),
 
-            if (!string.IsNullOrWhiteSpace(receiverUid))
+                    Permission.Update(
+                        Role.User(appwriteUserId)),
+
+                    Permission.Delete(
+                        Role.User(appwriteUserId))
+                };
+
+            if (!string.IsNullOrWhiteSpace(
+                    receiverUid))
             {
                 var receiverAppwriteUserId =
-                    await TryResolveAppwriteUserIdAsync(receiverUid);
+                    await TryResolveAppwriteUserIdAsync(
+                        receiverUid);
 
-                if (string.IsNullOrWhiteSpace(receiverAppwriteUserId))
+                if (string.IsNullOrWhiteSpace(
+                        receiverAppwriteUserId))
                 {
                     throw new InvalidOperationException(
                         "Appwrite document permissions cannot be created for a private message because this project does not have a valid Appwrite user/session mapping for Firebase UIDs.");
                 }
 
                 permissions.Add(
-                    Permission.Read(Role.User(receiverAppwriteUserId)));
+                    Permission.Read(
+                        Role.User(
+                            receiverAppwriteUserId)));
             }
 
             return permissions;
         }
 
-        private async Task<List<string>> BuildCommunityMessagePermissionsAsync(
-            string senderUid,
-            string groupId,
-            string? branchId = null,
-            string? regionId = null,
-            string? districtId = null)
+        // ============================================================
+        // COMMUNITY MESSAGE PERMISSIONS
+        // ============================================================
+
+        private async Task<List<string>>
+            BuildCommunityMessagePermissionsAsync(
+                string senderUid,
+                string groupId,
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null)
         {
             var appwriteUserId =
                 await RequireAppwriteUserIdAsync();
 
-            if (string.IsNullOrWhiteSpace(appwriteUserId))
+            if (string.IsNullOrWhiteSpace(
+                    appwriteUserId))
             {
                 throw new InvalidOperationException(
                     "Appwrite community message permissions require a valid Appwrite user/session identity.");
             }
 
-            if (string.IsNullOrWhiteSpace(groupId))
+            if (string.IsNullOrWhiteSpace(
+                    groupId))
             {
                 throw new InvalidOperationException(
                     "A group/community identifier is required for Appwrite document permissions.");
@@ -974,15 +1262,21 @@ namespace CCT_USCF.Services
                 "Community/group messaging requires an Appwrite team/role membership model for branch members. The current project only authenticates through Firebase and has no Appwrite team mapping configured for authorized branch members.");
         }
 
+        // ============================================================
+        // APPWRITE USER ID
+        // ============================================================
+
         private Task<string> RequireAppwriteUserIdAsync()
         {
             return Task.FromResult(
                 string.Empty);
         }
 
-        private Task<string> TryResolveAppwriteUserIdAsync(string firebaseUid)
+        private Task<string> TryResolveAppwriteUserIdAsync(
+            string firebaseUid)
         {
-            return Task.FromResult(string.Empty);
+            return Task.FromResult(
+                string.Empty);
         }
 
         // ============================================================
@@ -993,12 +1287,13 @@ namespace CCT_USCF.Services
             global::Appwrite.Models.Document document)
         {
             var data =
-                document.Data
-                ?? new Dictionary<string, object?>();
+                document.Data ??
+                new Dictionary<string, object?>();
 
             return new Message
             {
-                Id = document.Id,
+                Id =
+                    document.Id,
 
                 SenderId =
                     TryGetString(
@@ -1059,6 +1354,7 @@ namespace CCT_USCF.Services
         // CREATE PRAYER REQUEST
         // ============================================================
 
+        [Obsolete]
         public async Task<PrayerRequestDto?>
             CreatePrayerRequestAsync(
                 string title,
@@ -1129,6 +1425,7 @@ namespace CCT_USCF.Services
         // GET ALL PRAYER REQUESTS
         // ============================================================
 
+        [Obsolete]
         public async Task<List<PrayerRequestDto>>
             GetAllPrayerRequestsAsync()
         {
@@ -1166,6 +1463,7 @@ namespace CCT_USCF.Services
         // GET MY PRAYER REQUESTS
         // ============================================================
 
+        [Obsolete]
         public async Task<List<PrayerRequestDto>>
             GetMyPrayerRequestsAsync()
         {
@@ -1220,6 +1518,7 @@ namespace CCT_USCF.Services
         // DELETE PRAYER REQUEST
         // ============================================================
 
+        [Obsolete]
         public async Task<bool>
             DeletePrayerRequestAsync(Guid id)
         {
@@ -1247,6 +1546,7 @@ namespace CCT_USCF.Services
         // GET BIBLE POSTS
         // ============================================================
 
+        [Obsolete]
         public async Task<List<BiblePostDto>>
             GetBiblePostsAsync(int limit = 50)
         {
@@ -1296,6 +1596,7 @@ namespace CCT_USCF.Services
         // CREATE BIBLE POST
         // ============================================================
 
+        [Obsolete]
         public async Task<BiblePostDto?>
             CreateBiblePostAsync(
                 BiblePostCreateDto dto)
@@ -1320,6 +1621,9 @@ namespace CCT_USCF.Services
                 ?? currentUser.Email
                 ?? currentUser.Id.ToString();
 
+            var documentId =
+                Guid.NewGuid().ToString("N");
+
             var payload =
                 new Dictionary<string, object?>
                 {
@@ -1342,8 +1646,7 @@ namespace CCT_USCF.Services
                     await _appwriteService.Databases.CreateDocument(
                         databaseId: AppwriteConfig.DatabaseId,
                         collectionId: BiblePostsCollectionId,
-                        documentId:
-                            Guid.NewGuid().ToString("N"),
+                        documentId: documentId,
                         data: payload,
                         permissions: null);
 
@@ -1364,6 +1667,7 @@ namespace CCT_USCF.Services
         // GET MY BIBLE POSTS
         // ============================================================
 
+        [Obsolete]
         public async Task<List<BiblePostDto>>
             GetMyBiblePostsAsync()
         {
@@ -1420,6 +1724,7 @@ namespace CCT_USCF.Services
         // DELETE BIBLE POST
         // ============================================================
 
+        [Obsolete]
         public async Task<bool>
             DeleteBiblePostAsync(Guid id)
         {
@@ -1452,8 +1757,8 @@ namespace CCT_USCF.Services
                 global::Appwrite.Models.Document document)
         {
             var data =
-                document.Data
-                ?? new Dictionary<string, object?>();
+                document.Data ??
+                new Dictionary<string, object?>();
 
             var createdAt =
                 TryGetDateTime(
@@ -1470,8 +1775,15 @@ namespace CCT_USCF.Services
 
             return new CommunityMessage
             {
-                Id = document.Id,
-                MessageId = document.Id,
+                Id =
+                    document.Id,
+
+                MessageId =
+                    TryGetString(
+                        data,
+                        "message_id",
+                        document.Id)
+                    ?? document.Id,
 
                 SenderUid =
                     TryGetString(
@@ -1486,7 +1798,8 @@ namespace CCT_USCF.Services
                         "receiver_id",
                         null),
 
-                GroupId = groupId,
+                GroupId =
+                    groupId,
 
                 ConversationId =
                     TryGetString(
@@ -1509,8 +1822,11 @@ namespace CCT_USCF.Services
                         string.Empty)
                     ?? string.Empty,
 
-                CommunityId = groupId,
-                BranchId = groupId,
+                CommunityId =
+                    groupId,
+
+                BranchId =
+                    groupId,
 
                 RegionId =
                     TryGetString(
@@ -1538,7 +1854,8 @@ namespace CCT_USCF.Services
                         "sent")
                     ?? "sent",
 
-                CreatedAt = createdAt,
+                CreatedAt =
+                    createdAt,
 
                 UpdatedAt =
                     TryGetNullableDateTime(
@@ -1561,8 +1878,8 @@ namespace CCT_USCF.Services
                 global::Appwrite.Models.Document document)
         {
             var data =
-                document.Data
-                ?? new Dictionary<string, object?>();
+                document.Data ??
+                new Dictionary<string, object?>();
 
             var content =
                 TryGetString(
@@ -1595,7 +1912,8 @@ namespace CCT_USCF.Services
                     description =
                         string.Join(
                             Environment.NewLine,
-                            lines.Skip(1)).Trim();
+                            lines.Skip(1))
+                        .Trim();
                 }
                 else
                 {
@@ -1623,9 +1941,11 @@ namespace CCT_USCF.Services
                         ? userId
                         : Guid.Empty,
 
-                Title = title,
+                Title =
+                    title,
 
-                Description = description,
+                Description =
+                    description,
 
                 Status =
                     TryGetString(
@@ -1645,7 +1965,8 @@ namespace CCT_USCF.Services
                         "$updatedAt",
                         document.CreatedAt),
 
-                IsDeleted = false
+                IsDeleted =
+                    false
             };
         }
 
@@ -1658,8 +1979,8 @@ namespace CCT_USCF.Services
                 global::Appwrite.Models.Document document)
         {
             var data =
-                document.Data
-                ?? new Dictionary<string, object?>();
+                document.Data ??
+                new Dictionary<string, object?>();
 
             var content =
                 TryGetString(
@@ -1735,11 +2056,10 @@ namespace CCT_USCF.Services
         // STRING HELPER
         // ============================================================
 
-        private static string?
-            TryGetString(
-                Dictionary<string, object?> data,
-                string key,
-                string? fallback)
+        private static string? TryGetString(
+            Dictionary<string, object?> data,
+            string key,
+            string? fallback)
         {
             if (data.TryGetValue(
                     key,
@@ -1756,11 +2076,10 @@ namespace CCT_USCF.Services
         // DATE HELPER
         // ============================================================
 
-        private static DateTime
-            TryGetDateTime(
-                Dictionary<string, object?> data,
-                string key,
-                string fallback)
+        private static DateTime TryGetDateTime(
+            Dictionary<string, object?> data,
+            string key,
+            string fallback)
         {
             if (data.TryGetValue(
                     key,
@@ -1768,19 +2087,19 @@ namespace CCT_USCF.Services
                 value is not null)
             {
                 return DateTime.TryParse(
-                    Convert.ToString(value),
-                    out var dt)
+                           Convert.ToString(value),
+                           out var dt)
                     ? dt
                     : DateTime.TryParse(
-                        fallback,
-                        out var fallbackDate)
+                          fallback,
+                          out var fallbackDate)
                         ? fallbackDate
                         : DateTime.UtcNow;
             }
 
             return DateTime.TryParse(
-                fallback,
-                out var parsedFallback)
+                       fallback,
+                       out var parsedFallback)
                 ? parsedFallback
                 : DateTime.UtcNow;
         }
@@ -1813,22 +2132,23 @@ namespace CCT_USCF.Services
         // PRAYER CONTENT
         // ============================================================
 
-        private static string
-            BuildPrayerContent(
-                string title,
-                string description)
+        private static string BuildPrayerContent(
+            string title,
+            string description)
         {
             var parts =
                 new List<string>();
 
             if (!string.IsNullOrWhiteSpace(title))
             {
-                parts.Add(title.Trim());
+                parts.Add(
+                    title.Trim());
             }
 
             if (!string.IsNullOrWhiteSpace(description))
             {
-                parts.Add(description.Trim());
+                parts.Add(
+                    description.Trim());
             }
 
             return string.Join(
