@@ -1,3 +1,4 @@
+
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -30,13 +31,16 @@ namespace CCT_USCF.Services
             AppwriteService appwriteService,
             HttpClient httpClient)
         {
-            _authService = authService
+            _authService =
+                authService
                 ?? throw new ArgumentNullException(nameof(authService));
 
-            _appwriteService = appwriteService
+            _appwriteService =
+                appwriteService
                 ?? throw new ArgumentNullException(nameof(appwriteService));
 
-            _httpClient = httpClient
+            _httpClient =
+                httpClient
                 ?? throw new ArgumentNullException(nameof(httpClient));
         }
 
@@ -46,14 +50,16 @@ namespace CCT_USCF.Services
 
         public string GetCommunityMessagesChannel()
         {
-            return $"databases.{AppwriteService.DatabaseId}" +
-                   $".collections.{CommunityMessagesCollectionId}.documents";
+            return
+                $"databases.{AppwriteService.DatabaseId}" +
+                $".collections.{CommunityMessagesCollectionId}.documents";
         }
 
         public string GetMessagesChannel()
         {
-            return $"databases.{AppwriteService.DatabaseId}" +
-                   $".collections.{MessagesCollectionId}.documents";
+            return
+                $"databases.{AppwriteService.DatabaseId}" +
+                $".collections.{MessagesCollectionId}.documents";
         }
 
         // ============================================================
@@ -103,18 +109,24 @@ namespace CCT_USCF.Services
             var payload =
                 new Dictionary<string, object?>
                 {
-                    ["sender_id"] = firebaseUid,
-                    ["content"] = trimmed,
+                    ["sender_id"] =
+                        firebaseUid,
+
+                    ["content"] =
+                        trimmed,
+
                     ["created_at"] =
                         DateTime.UtcNow.ToString("O"),
+
                     ["message_type"] =
                         string.IsNullOrWhiteSpace(messageType)
                             ? "text"
-                            : messageType,
+                            : messageType.Trim(),
+
                     ["status"] =
                         string.IsNullOrWhiteSpace(status)
                             ? "sent"
-                            : status
+                            : status.Trim()
                 };
 
             if (!string.IsNullOrWhiteSpace(normalizedReceiverId))
@@ -167,11 +179,20 @@ namespace CCT_USCF.Services
 
                 var document =
                     await _appwriteService.Databases.CreateDocument(
-                        databaseId: AppwriteService.DatabaseId,
-                        collectionId: MessagesCollectionId,
-                        documentId: messageId,
-                        data: payload,
-                        permissions: permissions);
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            MessagesCollectionId,
+
+                        documentId:
+                            messageId,
+
+                        data:
+                            payload,
+
+                        permissions:
+                            permissions);
 
                 return MapMessageDocument(document);
             }
@@ -280,16 +301,426 @@ namespace CCT_USCF.Services
             string groupId,
             int limit = 100)
         {
-            var messages =
-                await GetCommunityMessagesAsync(
-                    communityId: groupId,
-                    limit: limit,
-                    organizationalLevel: "Branch",
-                    branchId: groupId);
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                throw new ArgumentException(
+                    "A group id is required.",
+                    nameof(groupId));
+            }
 
-            return messages
-                .OrderBy(message => message.CreatedAt)
-                .ToList();
+            return await GetCommunityMessagesAsync(
+                communityId: groupId.Trim(),
+                limit: limit,
+                organizationalLevel: "Branch",
+                branchId: groupId.Trim());
+        }
+
+        // ============================================================
+        // CREATE COMMUNITY MESSAGE
+        //
+        // APPWRITE FIELDS:
+        //
+        // message_id
+        // sender_uid
+        // sender_name
+        // content
+        // community_id
+        // message_type
+        // created_at
+        //
+        // Appwrite system fields:
+        // $id
+        // $createdAt
+        // $updatedAt
+        //
+        // are managed by Appwrite.
+        // ============================================================
+
+        [Obsolete]
+        public async Task<CommunityMessage>
+            CreateCommunityMessageAsync(
+                string communityId,
+                string content,
+                string messageType = "text",
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null,
+                string? organizationalLevel = null)
+        {
+            if (string.IsNullOrWhiteSpace(communityId))
+            {
+                throw new ArgumentException(
+                    "A community id is required.",
+                    nameof(communityId));
+            }
+
+            var trimmed =
+                content?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                throw new ArgumentException(
+                    "Message content is required.",
+                    nameof(content));
+            }
+
+            // --------------------------------------------------------
+            // FIREBASE UID
+            // --------------------------------------------------------
+
+            var firebaseUid =
+                _authService.GetCurrentFirebaseUid();
+
+            if (string.IsNullOrWhiteSpace(firebaseUid))
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
+
+            // --------------------------------------------------------
+            // CURRENT USER
+            // --------------------------------------------------------
+
+            var currentUser =
+                await _authService.GetCurrentUserAsync();
+
+            if (currentUser == null)
+            {
+                throw new InvalidOperationException(
+                    "The current user profile is not available.");
+            }
+
+            // --------------------------------------------------------
+            // SENDER NAME
+            // --------------------------------------------------------
+
+            var senderName =
+                currentUser.FullName?.Trim();
+
+            if (string.IsNullOrWhiteSpace(senderName))
+            {
+                senderName =
+                    "Community member";
+            }
+
+            // --------------------------------------------------------
+            // COMMUNITY ID
+            // --------------------------------------------------------
+
+            var normalizedCommunityId =
+                communityId.Trim();
+
+            // --------------------------------------------------------
+            // MESSAGE TYPE
+            // --------------------------------------------------------
+
+            var normalizedMessageType =
+                string.IsNullOrWhiteSpace(messageType)
+                    ? "text"
+                    : messageType.Trim();
+
+            // --------------------------------------------------------
+            // MESSAGE ID
+            //
+            // Same ID is used for:
+            //
+            // 1. Appwrite document ID
+            // 2. message_id
+            // --------------------------------------------------------
+
+            var messageId =
+                Guid.NewGuid().ToString("N");
+
+            // --------------------------------------------------------
+            // CREATED AT
+            // --------------------------------------------------------
+
+            var createdAt =
+                DateTime.UtcNow;
+
+            // --------------------------------------------------------
+            // EXACT APPWRITE PAYLOAD
+            //
+            // DO NOT ADD:
+            //
+            // sender_id
+            // receiver_id
+            // group_id
+            // conversation_id
+            // status
+            // read_at
+            // branch_id
+            // region_id
+            // district_id
+            //
+            // to this community message.
+            // --------------------------------------------------------
+
+            var payload =
+                new Dictionary<string, object?>
+                {
+                    ["message_id"] =
+                        messageId,
+
+                    ["sender_uid"] =
+                        firebaseUid,
+
+                    ["sender_name"] =
+                        senderName,
+
+                    ["content"] =
+                        trimmed,
+
+                    ["community_id"] =
+                        normalizedCommunityId,
+
+                    ["message_type"] =
+                        normalizedMessageType,
+
+                    ["created_at"] =
+                        createdAt.ToString("O")
+                };
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] CREATE START");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Endpoint={AppwriteService.Endpoint}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Project={AppwriteService.ProjectId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Database={AppwriteService.DatabaseId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Collection={MessagesCollectionId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"DocumentId={messageId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"message_id={messageId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"sender_uid={firebaseUid}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"sender_name={senderName}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"content={trimmed}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"community_id={normalizedCommunityId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"message_type={normalizedMessageType}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"created_at={createdAt:O}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                var document =
+                    await _appwriteService.Databases.CreateDocument(
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            MessagesCollectionId,
+
+                        documentId:
+                            messageId,
+
+                        data:
+                            payload,
+
+                        permissions:
+                            null);
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] CREATE SUCCESS");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"AppwriteDocumentId={document.Id}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                return MapCommunityDocument(document);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] CREATE FAILED");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"ExceptionType={ex.GetType().FullName}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Message={ex.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"InnerException={ex.InnerException?.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"FullException={ex}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                throw new InvalidOperationException(
+                    "Unable to send message.",
+                    ex);
+            }
+        }
+
+        // ============================================================
+        // LOAD COMMUNITY MESSAGES
+        //
+        // Searches ONLY by:
+        //
+        // community_id
+        //
+        // It does NOT use group_id.
+        // ============================================================
+
+        [Obsolete]
+        public async Task<List<CommunityMessage>>
+            GetCommunityMessagesAsync(
+                string communityId,
+                int limit = 50,
+                string? organizationalLevel = null,
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null)
+        {
+            if (string.IsNullOrWhiteSpace(communityId))
+            {
+                throw new ArgumentException(
+                    "A community id is required.",
+                    nameof(communityId));
+            }
+
+            var normalizedCommunityId =
+                communityId.Trim();
+
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] LOAD START");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Endpoint={AppwriteService.Endpoint}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Project={AppwriteService.ProjectId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Database={AppwriteService.DatabaseId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Collection={MessagesCollectionId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"community_id={normalizedCommunityId}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"limit={safeLimit}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                var queries =
+                    new List<string>
+                    {
+                        global::Appwrite.Query.Equal(
+                            "community_id",
+                            normalizedCommunityId),
+
+                        global::Appwrite.Query.OrderAsc(
+                            "created_at"),
+
+                        global::Appwrite.Query.Limit(
+                            safeLimit)
+                    };
+
+                var result =
+                    await _appwriteService.Databases.ListDocuments(
+                        AppwriteService.DatabaseId,
+                        MessagesCollectionId,
+                        queries,
+                        null,
+                        null,
+                        safeLimit);
+
+                var messages =
+                    result.Documents
+                        .Select(MapCommunityDocument)
+                        .OrderBy(
+                            message => message.CreatedAt)
+                        .ToList();
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] LOAD SUCCESS");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"MessageCount={messages.Count}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                return messages;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] LOAD FAILED");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"ExceptionType={ex.GetType().FullName}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Message={ex.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"InnerException={ex.InnerException?.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"FullException={ex}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    "================================================");
+
+                throw new InvalidOperationException(
+                    "Unable to load community messages.",
+                    ex);
+            }
         }
 
         // ============================================================
@@ -391,58 +822,52 @@ namespace CCT_USCF.Services
         // DESERIALIZE COMMUNITY MESSAGE
         // ============================================================
 
-        private static CommunityMessage DeserializeCommunityMessage(
-            string json,
-            JsonSerializerOptions options)
+        private static CommunityMessage
+            DeserializeCommunityMessage(
+                string json,
+                JsonSerializerOptions options)
         {
-            try
+            var root =
+                JsonDocument.Parse(json).RootElement;
+
+            if (root.ValueKind ==
+                JsonValueKind.Object)
             {
-                var root =
-                    JsonDocument.Parse(json).RootElement;
-
-                if (root.ValueKind ==
-                    JsonValueKind.Object)
+                if (root.TryGetProperty(
+                        "message",
+                        out var messageValue) &&
+                    messageValue.ValueKind !=
+                        JsonValueKind.Null)
                 {
-                    if (root.TryGetProperty(
-                            "message",
-                            out var messageValue) &&
-                        messageValue.ValueKind !=
-                            JsonValueKind.Null)
-                    {
-                        return
-                            JsonSerializer.Deserialize<CommunityMessage>(
-                                messageValue.GetRawText(),
-                                options)
-                            ?? throw new JsonException(
-                                "Community API message payload was empty.");
-                    }
-
-                    if (root.TryGetProperty(
-                            "data",
-                            out var dataValue) &&
-                        dataValue.ValueKind !=
-                            JsonValueKind.Null)
-                    {
-                        return
-                            JsonSerializer.Deserialize<CommunityMessage>(
-                                dataValue.GetRawText(),
-                                options)
-                            ?? throw new JsonException(
-                                "Community API data payload was empty.");
-                    }
+                    return
+                        JsonSerializer.Deserialize<CommunityMessage>(
+                            messageValue.GetRawText(),
+                            options)
+                        ?? throw new JsonException(
+                            "Community API message payload was empty.");
                 }
 
-                return
-                    JsonSerializer.Deserialize<CommunityMessage>(
-                        json,
-                        options)
-                    ?? throw new JsonException(
-                        "Community API returned an empty message payload.");
+                if (root.TryGetProperty(
+                        "data",
+                        out var dataValue) &&
+                    dataValue.ValueKind !=
+                        JsonValueKind.Null)
+                {
+                    return
+                        JsonSerializer.Deserialize<CommunityMessage>(
+                            dataValue.GetRawText(),
+                            options)
+                        ?? throw new JsonException(
+                            "Community API data payload was empty.");
+                }
             }
-            catch (JsonException)
-            {
-                throw;
-            }
+
+            return
+                JsonSerializer.Deserialize<CommunityMessage>(
+                    json,
+                    options)
+                ?? throw new JsonException(
+                    "Community API returned an empty message payload.");
         }
 
         // ============================================================
@@ -454,61 +879,54 @@ namespace CCT_USCF.Services
                 string json,
                 JsonSerializerOptions options)
         {
-            try
-            {
-                var root =
-                    JsonDocument.Parse(json).RootElement;
+            var root =
+                JsonDocument.Parse(json).RootElement;
 
-                if (root.ValueKind ==
-                    JsonValueKind.Array)
+            if (root.ValueKind ==
+                JsonValueKind.Array)
+            {
+                return
+                    JsonSerializer.Deserialize<
+                        List<CommunityMessage>>(
+                            root.GetRawText(),
+                            options)
+                    ?? new List<CommunityMessage>();
+            }
+
+            if (root.ValueKind ==
+                JsonValueKind.Object)
+            {
+                if (root.TryGetProperty(
+                        "messages",
+                        out var messagesValue) &&
+                    messagesValue.ValueKind ==
+                        JsonValueKind.Array)
                 {
                     return
                         JsonSerializer.Deserialize<
                             List<CommunityMessage>>(
-                                root.GetRawText(),
+                                messagesValue.GetRawText(),
                                 options)
                         ?? new List<CommunityMessage>();
                 }
 
-                if (root.ValueKind ==
-                    JsonValueKind.Object)
+                if (root.TryGetProperty(
+                        "data",
+                        out var dataValue) &&
+                    dataValue.ValueKind ==
+                        JsonValueKind.Array)
                 {
-                    if (root.TryGetProperty(
-                            "messages",
-                            out var messagesValue) &&
-                        messagesValue.ValueKind ==
-                            JsonValueKind.Array)
-                    {
-                        return
-                            JsonSerializer.Deserialize<
-                                List<CommunityMessage>>(
-                                    messagesValue.GetRawText(),
-                                    options)
-                            ?? new List<CommunityMessage>();
-                    }
-
-                    if (root.TryGetProperty(
-                            "data",
-                            out var dataValue) &&
-                        dataValue.ValueKind ==
-                            JsonValueKind.Array)
-                    {
-                        return
-                            JsonSerializer.Deserialize<
-                                List<CommunityMessage>>(
-                                    dataValue.GetRawText(),
-                                    options)
-                            ?? new List<CommunityMessage>();
-                    }
+                    return
+                        JsonSerializer.Deserialize<
+                            List<CommunityMessage>>(
+                                dataValue.GetRawText(),
+                                options)
+                        ?? new List<CommunityMessage>();
                 }
+            }
 
-                throw new JsonException(
-                    "Community API response did not contain a message list.");
-            }
-            catch (JsonException)
-            {
-                throw;
-            }
+            throw new JsonException(
+                "Community API response did not contain a message list.");
         }
 
         // ============================================================
@@ -539,9 +957,14 @@ namespace CCT_USCF.Services
             {
                 var document =
                     await _appwriteService.Databases.GetDocument(
-                        databaseId: AppwriteService.DatabaseId,
-                        collectionId: MessagesCollectionId,
-                        documentId: messageId);
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            MessagesCollectionId,
+
+                        documentId:
+                            messageId);
 
                 var data =
                     document.Data ??
@@ -570,10 +993,12 @@ namespace CCT_USCF.Services
                         senderId,
                         currentFirebaseUid,
                         StringComparison.Ordinal) ||
+
                     string.Equals(
                         receiverId,
                         currentFirebaseUid,
                         StringComparison.Ordinal) ||
+
                     (!string.IsNullOrWhiteSpace(groupId) &&
                      await IsCurrentUserAuthorizedForGroupAsync(
                          currentFirebaseUid,
@@ -587,18 +1012,30 @@ namespace CCT_USCF.Services
 
                 var updated =
                     await _appwriteService.Databases.UpdateDocument(
-                        databaseId: AppwriteService.DatabaseId,
-                        collectionId: MessagesCollectionId,
-                        documentId: messageId,
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            MessagesCollectionId,
+
+                        documentId:
+                            messageId,
+
                         data:
                             new Dictionary<string, object?>
                             {
-                                ["status"] = "read",
+                                ["status"] =
+                                    "read",
+
                                 ["read_at"] =
                                     DateTime.UtcNow.ToString("O")
                             },
-                        permissions: null,
-                        transactionId: null);
+
+                        permissions:
+                            null,
+
+                        transactionId:
+                            null);
 
                 return MapMessageDocument(updated);
             }
@@ -609,7 +1046,7 @@ namespace CCT_USCF.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    "========== APPWRITE COMMUNITY MESSAGE ERROR ==========");
+                    "========== APPWRITE PRIVATE MESSAGE READ ERROR ==========");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"Exception Type: {ex.GetType().FullName}");
@@ -624,7 +1061,7 @@ namespace CCT_USCF.Services
                     $"Full Exception: {ex}");
 
                 System.Diagnostics.Debug.WriteLine(
-                    "======================================================");
+                    "==========================================================");
 
                 throw;
             }
@@ -658,13 +1095,20 @@ namespace CCT_USCF.Services
             {
                 var document =
                     await _appwriteService.Databases.GetDocument(
-                        databaseId: AppwriteService.DatabaseId,
-                        collectionId: MessagesCollectionId,
-                        documentId: messageId);
+                        databaseId:
+                            AppwriteService.DatabaseId,
 
+                        collectionId:
+                            MessagesCollectionId,
+
+                        documentId:
+                            messageId);
+
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
                 var data =
                     document.Data ??
                     new Dictionary<string, object?>();
+#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
 
                 var senderId =
                     TryGetString(
@@ -682,10 +1126,17 @@ namespace CCT_USCF.Services
                 }
 
                 await _appwriteService.Databases.DeleteDocument(
-                    databaseId: AppwriteService.DatabaseId,
-                    collectionId: MessagesCollectionId,
-                    documentId: messageId,
-                    transactionId: null);
+                    databaseId:
+                        AppwriteService.DatabaseId,
+
+                    collectionId:
+                        MessagesCollectionId,
+
+                    documentId:
+                        messageId,
+
+                    transactionId:
+                        null);
 
                 return true;
             }
@@ -702,365 +1153,6 @@ namespace CCT_USCF.Services
                     "Unable to delete message.",
                     ex);
             }
-        }
-
-        // ============================================================
-        // CREATE COMMUNITY MESSAGE
-        // ============================================================
-
-        [Obsolete]
-        public async Task<CommunityMessage>
-            CreateCommunityMessageAsync(
-                string communityId,
-                string content,
-                string messageType = "text",
-                string? branchId = null,
-                string? regionId = null,
-                string? districtId = null,
-                string? organizationalLevel = null)
-        {
-            if (string.IsNullOrWhiteSpace(communityId))
-            {
-                throw new ArgumentException(
-                    "A community id is required.",
-                    nameof(communityId));
-            }
-
-            var trimmed =
-                content?.Trim() ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                throw new ArgumentException(
-                    "Message content is required.",
-                    nameof(content));
-            }
-
-            var firebaseUid =
-                _authService.GetCurrentFirebaseUid();
-
-            if (string.IsNullOrWhiteSpace(firebaseUid))
-            {
-                throw new InvalidOperationException(
-                    "The current Firebase user is not available.");
-            }
-
-            var normalizedCommunityId =
-                communityId.Trim();
-
-            var normalizedLevel =
-                NormalizeCommunityLevel(
-                    organizationalLevel,
-                    branchId,
-                    districtId,
-                    regionId);
-
-            var groupId =
-                ResolveCommunityMessageGroupId(
-                    normalizedCommunityId,
-                    normalizedLevel,
-                    branchId,
-                    regionId,
-                    districtId);
-
-            if (!await IsCurrentUserAuthorizedForGroupAsync(
-                    firebaseUid,
-                    groupId))
-            {
-                throw new UnauthorizedAccessException(
-                    "You are not authorized for this community group.");
-            }
-
-            var createdAt =
-                DateTime.UtcNow;
-
-            var normalizedMessageType =
-                string.IsNullOrWhiteSpace(messageType)
-                    ? "text"
-                    : messageType.Trim();
-
-            // The same ID is used for:
-            // 1. Appwrite document ID
-            // 2. Required message_id attribute
-            var messageId =
-                Guid.NewGuid().ToString("N");
-
-            var payload =
-                new Dictionary<string, object?>
-                {
-                    ["message_id"] = messageId,
-                    ["sender_id"] = firebaseUid,
-                    ["receiver_id"] = null,
-                    ["group_id"] = groupId,
-                    ["conversation_id"] =
-                        BuildGroupConversationId(groupId),
-                    ["content"] = trimmed,
-                    ["created_at"] =
-                        createdAt.ToString("O"),
-                    ["message_type"] =
-                        normalizedMessageType,
-                    ["status"] = "sent",
-                    ["read_at"] = null
-                };
-
-            try
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    "[APPWRITE_COMMUNITY_MESSAGE] Create start:");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"endpoint={AppwriteService.Endpoint}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"project={AppwriteService.ProjectId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"database={AppwriteService.DatabaseId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"collection={MessagesCollectionId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"communityId={normalizedCommunityId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"resolvedGroupId={groupId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"organizationalLevel={normalizedLevel}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"branchId={branchId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"regionId={regionId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"districtId={districtId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"senderUid={firebaseUid}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"messageId={messageId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"messageType={normalizedMessageType}");
-
-                var document =
-                    await _appwriteService.Databases.CreateDocument(
-                        databaseId: AppwriteService.DatabaseId,
-                        collectionId: MessagesCollectionId,
-                        documentId: messageId,
-                        data: payload,
-                        permissions: null);
-
-                return MapCommunityDocument(document);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[APPWRITE_COMMUNITY_MESSAGE] Create failed: {ex}");
-
-                throw new InvalidOperationException(
-                    "Unable to send message.",
-                    ex);
-            }
-        }
-
-        // ============================================================
-        // LOAD COMMUNITY MESSAGES
-        // ============================================================
-
-        [Obsolete]
-        public async Task<List<CommunityMessage>>
-            GetCommunityMessagesAsync(
-                string communityId,
-                int limit = 50,
-                string? organizationalLevel = null,
-                string? branchId = null,
-                string? regionId = null,
-                string? districtId = null)
-        {
-            if (string.IsNullOrWhiteSpace(communityId))
-            {
-                throw new ArgumentException(
-                    "A community id is required.",
-                    nameof(communityId));
-            }
-
-            var normalizedLevel =
-                NormalizeCommunityLevel(
-                    organizationalLevel,
-                    branchId,
-                    districtId,
-                    regionId);
-
-            var groupId =
-                ResolveCommunityMessageGroupId(
-                    communityId.Trim(),
-                    normalizedLevel,
-                    branchId,
-                    regionId,
-                    districtId);
-
-            var safeLimit =
-                Math.Clamp(limit, 1, 100);
-
-            try
-            {
-                var result =
-                    await _appwriteService.Databases.ListDocuments(
-                        AppwriteService.DatabaseId,
-                        MessagesCollectionId,
-                        new List<string>
-                        {
-                            global::Appwrite.Query.Equal(
-                                "group_id",
-                                groupId),
-
-                            global::Appwrite.Query.OrderAsc(
-                                "created_at"),
-
-                            global::Appwrite.Query.Limit(
-                                safeLimit)
-                        },
-                        null,
-                        null,
-                        safeLimit);
-
-                return result.Documents
-                    .Select(MapCommunityDocument)
-                    .OrderBy(message => message.CreatedAt)
-                    .ToList();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[APPWRITE_COMMUNITY_MESSAGE] Load failed: {ex}");
-
-                throw new InvalidOperationException(
-                    "Unable to load community messages.",
-                    ex);
-            }
-        }
-
-        // ============================================================
-        // RESOLVE COMMUNITY GROUP ID
-        // ============================================================
-
-        private static string ResolveCommunityMessageGroupId(
-            string communityId,
-            string organizationalLevel,
-            string? branchId,
-            string? regionId,
-            string? districtId)
-        {
-            if (string.Equals(
-                    organizationalLevel,
-                    "Branch",
-                    StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(branchId))
-            {
-                return branchId.Trim();
-            }
-
-            if (string.Equals(
-                    organizationalLevel,
-                    "District",
-                    StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(districtId))
-            {
-                return districtId.Trim();
-            }
-
-            if ((string.Equals(
-                     organizationalLevel,
-                     "Region",
-                     StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(
-                     organizationalLevel,
-                     "Regional",
-                     StringComparison.OrdinalIgnoreCase)) &&
-                !string.IsNullOrWhiteSpace(regionId))
-            {
-                return regionId.Trim();
-            }
-
-            return communityId.Trim();
-        }
-
-        // ============================================================
-        // PARSE POSITIVE INTEGER
-        // ============================================================
-
-        private static int? TryParsePositiveInt(
-            string? value)
-        {
-            return int.TryParse(
-                       value,
-                       out var parsed) &&
-                   parsed > 0
-                ? parsed
-                : null;
-        }
-
-        // ============================================================
-        // NORMALIZE COMMUNITY LEVEL
-        // ============================================================
-
-        private static string NormalizeCommunityLevel(
-            string? organizationalLevel,
-            string? branchId,
-            string? districtId,
-            string? regionId)
-        {
-            if (!string.IsNullOrWhiteSpace(
-                    organizationalLevel))
-            {
-                return organizationalLevel.Trim() switch
-                {
-                    "Regional" =>
-                        "Region",
-
-                    "Regional Group" =>
-                        "Region",
-
-                    "Region" =>
-                        "Region",
-
-                    "District Group" =>
-                        "District",
-
-                    "District" =>
-                        "District",
-
-                    "Branch Group" =>
-                        "Branch",
-
-                    "Branch" =>
-                        "Branch",
-
-                    var value =>
-                        value
-                };
-            }
-
-            if (!string.IsNullOrWhiteSpace(regionId))
-            {
-                return "Region";
-            }
-
-            if (!string.IsNullOrWhiteSpace(districtId))
-            {
-                return "District";
-            }
-
-            return "Branch";
         }
 
         // ============================================================
@@ -1081,7 +1173,8 @@ namespace CCT_USCF.Services
         private static string BuildGroupConversationId(
             string groupId)
         {
-            return $"branch:{groupId.Trim()}";
+            return
+                $"branch:{groupId.Trim()}";
         }
 
         private static string BuildConversationId(
@@ -1096,7 +1189,8 @@ namespace CCT_USCF.Services
                 }
                 .Where(value =>
                     !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.Ordinal)
+                .Distinct(
+                    StringComparer.Ordinal)
                 .OrderBy(
                     value => value,
                     StringComparer.Ordinal)
@@ -1205,8 +1299,7 @@ namespace CCT_USCF.Services
                         Role.User(appwriteUserId))
                 };
 
-            if (!string.IsNullOrWhiteSpace(
-                    receiverUid))
+            if (!string.IsNullOrWhiteSpace(receiverUid))
             {
                 var receiverAppwriteUserId =
                     await TryResolveAppwriteUserIdAsync(
@@ -1350,6 +1443,175 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
+        // MAP COMMUNITY MESSAGE
+        //
+        // IMPORTANT:
+        //
+        // This mapper reads ONLY the seven Community Message fields:
+        //
+        // message_id
+        // sender_uid
+        // sender_name
+        // content
+        // community_id
+        // message_type
+        // created_at
+        //
+        // Appwrite system fields are handled separately.
+        // ============================================================
+
+        private static CommunityMessage
+            MapCommunityDocument(
+                global::Appwrite.Models.Document document)
+        {
+            var data =
+                document.Data ??
+                new Dictionary<string, object?>();
+
+            // --------------------------------------------------------
+            // message_id
+            // --------------------------------------------------------
+
+            var messageId =
+                TryGetString(
+                    data,
+                    "message_id",
+                    document.Id)
+                ?? document.Id;
+
+            // --------------------------------------------------------
+            // sender_uid
+            // --------------------------------------------------------
+
+            var senderUid =
+                TryGetString(
+                    data,
+                    "sender_uid",
+                    string.Empty)
+                ?? string.Empty;
+
+            // --------------------------------------------------------
+            // sender_name
+            // --------------------------------------------------------
+
+            var senderName =
+                TryGetString(
+                    data,
+                    "sender_name",
+                    "Community member")
+                ?? "Community member";
+
+            // --------------------------------------------------------
+            // content
+            // --------------------------------------------------------
+
+            var content =
+                TryGetString(
+                    data,
+                    "content",
+                    string.Empty)
+                ?? string.Empty;
+
+            // --------------------------------------------------------
+            // community_id
+            // --------------------------------------------------------
+
+            var communityId =
+                TryGetString(
+                    data,
+                    "community_id",
+                    string.Empty)
+                ?? string.Empty;
+
+            // --------------------------------------------------------
+            // message_type
+            // --------------------------------------------------------
+
+            var messageType =
+                TryGetString(
+                    data,
+                    "message_type",
+                    "text")
+                ?? "text";
+
+            // --------------------------------------------------------
+            // created_at
+            // --------------------------------------------------------
+
+            var createdAt =
+                TryGetDateTime(
+                    data,
+                    "created_at",
+                    document.CreatedAt);
+
+            // --------------------------------------------------------
+            // RETURN COMMUNITY MESSAGE
+            // --------------------------------------------------------
+
+            return new CommunityMessage
+            {
+                Id =
+                    document.Id,
+
+                MessageId =
+                    messageId,
+
+                SenderUid =
+                    senderUid,
+
+                SenderName =
+                    senderName,
+
+                Content =
+                    content,
+
+                CommunityId =
+                    communityId,
+
+                MessageType =
+                    messageType,
+
+                CreatedAt =
+                    createdAt,
+
+                // ----------------------------------------------------
+                // Compatibility values for the existing C# model.
+                //
+                // These are NOT read from Appwrite.
+                // ----------------------------------------------------
+
+                GroupId =
+                    communityId,
+
+                BranchId =
+                    communityId,
+
+                ReceiverId =
+                    null,
+
+                ConversationId =
+                    string.Empty,
+
+                RegionId =
+                    null,
+
+                DistrictId =
+                    null,
+
+                Status =
+                    "sent",
+
+                UpdatedAt =
+                    TryGetNullableDateTime(
+                        data,
+                        "$updatedAt"),
+
+                ReadAt =
+                    null
+            };
+        }
+
+        // ============================================================
         // CREATE PRAYER REQUEST
         // ============================================================
 
@@ -1387,25 +1649,42 @@ namespace CCT_USCF.Services
             var payload =
                 new Dictionary<string, object?>
                 {
-                    ["user_id"] = userId,
+                    ["user_id"] =
+                        userId,
+
                     ["content"] =
                         BuildPrayerContent(
                             title,
                             description),
-                    ["leader_id"] = null,
-                    ["is_private"] = false,
-                    ["status"] = "Open"
+
+                    ["leader_id"] =
+                        null,
+
+                    ["is_private"] =
+                        false,
+
+                    ["status"] =
+                        "Open"
                 };
 
             try
             {
                 var document =
                     await _appwriteService.Databases.CreateDocument(
-                        databaseId: AppwriteConfig.DatabaseId,
-                        collectionId: PrayerRequestsCollectionId,
-                        documentId: documentId,
-                        data: payload,
-                        permissions: null);
+                        databaseId:
+                            AppwriteConfig.DatabaseId,
+
+                        collectionId:
+                            PrayerRequestsCollectionId,
+
+                        documentId:
+                            documentId,
+
+                        data:
+                            payload,
+
+                        permissions:
+                            null);
 
                 return MapPrayerDocument(document);
             }
@@ -1524,9 +1803,14 @@ namespace CCT_USCF.Services
             try
             {
                 await _appwriteService.Databases.DeleteDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: PrayerRequestsCollectionId,
-                    documentId: id.ToString());
+                    databaseId:
+                        AppwriteConfig.DatabaseId,
+
+                    collectionId:
+                        PrayerRequestsCollectionId,
+
+                    documentId:
+                        id.ToString());
 
                 return true;
             }
@@ -1547,7 +1831,8 @@ namespace CCT_USCF.Services
 
         [Obsolete]
         public async Task<List<BiblePostDto>>
-            GetBiblePostsAsync(int limit = 50)
+            GetBiblePostsAsync(
+                int limit = 50)
         {
             var safeLimit =
                 Math.Clamp(limit, 1, 100);
@@ -1626,8 +1911,12 @@ namespace CCT_USCF.Services
             var payload =
                 new Dictionary<string, object?>
                 {
-                    ["user_id"] = userId,
-                    ["post_type"] = "BibleVerse",
+                    ["user_id"] =
+                        userId,
+
+                    ["post_type"] =
+                        "BibleVerse",
+
                     ["content"] =
                         JsonSerializer.Serialize(
                             new
@@ -1643,11 +1932,20 @@ namespace CCT_USCF.Services
             {
                 var document =
                     await _appwriteService.Databases.CreateDocument(
-                        databaseId: AppwriteConfig.DatabaseId,
-                        collectionId: BiblePostsCollectionId,
-                        documentId: documentId,
-                        data: payload,
-                        permissions: null);
+                        databaseId:
+                            AppwriteConfig.DatabaseId,
+
+                        collectionId:
+                            BiblePostsCollectionId,
+
+                        documentId:
+                            documentId,
+
+                        data:
+                            payload,
+
+                        permissions:
+                            null);
 
                 return MapBibleDocument(document);
             }
@@ -1730,9 +2028,14 @@ namespace CCT_USCF.Services
             try
             {
                 await _appwriteService.Databases.DeleteDocument(
-                    databaseId: AppwriteConfig.DatabaseId,
-                    collectionId: BiblePostsCollectionId,
-                    documentId: id.ToString());
+                    databaseId:
+                        AppwriteConfig.DatabaseId,
+
+                    collectionId:
+                        BiblePostsCollectionId,
+
+                    documentId:
+                        id.ToString());
 
                 return true;
             }
@@ -1745,127 +2048,6 @@ namespace CCT_USCF.Services
                     "Unable to delete Bible post.",
                     ex);
             }
-        }
-
-        // ============================================================
-        // MAP COMMUNITY MESSAGE
-        // ============================================================
-
-        private static CommunityMessage
-            MapCommunityDocument(
-                global::Appwrite.Models.Document document)
-        {
-            var data =
-                document.Data ??
-                new Dictionary<string, object?>();
-
-            var createdAt =
-                TryGetDateTime(
-                    data,
-                    "created_at",
-                    document.CreatedAt);
-
-            var groupId =
-                TryGetString(
-                    data,
-                    "group_id",
-                    string.Empty)
-                ?? string.Empty;
-
-            return new CommunityMessage
-            {
-                Id =
-                    document.Id,
-
-                MessageId =
-                    TryGetString(
-                        data,
-                        "message_id",
-                        document.Id)
-                    ?? document.Id,
-
-                SenderUid =
-                    TryGetString(
-                        data,
-                        "sender_id",
-                        string.Empty)
-                    ?? string.Empty,
-
-                ReceiverId =
-                    TryGetString(
-                        data,
-                        "receiver_id",
-                        null),
-
-                GroupId =
-                    groupId,
-
-                ConversationId =
-                    TryGetString(
-                        data,
-                        "conversation_id",
-                        string.Empty)
-                    ?? string.Empty,
-
-                SenderName =
-                    TryGetString(
-                        data,
-                        "sender_name",
-                        "Community member")
-                    ?? "Community member",
-
-                Content =
-                    TryGetString(
-                        data,
-                        "content",
-                        string.Empty)
-                    ?? string.Empty,
-
-                CommunityId =
-                    groupId,
-
-                BranchId =
-                    groupId,
-
-                RegionId =
-                    TryGetString(
-                        data,
-                        "region_id",
-                        null),
-
-                DistrictId =
-                    TryGetString(
-                        data,
-                        "district_id",
-                        null),
-
-                MessageType =
-                    TryGetString(
-                        data,
-                        "message_type",
-                        "text")
-                    ?? "text",
-
-                Status =
-                    TryGetString(
-                        data,
-                        "status",
-                        "sent")
-                    ?? "sent",
-
-                CreatedAt =
-                    createdAt,
-
-                UpdatedAt =
-                    TryGetNullableDateTime(
-                        data,
-                        "$updatedAt"),
-
-                ReadAt =
-                    TryGetNullableDateTime(
-                        data,
-                        "read_at")
-            };
         }
 
         // ============================================================
@@ -2085,22 +2267,27 @@ namespace CCT_USCF.Services
                     out var value) &&
                 value is not null)
             {
-                return DateTime.TryParse(
-                           Convert.ToString(value),
-                           out var dt)
-                    ? dt
-                    : DateTime.TryParse(
-                          fallback,
-                          out var fallbackDate)
-                        ? fallbackDate
-                        : DateTime.UtcNow;
+                if (value is DateTime dateTime)
+                {
+                    return dateTime;
+                }
+
+                if (DateTime.TryParse(
+                        Convert.ToString(value),
+                        out var parsed))
+                {
+                    return parsed;
+                }
             }
 
-            return DateTime.TryParse(
-                       fallback,
-                       out var parsedFallback)
-                ? parsedFallback
-                : DateTime.UtcNow;
+            if (DateTime.TryParse(
+                    fallback,
+                    out var fallbackDate))
+            {
+                return fallbackDate;
+            }
+
+            return DateTime.UtcNow;
         }
 
         // ============================================================
@@ -2117,11 +2304,17 @@ namespace CCT_USCF.Services
                     out var value) &&
                 value is not null)
             {
-                return DateTime.TryParse(
-                    Convert.ToString(value),
-                    out var dt)
-                    ? dt
-                    : null;
+                if (value is DateTime dateTime)
+                {
+                    return dateTime;
+                }
+
+                if (DateTime.TryParse(
+                        Convert.ToString(value),
+                        out var parsed))
+                {
+                    return parsed;
+                }
             }
 
             return null;
@@ -2172,3 +2365,4 @@ namespace CCT_USCF.Services
         }
     }
 }
+
