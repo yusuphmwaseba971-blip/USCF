@@ -680,8 +680,22 @@ public partial class BranchChatPage : ContentPage
 
         [FirestoreProperty("districtId")]
         public int DistrictId { get; set; }
+    }private async void OnMessagesRefreshing(object sender, EventArgs e)
+{
+    try
+    {
+        await RefreshMessagesAsync();
     }
-
+    catch (Exception ex)
+    {
+        System.Diagnostics.Debug.WriteLine(
+            $"[BRANCH_CHAT_REFRESH] {ex}");
+    }
+    finally
+    {
+        MessagesRefreshView.IsRefreshing = false;
+    }
+}
     private class BranchChatMessageUi
     {
         public string MessageId { get; set; } = string.Empty;
