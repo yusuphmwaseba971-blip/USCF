@@ -6,9 +6,9 @@ namespace CCT_USCF.Services.Appwrite;
 public sealed class AppwriteService
 {
     public const string Endpoint = "https://cloud.appwrite.io/v1";
-    public const string ProjectId = "sgp-cct-uscf";
-    public const string DatabaseId = "database-cct-uscf-db";
-    public const string MessagesCollectionId = "messages";
+    public const string ProjectId = "project-sgp-cct-uscf";
+    public const string DatabaseId = "cct-uscf-db";
+    public const string MessagesCollectionId = "community_messages";
 
     public Client Client { get; }
     public Account Account { get; }
