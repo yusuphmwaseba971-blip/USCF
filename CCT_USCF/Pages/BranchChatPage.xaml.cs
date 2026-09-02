@@ -522,11 +522,41 @@ public partial class BranchChatPage : ContentPage
 
             MessageEntry.Text = string.Empty;
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[BRANCH CHAT] Send message failed: {ex}");
-            await DisplayAlert("Message could not be sent", "Please check your connection and try again.", "OK");
-        }
+      catch (Exception ex)
+{
+    System.Diagnostics.Debug.WriteLine(
+        "========== BRANCH CHAT SEND ERROR ==========");
+
+    System.Diagnostics.Debug.WriteLine(
+        $"Exception Type: {ex.GetType().FullName}");
+
+    System.Diagnostics.Debug.WriteLine(
+        $"Message: {ex.Message}");
+
+    System.Diagnostics.Debug.WriteLine(
+        $"Inner Exception: {ex.InnerException?.Message}");
+
+    System.Diagnostics.Debug.WriteLine(
+        $"Full Exception: {ex}");
+
+    System.Diagnostics.Debug.WriteLine(
+        "============================================");
+
+    var errorDetails =
+        $"Type: {ex.GetType().Name}\n\n" +
+        $"Message: {ex.Message}";
+
+    if (ex.InnerException != null)
+    {
+        errorDetails +=
+            $"\n\nInner error: {ex.InnerException.Message}";
+    }
+
+    await DisplayAlert(
+        "APPWRITE SEND ERROR",
+        errorDetails,
+        "OK");
+}
     }
 
     private async void MembersLabel_Tapped(object? sender, EventArgs e)
