@@ -1,5 +1,6 @@
 using Appwrite;
 using Appwrite.Services;
+using CCT_USCF.Services.Cloudinary;
 
 using CCT_USCF.Services;
 using CCT_USCF.Services.Appwrite;
@@ -178,14 +179,16 @@ public static class MauiProgram
         builder.Services.AddSingleton<
             CCT_USCF.Services.AuthService>();
 
-        // Community
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.CommunityService>();
+// Community
+builder.Services.AddSingleton<
+    CCT_USCF.Services.CommunityService>();
 
-        // Bible
-        builder.Services.AddSingleton<
-            CCT_USCF.Services.BibleService>();
-
+// Cloudinary
+builder.Services.AddSingleton<
+    CloudinaryService>();
+// Bible
+builder.Services.AddSingleton<
+    CCT_USCF.Services.BibleService>();
         // =====================================================
         // FIREBASE DATA SEEDERS
         // =====================================================

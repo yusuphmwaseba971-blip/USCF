@@ -1,11 +1,15 @@
+
+using System.Globalization;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using CCT_USCF.Services;
 using CCT_USCF.Services.Appwrite;
+using CCT_USCF.Services.Cloudinary;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Storage;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
 
@@ -20,67 +24,102 @@ namespace CCT_USCF.Pages;
 [QueryProperty(nameof(BranchId), "branchId")]
 public partial class GroupChatPage : ContentPage
 {
+    // ============================================================
+    // SERVICES
+    // ============================================================
+
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
     private readonly CommunityService _communityService;
+    private readonly CloudinaryService _cloudinaryService;
+
+    // ============================================================
+    // MESSAGE STATE
+    // ============================================================
+
     private readonly List<GroupChatMessageUi> _messages = new();
+
     private bool _isLoading;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
+
+    // ============================================================
+    // REALTIME
+    // ============================================================
+
     private ClientWebSocket? _appwriteRealtimeSocket;
     private CancellationTokenSource? _appwriteRealtimeCts;
 
-    public GroupChatPage()
-    {
-        InitializeComponent();
-        _auth = MauiProgram.Services.GetRequiredService<IFirebaseAuth>();
-        _firestore = MauiProgram.Services.GetRequiredService<IFirebaseFirestore>();
-        _communityService = MauiProgram.Services.GetRequiredService<CommunityService>();
-
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += MembersLabel_Tapped;
-        MembersLabel.GestureRecognizers.Add(tap);
-        AddMemberButton.Clicked += AddMemberButton_Clicked;
-    }
+    // ============================================================
+    // GROUP PARAMETERS
+    // ============================================================
 
     private string _groupId = string.Empty;
+
     public string GroupId
     {
         get => _groupId;
+
         set
         {
-            _groupId = string.IsNullOrWhiteSpace(value) ? string.Empty : value;
-            if (!string.IsNullOrWhiteSpace(GroupName))
-                GroupTitleLabel.Text = GroupName;
+            _groupId =
+                string.IsNullOrWhiteSpace(value)
+                    ? string.Empty
+                    : value.Trim();
+
+            UpdateGroupTitle();
         }
     }
 
     private string _groupName = "Group Chat";
+
     public string GroupName
     {
         get => _groupName;
+
         set
         {
-            _groupName = string.IsNullOrWhiteSpace(value) ? "Group Chat" : value;
-            GroupTitleLabel.Text = _groupName;
+            _groupName =
+                string.IsNullOrWhiteSpace(value)
+                    ? "Group Chat"
+                    : value.Trim();
+
+            UpdateGroupTitle();
         }
     }
 
     private string _groupType = "Group";
+
     public string GroupType
     {
         get => _groupType;
-        set => _groupType = string.IsNullOrWhiteSpace(value) ? "Group" : value;
+
+        set
+        {
+            _groupType =
+                string.IsNullOrWhiteSpace(value)
+                    ? "Group"
+                    : value.Trim();
+        }
     }
 
     private string _organizationalLevel = "Group";
+
     public string OrganizationalLevel
     {
         get => _organizationalLevel;
-        set => _organizationalLevel = string.IsNullOrWhiteSpace(value) ? "Group" : value;
+
+        set
+        {
+            _organizationalLevel =
+                string.IsNullOrWhiteSpace(value)
+                    ? "Group"
+                    : value.Trim();
+        }
     }
 
     private int _regionId;
+
     public int RegionId
     {
         get => _regionId;
@@ -88,6 +127,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     private int _districtId;
+
     public int DistrictId
     {
         get => _districtId;
@@ -95,71 +135,194 @@ public partial class GroupChatPage : ContentPage
     }
 
     private int _branchId;
+
     public int BranchId
     {
         get => _branchId;
         set => _branchId = value;
     }
 
+    // ============================================================
+    // CONSTRUCTOR
+    // ============================================================
+
+    public GroupChatPage()
+    {
+        InitializeComponent();
+
+        _auth =
+            MauiProgram.Services
+                .GetRequiredService<IFirebaseAuth>();
+
+        _firestore =
+            MauiProgram.Services
+                .GetRequiredService<IFirebaseFirestore>();
+
+        _communityService =
+            MauiProgram.Services
+                .GetRequiredService<CommunityService>();
+
+        _cloudinaryService =
+            MauiProgram.Services
+                .GetRequiredService<CloudinaryService>();
+
+        var membersTap =
+            new TapGestureRecognizer();
+
+        membersTap.Tapped +=
+            MembersLabel_Tapped;
+
+        MembersLabel.GestureRecognizers.Add(
+            membersTap);
+
+        AddMemberButton.Clicked +=
+            AddMemberButton_Clicked;
+    }
+
+    // ============================================================
+    // TITLE
+    // ============================================================
+
+    private void UpdateGroupTitle()
+    {
+        if (GroupTitleLabel == null)
+        {
+            return;
+        }
+
+        GroupTitleLabel.Text =
+            string.IsNullOrWhiteSpace(GroupName)
+                ? "Group Chat"
+                : GroupName;
+    }
+
+    // ============================================================
+    // PAGE APPEARING
+    // ============================================================
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _realtimeEnabled = true;
-        AttachRealtimeListener();
-        await LoadGroupAsync();
+
+        try
+        {
+            _realtimeEnabled = true;
+
+            if (string.IsNullOrWhiteSpace(_groupId))
+            {
+                GroupStatusLabel.Text =
+                    "The selected group is unavailable.";
+
+                return;
+            }
+
+            AttachRealtimeListener();
+
+            await LoadGroupAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] OnAppearing failed: {ex}");
+
+            GroupStatusLabel.Text =
+                "Unable to load this group.";
+        }
     }
+
+    // ============================================================
+    // PAGE DISAPPEARING
+    // ============================================================
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+
         _realtimeEnabled = false;
+
         DisposeRealtimeListener();
     }
 
+    // ============================================================
+    // REALTIME ATTACH
+    // ============================================================
+
     private void AttachRealtimeListener()
     {
-        if (_realtimeListenerAttached || !_realtimeEnabled || string.IsNullOrWhiteSpace(_groupId))
+        if (_realtimeListenerAttached ||
+            !_realtimeEnabled ||
+            string.IsNullOrWhiteSpace(_groupId))
+        {
             return;
+        }
 
-        _realtimeListenerAttached = true;
+        _realtimeListenerAttached =
+            true;
 
         try
         {
             _appwriteRealtimeCts?.Cancel();
             _appwriteRealtimeCts?.Dispose();
-            _appwriteRealtimeCts = new CancellationTokenSource();
 
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener attached for group {_groupId}");
-            _ = Task.Run(async () =>
-            {
-                try
+            _appwriteRealtimeCts =
+                new CancellationTokenSource();
+
+            var cancellationToken =
+                _appwriteRealtimeCts.Token;
+
+            _ = Task.Run(
+                async () =>
                 {
-                    await ListenForAppwriteMessagesAsync(_appwriteRealtimeCts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener cancelled for group {_groupId}");
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener error for group {_groupId}: {ex}");
-                    _realtimeListenerAttached = false;
-                }
-            });
+                    try
+                    {
+                        await ListenForAppwriteMessagesAsync(
+                            cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            "[GROUP_CHAT] Realtime listener cancelled.");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[GROUP_CHAT] Realtime listener failed: {ex}");
+
+                        _realtimeListenerAttached =
+                            false;
+                    }
+                });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime listener setup failed: {ex}");
-            _realtimeListenerAttached = false;
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Realtime setup failed: {ex}");
+
+            _realtimeListenerAttached =
+                false;
         }
     }
 
+    // ============================================================
+    // REALTIME DISPOSE
+    // ============================================================
+
     private void DisposeRealtimeListener()
     {
-        _realtimeListenerAttached = false;
-        _appwriteRealtimeCts?.Cancel();
-        _appwriteRealtimeCts?.Dispose();
-        _appwriteRealtimeCts = null;
+        _realtimeListenerAttached =
+            false;
+
+        try
+        {
+            _appwriteRealtimeCts?.Cancel();
+            _appwriteRealtimeCts?.Dispose();
+        }
+        catch
+        {
+        }
+
+        _appwriteRealtimeCts =
+            null;
 
         try
         {
@@ -168,347 +331,642 @@ public partial class GroupChatPage : ContentPage
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime disconnect failed: {ex}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Realtime socket dispose failed: {ex}");
         }
 
-        _appwriteRealtimeSocket = null;
+        _appwriteRealtimeSocket =
+            null;
     }
 
-    private async Task ListenForAppwriteMessagesAsync(CancellationToken cancellationToken)
+    // ============================================================
+    // REALTIME LISTENER
+    // ============================================================
+
+    private async Task ListenForAppwriteMessagesAsync(
+        CancellationToken cancellationToken)
     {
-        var socket = new ClientWebSocket();
-        _appwriteRealtimeSocket = socket;
+        using var socket =
+            new ClientWebSocket();
 
-        var uriBuilder = new UriBuilder(AppwriteService.Endpoint)
+        _appwriteRealtimeSocket =
+            socket;
+
+        var uriBuilder =
+            new UriBuilder(
+                AppwriteService.Endpoint)
+            {
+                Scheme =
+                    Uri.UriSchemeWss,
+
+                Path =
+                    "/v1/realtime",
+
+                Query =
+                    $"project={Uri.EscapeDataString(
+                        AppwriteService.ProjectId)}"
+            };
+
+        var channel =
+            _communityService
+                .GetCommunityMessagesChannel();
+
+        var subscription =
+            JsonSerializer.Serialize(
+                new
+                {
+                    type = "subscribe",
+
+                    channels =
+                        new[]
+                        {
+                            channel
+                        }
+                });
+
+        await socket.ConnectAsync(
+            uriBuilder.Uri,
+            cancellationToken);
+
+        await socket.SendAsync(
+            Encoding.UTF8.GetBytes(
+                subscription),
+            WebSocketMessageType.Text,
+            true,
+            cancellationToken);
+
+        var buffer =
+            new byte[16 * 1024];
+
+        var builder =
+            new StringBuilder();
+
+        while (
+            socket.State ==
+                WebSocketState.Open &&
+            !cancellationToken.IsCancellationRequested)
         {
-            Scheme = Uri.UriSchemeWss,
-            Path = "/v1/realtime",
-            Query = $"project={Uri.EscapeDataString(AppwriteService.ProjectId)}"
-        };
+            var result =
+                await socket.ReceiveAsync(
+                    new ArraySegment<byte>(
+                        buffer),
+                    cancellationToken);
 
-        var channel = _communityService.GetCommunityMessagesChannel();
-        var subscription = JsonSerializer.Serialize(new
-        {
-            type = "register",
-            channels = new[] { channel }
-        });
-
-        await socket.ConnectAsync(uriBuilder.Uri, cancellationToken);
-        await socket.SendAsync(Encoding.UTF8.GetBytes(subscription), WebSocketMessageType.Text, true, cancellationToken);
-
-        var buffer = new byte[16 * 1024];
-        var messageBuilder = new StringBuilder();
-
-        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
-        {
-            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
-            if (result.MessageType == WebSocketMessageType.Close)
+            if (result.MessageType ==
+                WebSocketMessageType.Close)
             {
                 break;
             }
 
-            var chunk = Encoding.UTF8.GetString(buffer, 0, result.Count);
-            messageBuilder.Append(chunk);
+            var chunk =
+                Encoding.UTF8.GetString(
+                    buffer,
+                    0,
+                    result.Count);
+
+            builder.Append(chunk);
 
             if (!result.EndOfMessage)
+            {
                 continue;
+            }
 
-            var rawMessage = messageBuilder.ToString();
-            messageBuilder.Clear();
-            ProcessRealtimeMessage(rawMessage);
+            var rawMessage =
+                builder.ToString();
+
+            builder.Clear();
+
+            ProcessRealtimeMessage(
+                rawMessage);
         }
     }
 
-    private void ProcessRealtimeMessage(string rawMessage)
+    // ============================================================
+    // REALTIME MESSAGE PROCESSING
+    // ============================================================
+
+    private void ProcessRealtimeMessage(
+        string rawMessage)
     {
         if (string.IsNullOrWhiteSpace(rawMessage))
+        {
             return;
+        }
 
         try
         {
-            using var document = JsonDocument.Parse(rawMessage);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("type", out var typeElement) ||
-                !string.Equals(typeElement.GetString(), "event", StringComparison.OrdinalIgnoreCase))
+            using var document =
+                JsonDocument.Parse(
+                    rawMessage);
+
+            var root =
+                document.RootElement;
+
+            if (!root.TryGetProperty(
+                    "type",
+                    out var typeElement))
             {
                 return;
             }
 
-            if (!root.TryGetProperty("payload", out var payload) && !root.TryGetProperty("data", out payload))
-                return;
-
-            if (payload.ValueKind != JsonValueKind.Object)
-                return;
-
-            var messageId = GetAppwriteDocumentId(payload);
-            var groupId = TryGetString(payload, "group_id");
-            if (string.IsNullOrWhiteSpace(groupId))
-                groupId = TryGetString(payload, "community_id");
-
-            if (!string.Equals(groupId, GetBackendCommunityId(), StringComparison.Ordinal))
-                return;
-
-            var senderUid = TryGetString(payload, "sender_id");
-            if (string.IsNullOrWhiteSpace(senderUid))
-                senderUid = TryGetString(payload, "sender_uid");
-
-            var senderName = TryGetString(payload, "sender_name");
-            var content = TryGetString(payload, "content");
-            var createdAtValue = TryGetDateTime(payload, "created_at");
-
-            var adaptiveMessage = new GroupChatMessageUi
+            if (!string.Equals(
+                    typeElement.ToString(),
+                    "event",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                MessageId = string.IsNullOrWhiteSpace(messageId) ? Guid.NewGuid().ToString("N") : messageId,
-                GroupId = groupId,
-                SenderUid = senderUid,
-                SenderName = string.IsNullOrWhiteSpace(senderName) ? "Member" : senderName,
-                Text = content,
-                CreatedAt = createdAtValue == default ? DateTime.UtcNow : createdAtValue
-            };
+                return;
+            }
 
-            MainThread.BeginInvokeOnMainThread(() =>
+            JsonElement payload;
+
+            if (!root.TryGetProperty(
+                    "payload",
+                    out payload))
             {
-                if (_messages.Any(message => string.Equals(message.MessageId, adaptiveMessage.MessageId, StringComparison.Ordinal)))
+                if (!root.TryGetProperty(
+                        "data",
+                        out payload))
+                {
                     return;
+                }
+            }
 
-                _messages.Add(adaptiveMessage);
-                _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
-                RenderMessages();
-            });
+            if (payload.ValueKind !=
+                JsonValueKind.Object)
+            {
+                return;
+            }
+
+            var communityId =
+                TryGetString(
+                    payload,
+                    "community_id");
+
+            if (string.IsNullOrWhiteSpace(
+                    communityId))
+            {
+                return;
+            }
+
+            if (!string.Equals(
+                    communityId,
+                    GetBackendCommunityId(),
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var messageId =
+                GetAppwriteDocumentId(
+                    payload);
+
+            if (string.IsNullOrWhiteSpace(
+                    messageId))
+            {
+                return;
+            }
+
+            var senderUid =
+                TryGetString(
+                    payload,
+                    "sender_uid");
+
+            if (string.IsNullOrWhiteSpace(
+                    senderUid))
+            {
+                senderUid =
+                    TryGetString(
+                        payload,
+                        "sender_id");
+            }
+
+            var senderName =
+                TryGetString(
+                    payload,
+                    "sender_name");
+
+            if (string.IsNullOrWhiteSpace(
+                    senderName))
+            {
+                senderName =
+                    "Member";
+            }
+
+            var content =
+                TryGetString(
+                    payload,
+                    "content");
+
+            var messageType =
+                TryGetString(
+                    payload,
+                    "message_type");
+
+            if (string.IsNullOrWhiteSpace(
+                    messageType))
+            {
+                messageType =
+                    "text";
+            }
+
+            var mediaUrl =
+                TryGetString(
+                    payload,
+                    "media_url");
+
+            var thumbnailUrl =
+                TryGetString(
+                    payload,
+                    "thumbnail_url");
+
+            var fileName =
+                TryGetString(
+                    payload,
+                    "file_name");
+
+            var fileSize =
+                TryGetLong(
+                    payload,
+                    "file_size");
+
+            var duration =
+                TryGetDouble(
+                    payload,
+                    "duration");
+
+            var createdAt =
+                TryGetDateTime(
+                    payload,
+                    "created_at");
+
+            if (createdAt == default)
+            {
+                createdAt =
+                    DateTime.UtcNow;
+            }
+
+            var message =
+                new GroupChatMessageUi
+                {
+                    MessageId =
+                        messageId,
+
+                    GroupId =
+                        communityId,
+
+                    SenderUid =
+                        senderUid,
+
+                    SenderName =
+                        senderName,
+
+                    Text =
+                        content,
+
+                    MessageType =
+                        messageType,
+
+                    MediaUrl =
+                        mediaUrl,
+
+                    ThumbnailUrl =
+                        thumbnailUrl,
+
+                    FileName =
+                        fileName,
+
+                    FileSize =
+                        fileSize,
+
+                    Duration =
+                        duration,
+
+                    CreatedAt =
+                        createdAt
+                };
+
+            _ =
+                HandleRealtimeMessageAsync(
+                    message);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Appwrite realtime payload parse failed: {ex}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Realtime parsing failed: {ex}");
         }
     }
 
-    private static string GetAppwriteDocumentId(JsonElement element)
+    // ============================================================
+    // REALTIME UI UPDATE
+    // ============================================================
+
+    private async Task HandleRealtimeMessageAsync(
+        GroupChatMessageUi message)
     {
-        var id = TryGetString(element, "$id");
-        return string.IsNullOrWhiteSpace(id)
-            ? TryGetString(element, "message_id")
-            : id;
-    }
-    private static string TryGetString(JsonElement element, string propertyName)
-    {
-        return element.TryGetProperty(propertyName, out var value) && value.ValueKind != JsonValueKind.Null && value.ValueKind != JsonValueKind.Undefined
-            ? value.ToString()
-            : string.Empty;
+        try
+        {
+            await MainThread.InvokeOnMainThreadAsync(
+                () =>
+                {
+                    var existingIndex =
+                        _messages.FindIndex(
+                            existing =>
+                                string.Equals(
+                                    existing.MessageId,
+                                    message.MessageId,
+                                    StringComparison.Ordinal));
+
+                    if (existingIndex >= 0)
+                    {
+                        _messages[existingIndex] =
+                            message;
+                    }
+                    else
+                    {
+                        _messages.Add(
+                            message);
+                    }
+
+                    _messages.Sort(
+                        (left, right) =>
+                            left.CreatedAt.CompareTo(
+                                right.CreatedAt));
+
+                    RenderMessages();
+                });
+
+            await CacheUiMessageAsync(
+                message);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Realtime handling failed: {ex}");
+        }
     }
 
-    private static DateTime TryGetDateTime(JsonElement element, string propertyName)
-    {
-        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined)
-            return default;
-
-        return DateTime.TryParse(value.ToString(), out var dateTime) ? dateTime : default;
-    }
+    // ============================================================
+    // LOAD GROUP
+    // ============================================================
 
     private async Task LoadGroupAsync()
     {
-        GroupStatusLabel.Text = "Loading group...";
+        GroupStatusLabel.Text =
+            "Loading group...";
 
         try
         {
             await FirebaseInit.Initialized;
 
-            var currentUser = MauiProgram.CurrentUser ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
+                    .GetCurrentUserAsync();
+
             if (currentUser == null)
             {
-                GroupStatusLabel.Text = "Please sign in to access this group.";
+                GroupStatusLabel.Text =
+                    "Please sign in to access this group.";
+
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(_groupId))
-            {
-                GroupStatusLabel.Text = "The selected group is unavailable.";
-                return;
-            }
+            var validation =
+                await ValidateGroupAccessAsync(
+                    currentUser);
 
-            var validation = await ValidateGroupAccessAsync(currentUser);
             if (!validation.IsAllowed)
             {
-                GroupStatusLabel.Text = validation.Message;
+                GroupStatusLabel.Text =
+                    validation.Message;
+
                 return;
             }
 
-            await EnsureCurrentUserMembershipAsync(currentUser);
+            await EnsureCurrentUserMembershipAsync(
+                currentUser);
 
-            var members = await LoadGroupMembersAsync();
-            GroupStatusLabel.Text = members.Count == 1 ? "1 member in this group" : $"{members.Count} members in this group";
-            MembersLabel.Text = members.Count == 1 ? "Members (1)" : $"Members ({members.Count})";
+            var members =
+                await LoadGroupMembersAsync();
 
-            await RefreshMessagesAsync();
+            MembersLabel.Text =
+                members.Count == 1
+                    ? "Members (1)"
+                    : $"Members ({members.Count})";
+
+            GroupStatusLabel.Text =
+                members.Count == 1
+                    ? "1 member in this group"
+                    : $"{members.Count} members in this group";
+
+            await LoadMessagesAsync();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Load failed: {ex}");
-            GroupStatusLabel.Text = "Unable to connect to the group right now. Please check your internet connection and try again.";
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Group load failed: {ex}");
+
+            GroupStatusLabel.Text =
+                "Unable to load this group right now.";
         }
     }
 
-    private async Task RefreshMessagesAsync()
-    {
-        if (_isLoading || string.IsNullOrWhiteSpace(_groupId))
-            return;
+    // ============================================================
+    // LOAD MESSAGES
+    // ============================================================
 
-        _isLoading = true;
+    private async Task LoadMessagesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(
+                GetBackendCommunityId()))
+        {
+            return;
+        }
 
         try
         {
-            var messages = await LoadMessagesAsync();
+            var appwriteMessages =
+                await _communityService
+                    .GetCommunityMessagesAsync(
+                        communityId:
+                            GetBackendCommunityId(),
+
+                        limit:
+                            100,
+
+                        organizationalLevel:
+                            OrganizationalLevel,
+
+                        branchId:
+                            _branchId > 0
+                                ? _branchId.ToString()
+                                : null,
+
+                        regionId:
+                            _regionId > 0
+                                ? _regionId.ToString()
+                                : null,
+
+                        districtId:
+                            _districtId > 0
+                                ? _districtId.ToString()
+                                : null);
+
+            var loadedMessages =
+                appwriteMessages
+                    .Where(message =>
+                        string.Equals(
+                            message.CommunityId,
+                            GetBackendCommunityId(),
+                            StringComparison.Ordinal))
+                    .Select(
+                        ToUiMessage)
+                    .OrderBy(
+                        message =>
+                            message.CreatedAt)
+                    .ToList();
+
             _messages.Clear();
-            foreach (var message in messages)
-                _messages.Add(message);
+
+            _messages.AddRange(
+                loadedMessages);
 
             RenderMessages();
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Refresh messages failed: {ex}");
-        }
-        finally
-        {
-            _isLoading = false;
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Message load failed: {ex}");
         }
     }
 
-    private async Task<List<GroupChatMessageUi>> LoadMessagesAsync()
+    // ============================================================
+    // MAP COMMUNITY MESSAGE → UI MESSAGE
+    // ============================================================
+
+    private GroupChatMessageUi ToUiMessage(
+        Models.CommunityMessage message)
+    {
+        return new GroupChatMessageUi
+        {
+            MessageId =
+                string.IsNullOrWhiteSpace(
+                    message.MessageId)
+                    ? message.Id
+                    : message.MessageId,
+
+            GroupId =
+                message.CommunityId,
+
+            SenderUid =
+                message.SenderUid,
+
+            SenderName =
+                string.IsNullOrWhiteSpace(
+                    message.SenderName)
+                    ? "Member"
+                    : message.SenderName,
+
+            Text =
+                message.Content,
+
+            MessageType =
+                string.IsNullOrWhiteSpace(
+                    message.MessageType)
+                    ? "text"
+                    : message.MessageType,
+
+            MediaUrl =
+                message.MediaUrl
+                ?? string.Empty,
+
+            ThumbnailUrl =
+                message.ThumbnailUrl
+                ?? string.Empty,
+
+            FileName =
+                message.FileName
+                ?? string.Empty,
+
+            FileSize =
+                message.FileSize,
+
+            Duration =
+                message.Duration,
+
+            CreatedAt =
+                EnsureUtc(
+                    message.CreatedAt)
+        };
+    }
+
+    // ============================================================
+    // CACHE MESSAGE
+    // ============================================================
+
+    private async Task CacheUiMessageAsync(
+        GroupChatMessageUi message)
     {
         try
         {
-            var appwriteMessages = await _communityService.GetCommunityMessagesAsync(
-                communityId: GetBackendCommunityId(),
-                limit: 100,
-                organizationalLevel: OrganizationalLevel,
-                branchId: _branchId > 0 ? _branchId.ToString() : null,
-                regionId: _regionId > 0 ? _regionId.ToString() : null,
-                districtId: _districtId > 0 ? _districtId.ToString() : null);
-
-            return appwriteMessages
-                .Where(message => string.Equals(message.CommunityId, GetBackendCommunityId(), StringComparison.Ordinal))
-                .Select(message => new GroupChatMessageUi
+            var communityMessage =
+                new Models.CommunityMessage
                 {
-                    MessageId = message.MessageId,
-                    GroupId = message.CommunityId,
-                    SenderUid = message.SenderUid,
-                    SenderName = string.IsNullOrWhiteSpace(message.SenderName) ? "Member" : message.SenderName,
-                    Text = message.Content,
-                    CreatedAt = message.CreatedAt
-                })
-                .OrderBy(doc => doc.CreatedAt)
-                .ToList();
+                    Id =
+                        message.MessageId,
+
+                    MessageId =
+                        message.MessageId,
+
+                    SenderUid =
+                        message.SenderUid,
+
+                    SenderName =
+                        message.SenderName,
+
+                    Content =
+                        message.Text,
+
+                    CommunityId =
+                        message.GroupId,
+
+                    MessageType =
+                        message.MessageType,
+
+                    MediaUrl =
+                        message.MediaUrl,
+
+                    ThumbnailUrl =
+                        message.ThumbnailUrl,
+
+                    FileName =
+                        message.FileName,
+
+                    FileSize =
+                        message.FileSize,
+
+                    Duration =
+                        message.Duration,
+
+                    CreatedAt =
+                        message.CreatedAt
+                };
+
+            await _communityService
+                .CacheCommunityMessageAsync(
+                    communityMessage);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Load messages failed: {ex}");
-            return new List<GroupChatMessageUi>();
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Cache message failed: {ex}");
         }
     }
 
-    private async Task<List<GroupMemberUi>> LoadGroupMembersAsync()
-    {
-        try
-        {
-            var snapshot = await _firestore
-                .GetCollection($"groups/{_groupId}/members")
-                .GetDocumentsAsync<FirestoreGroupMemberDocument>(Source.Default);
-
-            if (snapshot == null || !snapshot.Documents.Any())
-            {
-                return await LoadGroupMembersFromUsersAsync();
-            }
-
-            return snapshot.Documents
-                .Select(document => document.Data)
-                .Where(member => member != null)
-                .Select(member => new GroupMemberUi
-                {
-                    Uid = string.IsNullOrWhiteSpace(member!.Uid) ? member.DocumentId : member.Uid,
-                    DisplayName = !string.IsNullOrWhiteSpace(member.FullName) ? member.FullName : (!string.IsNullOrWhiteSpace(member.Username) ? member.Username : "Member"),
-                    Role = string.IsNullOrWhiteSpace(member.Role) ? "Member" : member.Role,
-                    LeadershipLevel = string.IsNullOrWhiteSpace(member.LeadershipLevel) ? "Member" : member.LeadershipLevel,
-                    IsCurrentUser = string.Equals(GetCurrentUserUid(), string.IsNullOrWhiteSpace(member.Uid) ? member.DocumentId : member.Uid, StringComparison.Ordinal)
-                })
-                .OrderBy(member => member.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Load members failed: {ex}");
-            return await LoadGroupMembersFromUsersAsync();
-        }
-    }
-
-    private async Task<List<GroupMemberUi>> LoadGroupMembersFromUsersAsync()
-    {
-        try
-        {
-            var snapshot = await _firestore
-                .GetCollection("users")
-                .GetDocumentsAsync<FirestoreUserProfileDocument>(Source.Default);
-
-            if (snapshot == null)
-                return new List<GroupMemberUi>();
-
-            var currentUid = GetCurrentUserUid();
-            var members = snapshot.Documents
-                .Select(document => document.Data)
-                .Where(profile => profile != null && IsProfileEligibleForGroup(profile, currentUid))
-                .Select(profile => new GroupMemberUi
-                {
-                    Uid = string.IsNullOrWhiteSpace(profile!.Uid) ? profile.DocumentId : profile.Uid,
-                    DisplayName = !string.IsNullOrWhiteSpace(profile.FullName) ? profile.FullName : (!string.IsNullOrWhiteSpace(profile.Username) ? profile.Username : "Member"),
-                    Role = string.IsNullOrWhiteSpace(profile.Role) ? "Member" : profile.Role,
-                    LeadershipLevel = string.IsNullOrWhiteSpace(profile.LeadershipLevel) ? "Member" : profile.LeadershipLevel,
-                    IsCurrentUser = string.Equals(currentUid, string.IsNullOrWhiteSpace(profile.Uid) ? profile.DocumentId : profile.Uid, StringComparison.Ordinal)
-                })
-                .OrderBy(member => member.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            return members;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Fallback member scan failed: {ex}");
-            return new List<GroupMemberUi>();
-        }
-    }
-
-    private bool IsProfileEligibleForGroup(FirestoreUserProfileDocument profile, string currentUid)
-    {
-        var normalizedLevel = NormalizeLevel(OrganizationalLevel);
-        if (string.IsNullOrWhiteSpace(normalizedLevel) || profile == null)
-            return false;
-
-        if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase))
-        {
-            return profile.DistrictId > 0 && DistrictId > 0 && profile.DistrictId == DistrictId;
-        }
-
-        if (string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase))
-        {
-            return profile.RegionId > 0 && RegionId > 0 && profile.RegionId == RegionId;
-        }
-
-        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase))
-        {
-            var selectedBranchId = BranchId > 0 ? BranchId : TryParseBranchIdFromGroupId(_groupId);
-            if (selectedBranchId <= 0)
-                return false;
-
-            return profile.BranchId > 0 && profile.BranchId == selectedBranchId;
-        }
-
-        if (string.Equals(normalizedLevel, "National", StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Equals(profile.LeadershipLevel, "National", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(profile.Role, "National Leader", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(currentUid, string.IsNullOrWhiteSpace(profile.Uid) ? profile.DocumentId : profile.Uid, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return false;
-    }
+    // ============================================================
+    // RENDER MESSAGES
+    // ============================================================
 
     private void RenderMessages()
     {
@@ -516,412 +974,2069 @@ public partial class GroupChatPage : ContentPage
 
         if (_messages.Count == 0)
         {
-            MessagesLayout.Children.Add(new Label
-            {
-                Text = "No messages yet. Start the conversation.",
-                TextColor = Colors.Gray,
-                FontSize = 15,
-                Margin = new Thickness(8, 16)
-            });
+            MessagesLayout.Children.Add(
+                new Label
+                {
+                    Text =
+                        "No messages yet. Start the conversation.",
+
+                    FontSize =
+                        15,
+
+                    TextColor =
+                        Colors.Gray,
+
+                    Margin =
+                        new Thickness(
+                            8,
+                            16)
+                });
+
             return;
         }
 
         foreach (var message in _messages)
         {
-            var isCurrentUser = string.Equals(message.SenderUid, GetCurrentUserUid(), StringComparison.Ordinal);
-            var senderText = isCurrentUser ? "You" : message.SenderName;
+            var isCurrentUser =
+                string.Equals(
+                    message.SenderUid,
+                    GetCurrentUserUid(),
+                    StringComparison.Ordinal);
 
-            var container = new Border
-            {
-                Padding = new Thickness(12, 10),
-                BackgroundColor = isCurrentUser ? Color.FromArgb("#DBEAFE") : Colors.White,
-                StrokeThickness = 0,
-                StrokeShape = new RoundRectangle { CornerRadius = 12 },
-                Margin = new Thickness(isCurrentUser ? 24 : 0, 0, isCurrentUser ? 0 : 24, 8),
-                WidthRequest = 290,
-                HorizontalOptions = isCurrentUser ? LayoutOptions.End : LayoutOptions.Start
-            };
+            var bubble =
+                CreateMessageBubble(
+                    message,
+                    isCurrentUser);
 
-            var stack = new VerticalStackLayout { Spacing = 4 };
-            stack.Children.Add(new Label
-            {
-                Text = senderText,
-                FontAttributes = FontAttributes.Bold,
-                FontSize = 12,
-                TextColor = isCurrentUser ? Color.FromArgb("#1D4ED8") : Colors.DarkSlateBlue
-            });
-            stack.Children.Add(new Label
-            {
-                Text = message.Text,
-                FontSize = 15,
-                TextColor = Colors.Black,
-                LineBreakMode = LineBreakMode.WordWrap
-            });
-            stack.Children.Add(new Label
-            {
-                Text = message.CreatedAt.ToLocalTime().ToString("HH:mm"),
-                FontSize = 11,
-                TextColor = Colors.Gray,
-                HorizontalOptions = LayoutOptions.End
-            });
-
-            container.Content = stack;
-            MessagesLayout.Children.Add(container);
+            MessagesLayout.Children.Add(
+                bubble);
         }
 
-        if (MessagesLayout.Parent is ScrollView scrollView)
+        _ =
+            ScrollMessagesToBottomAsync();
+    }
+
+    // ============================================================
+    // MESSAGE BUBBLE
+    // ============================================================
+
+    private Border CreateMessageBubble(
+        GroupChatMessageUi message,
+        bool isCurrentUser)
+    {
+        var border =
+            new Border
+            {
+                WidthRequest =
+                    290,
+
+                Padding =
+                    new Thickness(
+                        12,
+                        10),
+
+                Margin =
+                    new Thickness(
+                        isCurrentUser ? 24 : 0,
+                        0,
+                        isCurrentUser ? 0 : 24,
+                        8),
+
+                BackgroundColor =
+                    isCurrentUser
+                        ? Color.FromArgb("#DBEAFE")
+                        : Colors.White,
+
+                StrokeThickness =
+                    0,
+
+                StrokeShape =
+                    new RoundRectangle
+                    {
+                        CornerRadius =
+                            12
+                    },
+
+                HorizontalOptions =
+                    isCurrentUser
+                        ? LayoutOptions.End
+                        : LayoutOptions.Start
+            };
+
+        var stack =
+            new VerticalStackLayout
+            {
+                Spacing =
+                    6
+            };
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    isCurrentUser
+                        ? "You"
+                        : message.SenderName,
+
+                FontSize =
+                    12,
+
+                FontAttributes =
+                    FontAttributes.Bold,
+
+                TextColor =
+                    isCurrentUser
+                        ? Color.FromArgb("#1D4ED8")
+                        : Colors.DarkSlateBlue
+            });
+
+        AddMessageContent(
+            stack,
+            message);
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    message.CreatedAt
+                        .ToLocalTime()
+                        .ToString(
+                            "HH:mm",
+                            CultureInfo.InvariantCulture),
+
+                FontSize =
+                    11,
+
+                TextColor =
+                    Colors.Gray,
+
+                HorizontalOptions =
+                    LayoutOptions.End
+            });
+
+        border.Content =
+            stack;
+
+        return border;
+    }
+
+    // ============================================================
+    // MESSAGE CONTENT
+    // ============================================================
+
+    private void AddMessageContent(
+        VerticalStackLayout stack,
+        GroupChatMessageUi message)
+    {
+        var type =
+            string.IsNullOrWhiteSpace(
+                message.MessageType)
+                ? "text"
+                : message.MessageType
+                    .Trim()
+                    .ToLowerInvariant();
+
+        switch (type)
         {
-            _ = MainThread.InvokeOnMainThreadAsync(() => scrollView.ScrollToAsync(0, double.MaxValue, false));
+            case "image":
+
+                AddImageContent(
+                    stack,
+                    message);
+
+                break;
+
+            case "video":
+
+                AddVideoContent(
+                    stack,
+                    message);
+
+                break;
+
+            case "audio":
+
+                AddAudioContent(
+                    stack,
+                    message);
+
+                break;
+
+            default:
+
+                stack.Children.Add(
+                    new Label
+                    {
+                        Text =
+                            message.Text,
+
+                        FontSize =
+                            15,
+
+                        TextColor =
+                            Colors.Black,
+
+                        LineBreakMode =
+                            LineBreakMode.WordWrap
+                    });
+
+                break;
         }
     }
 
-    private async void OnSendClicked(object sender, EventArgs e)
+    // ============================================================
+    // IMAGE CONTENT
+    // ============================================================
+
+    private void AddImageContent(
+        VerticalStackLayout stack,
+        GroupChatMessageUi message)
     {
-        var text = MessageEntry.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(
+                message.MediaUrl))
         {
-            await DisplayAlert("Message required", "Please enter a message before sending.", "OK");
+            stack.Children.Add(
+                new Label
+                {
+                    Text =
+                        "Image unavailable.",
+
+                    TextColor =
+                        Colors.Gray
+                });
+
             return;
         }
 
-        string backendCommunityId = string.Empty;
-        string currentUid = string.Empty;
+        var image =
+            new Image
+            {
+                Source =
+                    ImageSource.FromUri(
+                        new Uri(
+                            message.MediaUrl)),
+
+                HeightRequest =
+                    190,
+
+                WidthRequest =
+                    255,
+
+                Aspect =
+                    Aspect.AspectFill
+            };
+
+        var tap =
+            new TapGestureRecognizer();
+
+        tap.Tapped +=
+            async (_, _) =>
+            {
+                await OpenMediaAsync(
+                    message.MediaUrl);
+            };
+
+        image.GestureRecognizers.Add(
+            tap);
+
+        stack.Children.Add(
+            image);
+
+        if (!string.IsNullOrWhiteSpace(
+                message.Text))
+        {
+            stack.Children.Add(
+                new Label
+                {
+                    Text =
+                        message.Text,
+
+                    FontSize =
+                        13,
+
+                    TextColor =
+                        Colors.Black
+                });
+        }
+    }
+
+    // ============================================================
+    // VIDEO CONTENT
+    // ============================================================
+
+    private void AddVideoContent(
+        VerticalStackLayout stack,
+        GroupChatMessageUi message)
+    {
+        var button =
+            new Button
+            {
+                Text =
+                    "▶  Play video",
+
+                BackgroundColor =
+                    Color.FromArgb("#1E40AF"),
+
+                TextColor =
+                    Colors.White,
+
+                CornerRadius =
+                    10
+            };
+
+        button.Clicked +=
+            async (_, _) =>
+            {
+                await OpenMediaAsync(
+                    message.MediaUrl);
+            };
+
+        stack.Children.Add(
+            button);
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    string.IsNullOrWhiteSpace(
+                        message.FileName)
+                        ? "Video"
+                        : message.FileName,
+
+                FontSize =
+                    12,
+
+                TextColor =
+                    Colors.Gray
+            });
+    }
+
+    // ============================================================
+    // AUDIO CONTENT
+    // ============================================================
+
+    private void AddAudioContent(
+        VerticalStackLayout stack,
+        GroupChatMessageUi message)
+    {
+        var button =
+            new Button
+            {
+                Text =
+                    "▶  Play audio",
+
+                BackgroundColor =
+                    Color.FromArgb("#0F766E"),
+
+                TextColor =
+                    Colors.White,
+
+                CornerRadius =
+                    10
+            };
+
+        button.Clicked +=
+            async (_, _) =>
+            {
+                await OpenMediaAsync(
+                    message.MediaUrl);
+            };
+
+        stack.Children.Add(
+            button);
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    string.IsNullOrWhiteSpace(
+                        message.FileName)
+                        ? "Audio"
+                        : message.FileName,
+
+                FontSize =
+                    12,
+
+                TextColor =
+                    Colors.Gray
+            });
+    }
+
+    // ============================================================
+    // OPEN MEDIA
+    // ============================================================
+
+    private static async Task OpenMediaAsync(
+        string mediaUrl)
+    {
+        if (string.IsNullOrWhiteSpace(
+                mediaUrl))
+        {
+            return;
+        }
+
+        try
+        {
+            await Launcher.Default.OpenAsync(
+                new Uri(
+                    mediaUrl));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Open media failed: {ex}");
+        }
+    }
+
+    // ============================================================
+    // TEXT SEND
+    // ============================================================
+
+    private async void OnSendClicked(
+        object? sender,
+        EventArgs e)
+    {
+        await SendTextMessageAsync();
+    }
+
+    private async void OnMessageEntryCompleted(
+        object? sender,
+        EventArgs e)
+    {
+        await SendTextMessageAsync();
+    }
+
+    private async Task SendTextMessageAsync()
+    {
+        var text =
+            MessageEntry.Text?.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                text))
+        {
+            return;
+        }
 
         try
         {
             await FirebaseInit.Initialized;
 
-            var currentUser = MauiProgram.CurrentUser ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
+                    .GetCurrentUserAsync();
+
             if (currentUser == null)
             {
-                await DisplayAlert("Not authenticated", "Please sign in to send a message.", "OK");
+                await DisplayAlert(
+                    "Sign in required",
+                    "Please sign in before sending a message.",
+                    "OK");
+
                 return;
             }
 
-            var validation = await ValidateGroupAccessAsync(currentUser);
+            var validation =
+                await ValidateGroupAccessAsync(
+                    currentUser);
+
             if (!validation.IsAllowed)
             {
-                await DisplayAlert("Access denied", validation.Message, "OK");
+                await DisplayAlert(
+                    "Access denied",
+                    validation.Message,
+                    "OK");
+
                 return;
             }
 
-            currentUid = GetCurrentUserUid();
-            if (string.IsNullOrWhiteSpace(currentUid))
+            var currentUid =
+                GetCurrentUserUid();
+
+            if (string.IsNullOrWhiteSpace(
+                    currentUid))
             {
-                await DisplayAlert("Not authenticated", "Firebase authentication is required to send a message.", "OK");
+                await DisplayAlert(
+                    "Not authenticated",
+                    "Firebase authentication is required.",
+                    "OK");
+
                 return;
             }
 
-            backendCommunityId = GetBackendCommunityId();
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Send start: GroupId={_groupId}, GroupName={GroupName}, GroupType={GroupType}, OrganizationalLevel={OrganizationalLevel}, BranchId={_branchId}, RegionId={_regionId}, DistrictId={_districtId}, BackendCommunityId={backendCommunityId}, FirebaseUid={currentUid}");
+            var createdMessage =
+                await _communityService
+                    .CreateCommunityMessageAsync(
+                        communityId:
+                            GetBackendCommunityId(),
 
-            var createdMessage = await _communityService.CreateCommunityMessageAsync(
-                communityId: backendCommunityId,
-                content: text,
-                messageType: "text",
-                branchId: _branchId > 0 ? _branchId.ToString() : null,
-                regionId: _regionId > 0 ? _regionId.ToString() : null,
-                districtId: _districtId > 0 ? _districtId.ToString() : null,
-                organizationalLevel: OrganizationalLevel);
+                        content:
+                            text,
 
-            if (createdMessage == null || string.IsNullOrWhiteSpace(createdMessage.MessageId))
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[GROUP_CHAT] Send returned no valid message id: GroupId={_groupId}, GroupName={GroupName}, GroupType={GroupType}, OrganizationalLevel={OrganizationalLevel}, BranchId={_branchId}, RegionId={_regionId}, DistrictId={_districtId}, BackendCommunityId={backendCommunityId}, FirebaseUid={currentUid}");
+                        messageType:
+                            "text",
 
-                await DisplayAlert("Message Not Sent", "Message could not be sent. Please check your connection and try again.", "OK");
-                return;
-            }
+                        branchId:
+                            _branchId > 0
+                                ? _branchId.ToString()
+                                : null,
 
-            MessageEntry.Text = string.Empty;
-            await RefreshMessagesAsync();
+                        regionId:
+                            _regionId > 0
+                                ? _regionId.ToString()
+                                : null,
+
+                        districtId:
+                            _districtId > 0
+                                ? _districtId.ToString()
+                                : null,
+
+                        organizationalLevel:
+                            OrganizationalLevel);
+
+            MessageEntry.Text =
+                string.Empty;
+
+            var uiMessage =
+                ToUiMessage(
+                    createdMessage);
+
+            AddOrReplaceMessage(
+                uiMessage);
+
+            RenderMessages();
         }
         catch (Exception ex)
         {
-            LogSendFailure(ex, backendCommunityId, currentUid);
-            await DisplayAlert("Message Not Sent", "Message could not be sent. Please check your connection and try again.", "OK");
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Send failed: {ex}");
+
+            await DisplayAlert(
+                "Message not sent",
+                "The message could not be sent. Please try again.",
+                "OK");
         }
     }
 
-    private void LogSendFailure(Exception ex, string backendCommunityId, string firebaseUid)
-    {
-        System.Diagnostics.Debug.WriteLine("[GROUP_CHAT] Send message failed.");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] ExceptionType={ex.GetType().FullName}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] ExceptionMessage={ex.Message}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] GroupId={_groupId}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] GroupName={GroupName}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] GroupType={GroupType}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] OrganizationalLevel={OrganizationalLevel}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] BranchId={_branchId}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] RegionId={_regionId}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] DistrictId={_districtId}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] BackendCommunityId={backendCommunityId}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] FirebaseUid={firebaseUid}");
-        System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] FullException={ex}");
-    }
-    private async void MembersLabel_Tapped(object? sender, EventArgs e)
+    // ============================================================
+    // ATTACHMENT BUTTON
+    // ============================================================
+
+    private async void OnAttachmentClicked(
+        object? sender,
+        EventArgs e)
     {
         try
         {
-            var members = await LoadGroupMembersAsync();
+            var choice =
+                await DisplayActionSheet(
+                    "Attach",
+                    "Cancel",
+                    null,
+                    "🖼️ Image",
+                    "🎥 Video",
+                    "🎵 Audio");
+
+            switch (choice)
+            {
+                case "🖼️ Image":
+                    await PickImageAsync();
+                    break;
+
+                case "🎥 Video":
+                    await PickVideoAsync();
+                    break;
+
+                case "🎵 Audio":
+                    await PickAudioAsync();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Attachment menu failed: {ex}");
+        }
+    }
+
+    // ============================================================
+    // PICK IMAGE
+    // ============================================================
+
+    private async Task PickImageAsync()
+    {
+        try
+        {
+            var file =
+                await MediaPicker.Default
+                    .PickPhotoAsync(
+                        new MediaPickerOptions
+                        {
+                            Title =
+                                "Select an image"
+                        });
+
+            if (file == null)
+            {
+                return;
+            }
+
+            await UploadAndSendMediaAsync(
+                file,
+                "image");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Image selection failed: {ex}");
+
+            await DisplayAlert(
+                "Image",
+                "Unable to select or upload the image.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // PICK VIDEO
+    // ============================================================
+
+    private async Task PickVideoAsync()
+    {
+        try
+        {
+            var file =
+                await MediaPicker.Default
+                    .PickVideoAsync(
+                        new MediaPickerOptions
+                        {
+                            Title =
+                                "Select a video"
+                        });
+
+            if (file == null)
+            {
+                return;
+            }
+
+            await UploadAndSendMediaAsync(
+                file,
+                "video");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Video selection failed: {ex}");
+
+            await DisplayAlert(
+                "Video",
+                "Unable to select or upload the video.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // PICK AUDIO
+    // ============================================================
+
+    private async Task PickAudioAsync()
+    {
+        try
+        {
+            var fileType =
+                new FilePickerFileType(
+                    new Dictionary<
+                        DevicePlatform,
+                        IEnumerable<string>>
+                    {
+                        [DevicePlatform.Android] =
+                            new[]
+                            {
+                                "audio/*"
+                            }
+                    });
+
+            var file =
+                await FilePicker.Default
+                    .PickAsync(
+                        new PickOptions
+                        {
+                            PickerTitle =
+                                "Select audio",
+
+                            FileTypes =
+                                fileType
+                        });
+
+            if (file == null)
+            {
+                return;
+            }
+
+            await UploadAndSendMediaAsync(
+                file,
+                "audio");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Audio selection failed: {ex}");
+
+            await DisplayAlert(
+                "Audio",
+                "Unable to select or upload the audio.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // MEDIA UPLOAD + SEND
+    // ============================================================
+
+    private async Task UploadAndSendMediaAsync(
+        FileResult file,
+        string messageType)
+    {
+        try
+        {
+            SetComposerBusy(
+                true,
+                $"Uploading {messageType}...");
+
+            CloudinaryUploadResult upload;
+
+            switch (
+                messageType
+                    .Trim()
+                    .ToLowerInvariant())
+            {
+                case "image":
+
+                    upload =
+                        await _cloudinaryService
+                            .UploadImageAsync(
+                                file);
+
+                    break;
+
+                case "video":
+
+                    upload =
+                        await _cloudinaryService
+                            .UploadVideoAsync(
+                                file);
+
+                    break;
+
+                case "audio":
+
+                    upload =
+                        await _cloudinaryService
+                            .UploadAudioAsync(
+                                file);
+
+                    break;
+
+                default:
+
+                    throw new InvalidOperationException(
+                        "Unsupported media type.");
+            }
+
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
+                    .GetCurrentUserAsync();
+
+            if (currentUser == null)
+            {
+                throw new InvalidOperationException(
+                    "You must be signed in.");
+            }
+
+            var validation =
+                await ValidateGroupAccessAsync(
+                    currentUser);
+
+            if (!validation.IsAllowed)
+            {
+                throw new UnauthorizedAccessException(
+                    validation.Message);
+            }
+
+            var createdMessage =
+                await _communityService
+                    .CreateCommunityMessageAsync(
+                        communityId:
+                            GetBackendCommunityId(),
+
+                        content:
+                            file.FileName,
+
+                        messageType:
+                            messageType,
+
+                        branchId:
+                            _branchId > 0
+                                ? _branchId.ToString()
+                                : null,
+
+                        regionId:
+                            _regionId > 0
+                                ? _regionId.ToString()
+                                : null,
+
+                        districtId:
+                            _districtId > 0
+                                ? _districtId.ToString()
+                                : null,
+
+                        organizationalLevel:
+                            OrganizationalLevel,
+
+                        mediaUrl:
+                            upload.SecureUrl,
+
+                        thumbnailUrl:
+                            string.Empty,
+
+                        fileName:
+                            upload.OriginalFilename,
+
+                        fileSize:
+                            upload.Bytes,
+
+                        duration:
+                            upload.Duration);
+
+            var uiMessage =
+                ToUiMessage(
+                    createdMessage);
+
+            AddOrReplaceMessage(
+                uiMessage);
+
+            RenderMessages();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            await DisplayAlert(
+                "Access denied",
+                ex.Message,
+                "OK");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Media send failed: {ex}");
+
+            await DisplayAlert(
+                "Media not sent",
+                "The media could not be sent. Please try again.",
+                "OK");
+        }
+        finally
+        {
+            SetComposerBusy(
+                false,
+                null);
+        }
+    }
+
+    // ============================================================
+    // COMPOSER STATE
+    // ============================================================
+
+    private void SetComposerBusy(
+        bool busy,
+        string? status)
+    {
+        MainThread.BeginInvokeOnMainThread(
+            () =>
+            {
+                AttachmentButton.IsEnabled =
+                    !busy;
+
+                SendButton.IsEnabled =
+                    !busy;
+
+                MessageEntry.IsEnabled =
+                    !busy;
+
+                if (!string.IsNullOrWhiteSpace(
+                        status))
+                {
+                    GroupStatusLabel.Text =
+                        status;
+                }
+            });
+    }
+
+    // ============================================================
+    // MESSAGE INSERT / REPLACE
+    // ============================================================
+
+    private void AddOrReplaceMessage(
+        GroupChatMessageUi message)
+    {
+        var existingIndex =
+            _messages.FindIndex(
+                existing =>
+                    string.Equals(
+                        existing.MessageId,
+                        message.MessageId,
+                        StringComparison.Ordinal));
+
+        if (existingIndex >= 0)
+        {
+            _messages[existingIndex] =
+                message;
+        }
+        else
+        {
+            _messages.Add(
+                message);
+        }
+
+        _messages.Sort(
+            (left, right) =>
+                left.CreatedAt.CompareTo(
+                    right.CreatedAt));
+    }
+
+    // ============================================================
+    // MEMBERS
+    // ============================================================
+
+    private async Task<List<GroupMemberUi>>
+        LoadGroupMembersAsync()
+    {
+        try
+        {
+            var snapshot =
+                await _firestore
+                    .GetCollection(
+                        $"groups/{_groupId}/members")
+                    .GetDocumentsAsync<
+                        FirestoreGroupMemberDocument>(
+                        Source.Default);
+
+            if (snapshot != null &&
+                snapshot.Documents.Any())
+            {
+                return snapshot.Documents
+                    .Select(
+                        document =>
+                            document.Data)
+                    .Where(
+                        member =>
+                            member != null)
+                    .Select(
+                        member =>
+                            new GroupMemberUi
+                            {
+                                Uid =
+                                    string.IsNullOrWhiteSpace(
+                                        member!.Uid)
+                                        ? member.DocumentId
+                                        : member.Uid,
+
+                                DisplayName =
+                                    !string.IsNullOrWhiteSpace(
+                                        member.FullName)
+                                        ? member.FullName
+                                        : !string.IsNullOrWhiteSpace(
+                                            member.Username)
+                                            ? member.Username
+                                            : "Member",
+
+                                Role =
+                                    string.IsNullOrWhiteSpace(
+                                        member.Role)
+                                        ? "Member"
+                                        : member.Role,
+
+                                LeadershipLevel =
+                                    string.IsNullOrWhiteSpace(
+                                        member.LeadershipLevel)
+                                        ? "Member"
+                                        : member.LeadershipLevel,
+
+                                IsCurrentUser =
+                                    string.Equals(
+                                        GetCurrentUserUid(),
+                                        string.IsNullOrWhiteSpace(
+                                            member.Uid)
+                                            ? member.DocumentId
+                                            : member.Uid,
+                                        StringComparison.Ordinal)
+                            })
+                    .OrderBy(
+                        member =>
+                            member.DisplayName,
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return await LoadGroupMembersFromUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Group member load failed: {ex}");
+
+            return await LoadGroupMembersFromUsersAsync();
+        }
+    }
+
+    private async Task<List<GroupMemberUi>>
+        LoadGroupMembersFromUsersAsync()
+    {
+        try
+        {
+            var snapshot =
+                await _firestore
+                    .GetCollection("users")
+                    .GetDocumentsAsync<
+                        FirestoreUserProfileDocument>(
+                        Source.Default);
+
+            if (snapshot == null)
+            {
+                return new List<GroupMemberUi>();
+            }
+
+            var currentUid =
+                GetCurrentUserUid();
+
+            return snapshot.Documents
+                .Select(
+                    document =>
+                        document.Data)
+                .Where(
+                    profile =>
+                        profile != null &&
+                        IsProfileEligibleForGroup(
+                            profile,
+                            currentUid))
+                .Select(
+                    profile =>
+                        new GroupMemberUi
+                        {
+                            Uid =
+                                string.IsNullOrWhiteSpace(
+                                    profile!.Uid)
+                                    ? profile.DocumentId
+                                    : profile.Uid,
+
+                            DisplayName =
+                                !string.IsNullOrWhiteSpace(
+                                    profile.FullName)
+                                    ? profile.FullName
+                                    : !string.IsNullOrWhiteSpace(
+                                        profile.Username)
+                                        ? profile.Username
+                                        : "Member",
+
+                            Role =
+                                string.IsNullOrWhiteSpace(
+                                    profile.Role)
+                                    ? "Member"
+                                    : profile.Role,
+
+                            LeadershipLevel =
+                                string.IsNullOrWhiteSpace(
+                                    profile.LeadershipLevel)
+                                    ? "Member"
+                                    : profile.LeadershipLevel,
+
+                            IsCurrentUser =
+                                string.Equals(
+                                    currentUid,
+                                    string.IsNullOrWhiteSpace(
+                                        profile.Uid)
+                                        ? profile.DocumentId
+                                        : profile.Uid,
+                                    StringComparison.Ordinal)
+                        })
+                .OrderBy(
+                    member =>
+                        member.DisplayName,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] User member fallback failed: {ex}");
+
+            return new List<GroupMemberUi>();
+        }
+    }
+
+    private bool IsProfileEligibleForGroup(
+        FirestoreUserProfileDocument profile,
+        string currentUid)
+    {
+        var level =
+            NormalizeLevel(
+                OrganizationalLevel);
+
+        if (string.IsNullOrWhiteSpace(
+                level))
+        {
+            return false;
+        }
+
+        if (string.Equals(
+                level,
+                "District",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return
+                profile.DistrictId > 0 &&
+                DistrictId > 0 &&
+                profile.DistrictId ==
+                    DistrictId;
+        }
+
+        if (string.Equals(
+                level,
+                "Regional",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return
+                profile.RegionId > 0 &&
+                RegionId > 0 &&
+                profile.RegionId ==
+                    RegionId;
+        }
+
+        if (string.Equals(
+                level,
+                "Branch",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var selectedBranchId =
+                BranchId > 0
+                    ? BranchId
+                    : TryParseBranchIdFromGroupId(
+                        _groupId);
+
+            return
+                selectedBranchId > 0 &&
+                profile.BranchId ==
+                    selectedBranchId;
+        }
+
+        if (string.Equals(
+                level,
+                "National",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var profileUid =
+                string.IsNullOrWhiteSpace(
+                    profile.Uid)
+                    ? profile.DocumentId
+                    : profile.Uid;
+
+            return
+                string.Equals(
+                    profile.LeadershipLevel,
+                    "National",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    profile.Role,
+                    "National Leader",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    currentUid,
+                    profileUid,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    // ============================================================
+    // MEMBERS CLICK
+    // ============================================================
+
+    private async void MembersLabel_Tapped(
+        object? sender,
+        EventArgs e)
+    {
+        try
+        {
+            var members =
+                await LoadGroupMembersAsync();
+
             if (members.Count == 0)
             {
-                await DisplayAlert("Group Members", "No registered members are assigned to this group yet.", "OK");
+                await DisplayAlert(
+                    "Group Members",
+                    "No registered members are assigned to this group yet.",
+                    "OK");
+
                 return;
             }
 
-            var details = string.Join(Environment.NewLine, members.Select(m => $"• {m.DisplayName}{(m.IsCurrentUser ? " - You" : $" - {m.LeadershipLevel}")}"));
-            await DisplayAlert($"Group Members ({members.Count})", details, "OK");
+            var details =
+                string.Join(
+                    Environment.NewLine,
+                    members.Select(
+                        member =>
+                            $"• {member.DisplayName}" +
+                            (member.IsCurrentUser
+                                ? " - You"
+                                : $" - {member.LeadershipLevel}")));
+
+            await DisplayAlert(
+                $"Group Members ({members.Count})",
+                details,
+                "OK");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Members label failed: {ex}");
-            await DisplayAlert("Group Members", "The member list could not be loaded right now.", "OK");
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Members dialog failed: {ex}");
+
+            await DisplayAlert(
+                "Group Members",
+                "The member list could not be loaded right now.",
+                "OK");
         }
     }
 
-    private async void AddMemberButton_Clicked(object? sender, EventArgs e)
+    // ============================================================
+    // ADD MEMBER
+    // ============================================================
+
+    private async void AddMemberButton_Clicked(
+        object? sender,
+        EventArgs e)
     {
         try
         {
-            var currentUser = MauiProgram.CurrentUser ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
+                    .GetCurrentUserAsync();
+
             if (currentUser == null)
             {
-                await DisplayAlert("Sign in required", "Please sign in to manage this group.", "OK");
+                await DisplayAlert(
+                    "Sign in required",
+                    "Please sign in to manage this group.",
+                    "OK");
+
                 return;
             }
 
-            var validation = await ValidateGroupAccessAsync(currentUser);
+            var validation =
+                await ValidateGroupAccessAsync(
+                    currentUser);
+
             if (!validation.IsAllowed)
             {
-                await DisplayAlert("Access denied", validation.Message, "OK");
+                await DisplayAlert(
+                    "Access denied",
+                    validation.Message,
+                    "OK");
+
                 return;
             }
 
-            var isAuthorized = IsAuthorizedToManageMembers(currentUser);
-            if (!isAuthorized)
+            if (!IsAuthorizedToManageMembers(
+                    currentUser))
             {
-                await DisplayAlert("Access denied", "Only authorized group leaders can add or invite members.", "OK");
+                await DisplayAlert(
+                    "Access denied",
+                    "Only authorized group leaders can add or invite members.",
+                    "OK");
+
                 return;
             }
 
-            var invitationId = Guid.NewGuid().ToString("N");
-            var invitation = new GroupInvitationRecord
-            {
-                InvitationId = invitationId,
-                GroupId = _groupId,
-                GroupName = GroupName,
-                OrganizationalLevel = OrganizationalLevel,
-                CreatedByUid = GetCurrentUserUid(),
-                CreatedAt = DateTime.UtcNow,
-                Status = "pending"
-            };
+            var invitationId =
+                Guid.NewGuid().ToString("N");
 
-            var invitationRef = _firestore.GetCollection("groupInvitations").GetDocument(invitationId);
-            await invitationRef.SetDataAsync(invitation);
+            var invitation =
+                new GroupInvitationRecord
+                {
+                    InvitationId =
+                        invitationId,
 
-            var deepLink = $"cctuscf://groupInvite?groupId={_groupId}&invitationId={invitationId}";
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Invitation created: invitationId={invitationId} groupId={_groupId} createdByUid={GetCurrentUserUid()}");
+                    GroupId =
+                        _groupId,
 
-            await Share.Default.RequestAsync(new ShareTextRequest
-            {
-                Title = $"Invite people to {GroupName}",
-                Text = $"Join CCT-USCF and connect with the {GroupName}.\n\n{deepLink}"
-            });
+                    GroupName =
+                        GroupName,
 
-            await DisplayAlert("Invite people to " + GroupName, "The group invitation link was created and shared.", "OK");
+                    OrganizationalLevel =
+                        OrganizationalLevel,
+
+                    CreatedByUid =
+                        GetCurrentUserUid(),
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    Status =
+                        "pending"
+                };
+
+            await _firestore
+                .GetCollection(
+                    "groupInvitations")
+                .GetDocument(
+                    invitationId)
+                .SetDataAsync(
+                    invitation);
+
+            var deepLink =
+                $"cctuscf://groupInvite" +
+                $"?groupId={_groupId}" +
+                $"&invitationId={invitationId}";
+
+            await Share.Default.RequestAsync(
+                new ShareTextRequest
+                {
+                    Title =
+                        $"Invite people to {GroupName}",
+
+                    Text =
+                        $"Join CCT-USCF and connect with the {GroupName}." +
+                        $"\n\n{deepLink}"
+                });
+
+            await DisplayAlert(
+                $"Invite people to {GroupName}",
+                "The group invitation link was created and shared.",
+                "OK");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Invitation creation failed: {ex}");
-            await DisplayAlert("Invitation could not be created", "Please check your connection and try again.", "OK");
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Invitation failed: {ex}");
+
+            await DisplayAlert(
+                "Invitation failed",
+                "The invitation could not be created.",
+                "OK");
         }
     }
 
-    private bool IsAuthorizedToManageMembers(CCT_USCF.Models.CurrentUser currentUser)
+    // ============================================================
+    // AUTHORIZATION
+    // ============================================================
+
+    private bool IsAuthorizedToManageMembers(
+        CCT_USCF.Models.CurrentUser currentUser)
     {
-        var normalizedLevel = NormalizeLevel(OrganizationalLevel);
-        if (string.IsNullOrWhiteSpace(normalizedLevel))
+        var level =
+            NormalizeLevel(
+                OrganizationalLevel);
+
+        if (string.IsNullOrWhiteSpace(
+                level))
+        {
             return false;
+        }
 
-        if (string.Equals(currentUser.LeadershipLevel, normalizedLevel, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        return IsLeaderGroup() && string.Equals(currentUser.LeadershipLevel, normalizedLevel, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(
+            currentUser.LeadershipLevel,
+            level,
+            StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<(bool IsAllowed, string Message)> ValidateGroupAccessAsync(CCT_USCF.Models.CurrentUser currentUser)
+    private async Task<(
+        bool IsAllowed,
+        string Message)>
+        ValidateGroupAccessAsync(
+            CCT_USCF.Models.CurrentUser currentUser)
     {
-        var normalizedLevel = NormalizeLevel(OrganizationalLevel);
-        if (string.IsNullOrWhiteSpace(_groupId))
-            return (false, "This group is unavailable.");
+        var level =
+            NormalizeLevel(
+                OrganizationalLevel);
 
-        if (string.IsNullOrWhiteSpace(normalizedLevel))
-            return (false, "The group could not be identified.");
+        if (string.IsNullOrWhiteSpace(
+                _groupId))
+        {
+            return (
+                false,
+                "This group is unavailable.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                level))
+        {
+            return (
+                false,
+                "The group could not be identified.");
+        }
 
         if (IsLeaderGroup())
         {
-            if (!string.Equals(currentUser.LeadershipLevel, normalizedLevel, StringComparison.OrdinalIgnoreCase))
-                return (false, $"You are not a member of the {GroupName}.");
+            if (!string.Equals(
+                    currentUser.LeadershipLevel,
+                    level,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return (
+                    false,
+                    $"You are not a member of the {GroupName}.");
+            }
 
-            if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase) && (currentUser.DistrictId == null || currentUser.DistrictId.Value != DistrictId))
-                return (false, "This group is outside your assigned organizational area.");
+            if (string.Equals(
+                    level,
+                    "District",
+                    StringComparison.OrdinalIgnoreCase) &&
+                (!currentUser.DistrictId.HasValue ||
+                 currentUser.DistrictId.Value !=
+                    DistrictId))
+            {
+                return (
+                    false,
+                    "This group is outside your assigned organizational area.");
+            }
 
-            if (string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase) && (currentUser.RegionId == null || currentUser.RegionId.Value != RegionId))
-                return (false, "This group is outside your assigned organizational area.");
+            if (string.Equals(
+                    level,
+                    "Regional",
+                    StringComparison.OrdinalIgnoreCase) &&
+                (!currentUser.RegionId.HasValue ||
+                 currentUser.RegionId.Value !=
+                    RegionId))
+            {
+                return (
+                    false,
+                    "This group is outside your assigned organizational area.");
+            }
 
-            if (string.Equals(normalizedLevel, "National", StringComparison.OrdinalIgnoreCase) && !string.Equals(currentUser.LeadershipLevel, "National", StringComparison.OrdinalIgnoreCase))
-                return (false, "You are not registered at this organizational level.");
+            if (string.Equals(
+                    level,
+                    "National",
+                    StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(
+                    currentUser.LeadershipLevel,
+                    "National",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return (
+                    false,
+                    "You are not registered at this organizational level.");
+            }
 
-            return (true, $"{GroupName} access approved.");
+            return (
+                true,
+                "Group access approved.");
         }
 
-        if (string.Equals(normalizedLevel, "National", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(
+                level,
+                "National",
+                StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.Equals(currentUser.LeadershipLevel, "National", StringComparison.OrdinalIgnoreCase))
-                return (false, "You are not registered at this organizational level.");
-
-            return (true, "National group access approved.");
+            return string.Equals(
+                currentUser.LeadershipLevel,
+                "National",
+                StringComparison.OrdinalIgnoreCase)
+                ? (
+                    true,
+                    "National group access approved.")
+                : (
+                    false,
+                    "You are not registered at this organizational level.");
         }
 
-        if (string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(
+                level,
+                "Regional",
+                StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.Equals(currentUser.LeadershipLevel, "Regional", StringComparison.OrdinalIgnoreCase) && !currentUser.RegionId.HasValue)
-                return (false, "You are not registered at this organizational level.");
+            if (!currentUser.RegionId.HasValue)
+            {
+                return (
+                    false,
+                    "You are not assigned to a region.");
+            }
 
-            if (!currentUser.RegionId.HasValue || currentUser.RegionId.Value != RegionId)
-                return (false, "This group is outside your assigned organizational area.");
-
-            return (true, "Regional group access approved.");
+            return currentUser.RegionId.Value ==
+                   RegionId
+                ? (
+                    true,
+                    "Regional group access approved.")
+                : (
+                    false,
+                    "This group is outside your assigned organizational area.");
         }
 
-        if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(
+                level,
+                "District",
+                StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.Equals(currentUser.LeadershipLevel, "District", StringComparison.OrdinalIgnoreCase) && !currentUser.DistrictId.HasValue)
-                return (false, "You are not registered at this organizational level.");
+            if (!currentUser.DistrictId.HasValue)
+            {
+                return (
+                    false,
+                    "You are not assigned to a district.");
+            }
 
-            if (!currentUser.DistrictId.HasValue || currentUser.DistrictId.Value != DistrictId)
-                return (false, "This group is outside your assigned organizational area.");
-
-            return (true, "District group access approved.");
+            return currentUser.DistrictId.Value ==
+                   DistrictId
+                ? (
+                    true,
+                    "District group access approved.")
+                : (
+                    false,
+                    "This group is outside your assigned organizational area.");
         }
 
-        return (false, "The selected group could not be validated.");
+        if (string.Equals(
+                level,
+                "Branch",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var selectedBranchId =
+                BranchId > 0
+                    ? BranchId
+                    : TryParseBranchIdFromGroupId(
+                        _groupId);
+
+            if (!currentUser.BranchId.HasValue)
+            {
+                return (
+                    false,
+                    "You are not assigned to a branch.");
+            }
+
+            return currentUser.BranchId.Value ==
+                   selectedBranchId
+                ? (
+                    true,
+                    "Branch group access approved.")
+                : (
+                    false,
+                    "This group is outside your assigned branch.");
+        }
+
+        return (
+            false,
+            "The selected group could not be validated.");
     }
 
-    private async Task EnsureCurrentUserMembershipAsync(CCT_USCF.Models.CurrentUser currentUser)
+    // ============================================================
+    // ENSURE MEMBERSHIP
+    // ============================================================
+
+    private async Task EnsureCurrentUserMembershipAsync(
+        CCT_USCF.Models.CurrentUser currentUser)
     {
         try
         {
-            var currentUid = GetCurrentUserUid();
-            if (string.IsNullOrWhiteSpace(currentUid))
-                return;
+            var currentUid =
+                GetCurrentUserUid();
 
-            var member = new FirestoreGroupMemberDocument
+            if (string.IsNullOrWhiteSpace(
+                    currentUid))
             {
-                DocumentId = currentUid,
-                Uid = currentUid,
-                FullName = !string.IsNullOrWhiteSpace(currentUser.FullName) ? currentUser.FullName : currentUser.Username,
-                Username = currentUser.Username,
-                Role = currentUser.Role,
-                LeadershipLevel = currentUser.LeadershipLevel,
-                GroupName = GroupName,
-                OrganizationalLevel = OrganizationalLevel,
-                RegionId = currentUser.RegionId ?? RegionId,
-                DistrictId = currentUser.DistrictId ?? DistrictId,
-                BranchId = currentUser.BranchId ?? BranchId,
-                Status = "active",
-                CreatedAt = DateTime.UtcNow
-            };
+                return;
+            }
+
+            var member =
+                new FirestoreGroupMemberDocument
+                {
+                    DocumentId =
+                        currentUid,
+
+                    Uid =
+                        currentUid,
+
+                    FullName =
+                        !string.IsNullOrWhiteSpace(
+                            currentUser.FullName)
+                            ? currentUser.FullName
+                            : currentUser.Username,
+
+                    Username =
+                        currentUser.Username,
+
+                    Role =
+                        currentUser.Role,
+
+                    LeadershipLevel =
+                        currentUser.LeadershipLevel,
+
+                    GroupName =
+                        GroupName,
+
+                    OrganizationalLevel =
+                        OrganizationalLevel,
+
+                    RegionId =
+                        currentUser.RegionId
+                        ?? RegionId,
+
+                    DistrictId =
+                        currentUser.DistrictId
+                        ?? DistrictId,
+
+                    BranchId =
+                        currentUser.BranchId
+                        ?? BranchId,
+
+                    Status =
+                        "active",
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
 
             await _firestore
-                .GetCollection($"groups/{_groupId}/members")
-                .GetDocument(currentUid)
-                .SetDataAsync(member);
+                .GetCollection(
+                    $"groups/{_groupId}/members")
+                .GetDocument(
+                    currentUid)
+                .SetDataAsync(
+                    member);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Ensure membership failed: {ex}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Ensure membership failed: {ex}");
         }
     }
 
+    // ============================================================
+    // COMMUNITY ID
+    // ============================================================
+
     private string GetBackendCommunityId()
     {
-        var normalizedLevel = NormalizeLevel(OrganizationalLevel);
+        var level =
+            NormalizeLevel(
+                OrganizationalLevel);
 
-        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(
+                level,
+                "Branch",
+                StringComparison.OrdinalIgnoreCase))
         {
             if (_branchId > 0)
+            {
                 return _branchId.ToString();
+            }
 
-            var parsedBranchId = TryParseBranchIdFromGroupId(_groupId);
+            var parsedBranchId =
+                TryParseBranchIdFromGroupId(
+                    _groupId);
+
             if (parsedBranchId > 0)
+            {
                 return parsedBranchId.ToString();
+            }
         }
 
-        if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase) && _districtId > 0)
+        if (string.Equals(
+                level,
+                "District",
+                StringComparison.OrdinalIgnoreCase) &&
+            _districtId > 0)
+        {
             return _districtId.ToString();
+        }
 
-        if ((string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(normalizedLevel, "Region", StringComparison.OrdinalIgnoreCase)) && _regionId > 0)
+        if ((string.Equals(
+                level,
+                "Regional",
+                StringComparison.OrdinalIgnoreCase)
+             ||
+             string.Equals(
+                 level,
+                 "Region",
+                 StringComparison.OrdinalIgnoreCase))
+            &&
+            _regionId > 0)
+        {
             return _regionId.ToString();
+        }
 
         return _groupId;
     }
 
-    private static int TryParseBranchIdFromGroupId(string? groupId)
-    {
-        if (string.IsNullOrWhiteSpace(groupId))
-            return 0;
+    // ============================================================
+    // HELPERS
+    // ============================================================
 
-        var digits = new string(groupId.Where(char.IsDigit).ToArray());
-        return int.TryParse(digits, out var parsed) && parsed > 0
-            ? parsed
-            : 0;
+    private bool IsLeaderGroup()
+    {
+        return
+            GroupName.Contains(
+                "Leader Group",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            GroupType.Contains(
+                "Leader Group",
+                StringComparison.OrdinalIgnoreCase);
     }
-    private bool IsLeaderGroup() =>
-        GroupName.Contains("Leader Group", StringComparison.OrdinalIgnoreCase)
-        || GroupType.Contains("Leader Group", StringComparison.OrdinalIgnoreCase);
 
-    private static string NormalizeLevel(string? value)
+    private static string NormalizeLevel(
+        string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            return string.Empty;
-
-        var normalized = value.Trim();
-        return normalized switch
+        if (string.IsNullOrWhiteSpace(
+                value))
         {
-            "District Group" => "District",
-            "Regional Group" => "Regional",
-            "National Group" => "National",
-            "Branch Group" => "Branch",
-            _ => normalized
+            return string.Empty;
+        }
+
+        return value.Trim() switch
+        {
+            "District Group" =>
+                "District",
+
+            "Regional Group" =>
+                "Regional",
+
+            "Region Group" =>
+                "Regional",
+
+            "National Group" =>
+                "National",
+
+            "Branch Group" =>
+                "Branch",
+
+            _ =>
+                value.Trim()
         };
     }
 
-    private string GetCurrentUserUid() =>
-        _auth.CurrentUser?.Uid ?? string.Empty;
+    private static int TryParseBranchIdFromGroupId(
+        string? groupId)
+    {
+        if (string.IsNullOrWhiteSpace(
+                groupId))
+        {
+            return 0;
+        }
 
-    private sealed class FirestoreUserProfileDocument : IFirestoreObject
+        var digits =
+            new string(
+                groupId
+                    .Where(char.IsDigit)
+                    .ToArray());
+
+        return
+            int.TryParse(
+                digits,
+                out var parsed) &&
+            parsed > 0
+                ? parsed
+                : 0;
+    }
+
+    private static string TryGetString(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out var value))
+        {
+            return string.Empty;
+        }
+
+        if (value.ValueKind ==
+                JsonValueKind.Null ||
+            value.ValueKind ==
+                JsonValueKind.Undefined)
+        {
+            return string.Empty;
+        }
+
+        return value.ToString();
+    }
+
+    private static long TryGetLong(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out var value))
+        {
+            return 0;
+        }
+
+        if (value.ValueKind ==
+            JsonValueKind.Number)
+        {
+            if (value.TryGetInt64(
+                    out var integerValue))
+            {
+                return integerValue;
+            }
+
+            if (value.TryGetDouble(
+                    out var doubleValue))
+            {
+                return Convert.ToInt64(
+                    doubleValue);
+            }
+        }
+
+        return long.TryParse(
+                value.ToString(),
+                out var parsed)
+            ? parsed
+            : 0;
+    }
+
+    private static double TryGetDouble(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out var value))
+        {
+            return 0;
+        }
+
+        if (value.ValueKind ==
+            JsonValueKind.Number)
+        {
+            if (value.TryGetDouble(
+                    out var number))
+            {
+                return number;
+            }
+        }
+
+        return double.TryParse(
+                value.ToString(),
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out var parsed)
+            ? parsed
+            : 0;
+    }
+
+    private static DateTime TryGetDateTime(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out var value))
+        {
+            return default;
+        }
+
+        if (value.ValueKind ==
+                JsonValueKind.Null ||
+            value.ValueKind ==
+                JsonValueKind.Undefined)
+        {
+            return default;
+        }
+
+        return DateTime.TryParse(
+                value.ToString(),
+                null,
+                DateTimeStyles.RoundtripKind,
+                out var parsed)
+            ? EnsureUtc(parsed)
+            : default;
+    }
+
+    private static DateTime EnsureUtc(
+        DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc =>
+                value,
+
+            DateTimeKind.Local =>
+                value.ToUniversalTime(),
+
+            _ =>
+                DateTime.SpecifyKind(
+                    value,
+                    DateTimeKind.Utc)
+        };
+    }
+
+    private string GetCurrentUserUid()
+    {
+        return _auth.CurrentUser?.Uid
+            ?? string.Empty;
+    }
+
+    private static string GetAppwriteDocumentId(
+        JsonElement element)
+    {
+        var id =
+            TryGetString(
+                element,
+                "$id");
+
+        return string.IsNullOrWhiteSpace(id)
+            ? TryGetString(
+                element,
+                "message_id")
+            : id;
+    }
+
+    // ============================================================
+    // REFRESH
+    // ============================================================
+
+    private async void OnMessagesRefreshing(
+        object? sender,
+        EventArgs e)
+    {
+        try
+        {
+            await LoadMessagesAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Refresh failed: {ex}");
+        }
+        finally
+        {
+            MessagesRefreshView.IsRefreshing =
+                false;
+        }
+    }
+
+    // ============================================================
+    // SCROLL
+    // ============================================================
+
+    private async Task ScrollMessagesToBottomAsync()
+    {
+        try
+        {
+            await MainThread.InvokeOnMainThreadAsync(
+                async () =>
+                {
+                    if (MessagesLayout.Parent
+                        is ScrollView scrollView)
+                    {
+                        await scrollView
+                            .ScrollToAsync(
+                                0,
+                                double.MaxValue,
+                                false);
+                    }
+                });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Scroll failed: {ex}");
+        }
+    }
+
+    // ============================================================
+    // UI MODELS
+    // ============================================================
+
+    private sealed class GroupChatMessageUi
+    {
+        public string MessageId { get; set; } =
+            string.Empty;
+
+        public string GroupId { get; set; } =
+            string.Empty;
+
+        public string SenderUid { get; set; } =
+            string.Empty;
+
+        public string SenderName { get; set; } =
+            string.Empty;
+
+        public string Text { get; set; } =
+            string.Empty;
+
+        public string MessageType { get; set; } =
+            "text";
+
+        public string MediaUrl { get; set; } =
+            string.Empty;
+
+        public string ThumbnailUrl { get; set; } =
+            string.Empty;
+
+        public string FileName { get; set; } =
+            string.Empty;
+
+        public long FileSize { get; set; }
+
+        public double Duration { get; set; }
+
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
+    }
+
+    private sealed class GroupMemberUi
+    {
+        public string Uid { get; set; } =
+            string.Empty;
+
+        public string DisplayName { get; set; } =
+            string.Empty;
+
+        public string Role { get; set; } =
+            "Member";
+
+        public string LeadershipLevel { get; set; } =
+            "Member";
+
+        public bool IsCurrentUser { get; set; }
+    }
+
+    // ============================================================
+    // FIRESTORE USER PROFILE
+    // ============================================================
+
+    private sealed class FirestoreUserProfileDocument
+        : IFirestoreObject
     {
         [FirestoreDocumentId]
-        public string DocumentId { get; set; } = string.Empty;
+        public string DocumentId { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("uid")]
-        public string Uid { get; set; } = string.Empty;
+        public string Uid { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("fullName")]
-        public string FullName { get; set; } = string.Empty;
+        public string FullName { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("username")]
-        public string Username { get; set; } = string.Empty;
+        public string Username { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("role")]
-        public string Role { get; set; } = string.Empty;
+        public string Role { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("leadershipLevel")]
-        public string LeadershipLevel { get; set; } = string.Empty;
+        public string LeadershipLevel { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("regionId")]
         public int RegionId { get; set; }
@@ -933,31 +3048,44 @@ public partial class GroupChatPage : ContentPage
         public int BranchId { get; set; }
     }
 
-    private sealed class FirestoreGroupMemberDocument : IFirestoreObject
+    // ============================================================
+    // FIRESTORE GROUP MEMBER
+    // ============================================================
+
+    private sealed class FirestoreGroupMemberDocument
+        : IFirestoreObject
     {
         [FirestoreDocumentId]
-        public string DocumentId { get; set; } = string.Empty;
+        public string DocumentId { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("uid")]
-        public string Uid { get; set; } = string.Empty;
+        public string Uid { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("fullName")]
-        public string FullName { get; set; } = string.Empty;
+        public string FullName { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("username")]
-        public string Username { get; set; } = string.Empty;
+        public string Username { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("role")]
-        public string Role { get; set; } = string.Empty;
+        public string Role { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("leadershipLevel")]
-        public string LeadershipLevel { get; set; } = string.Empty;
+        public string LeadershipLevel { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("groupName")]
-        public string GroupName { get; set; } = string.Empty;
+        public string GroupName { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("organizationalLevel")]
-        public string OrganizationalLevel { get; set; } = string.Empty;
+        public string OrganizationalLevel { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("regionId")]
         public int RegionId { get; set; }
@@ -969,89 +3097,47 @@ public partial class GroupChatPage : ContentPage
         public int BranchId { get; set; }
 
         [FirestoreProperty("status")]
-        public string Status { get; set; } = "active";
+        public string Status { get; set; } =
+            "active";
 
         [FirestoreProperty("createdAt")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
     }
 
-    private sealed class FirestoreGroupChatMessage : IFirestoreObject
+    // ============================================================
+    // GROUP INVITATION
+    // ============================================================
+
+    private sealed class GroupInvitationRecord
+        : IFirestoreObject
     {
         [FirestoreDocumentId]
-        public string MessageId { get; set; } = string.Empty;
+        public string InvitationId { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("groupId")]
-        public string GroupId { get; set; } = string.Empty;
-
-        [FirestoreProperty("senderUid")]
-        public string SenderUid { get; set; } = string.Empty;
-
-        [FirestoreProperty("senderName")]
-        public string SenderName { get; set; } = string.Empty;
-
-        [FirestoreProperty("text")]
-        public string Text { get; set; } = string.Empty;
-
-        [FirestoreProperty("createdAt")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        [FirestoreProperty("timestamp")]
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-    }
-
-    private sealed class GroupInvitationRecord : IFirestoreObject
-    {
-        [FirestoreDocumentId]
-        public string InvitationId { get; set; } = string.Empty;
-
-        [FirestoreProperty("groupId")]
-        public string GroupId { get; set; } = string.Empty;
+        public string GroupId { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("groupName")]
-        public string GroupName { get; set; } = string.Empty;
+        public string GroupName { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("organizationalLevel")]
-        public string OrganizationalLevel { get; set; } = string.Empty;
+        public string OrganizationalLevel { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("createdByUid")]
-        public string CreatedByUid { get; set; } = string.Empty;
+        public string CreatedByUid { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("createdAt")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
 
         [FirestoreProperty("status")]
-        public string Status { get; set; } = "pending";
-    }
-
-    private sealed class BranchChatMessageUi
-{
-    public string MessageId { get; set; } = string.Empty;
-    public int BranchId { get; set; }
-
-    public string SenderUid { get; set; } = string.Empty;
-    public string SenderName { get; set; } = string.Empty;
-
-    public string Text { get; set; } = string.Empty;
-
-    public string MessageType { get; set; } = "text";
-
-    public string MediaUrl { get; set; } = string.Empty;
-
-    public string ThumbnailUrl { get; set; } = string.Empty;
-
-    public string FileName { get; set; } = string.Empty;
-
-    public long FileSize { get; set; }
-
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-}
-
-    private class GroupMemberUi
-    {
-        public string Uid { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
-        public string Role { get; set; } = "Member";
-        public string LeadershipLevel { get; set; } = "Member";
-        public bool IsCurrentUser { get; set; }
+        public string Status { get; set; } =
+            "pending";
     }
 }

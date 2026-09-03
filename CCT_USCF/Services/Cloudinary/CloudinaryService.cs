@@ -1,5 +1,8 @@
+
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.Maui.Storage;
 
 namespace CCT_USCF.Services.Cloudinary
 {
@@ -12,17 +15,10 @@ namespace CCT_USCF.Services.Cloudinary
         private const string CloudName =
             "mjnzgze1";
 
-        // IMPORTANT:
-        // This must be an UNSIGNED upload preset.
-        //
-        // Replace the value below with the exact preset name
-        // you create in Cloudinary Console.
-        //
-        // Example:
-        // cct_uscf_mobile
-        //
+        // This is the UNSIGNED upload preset created
+        // in the Cloudinary Console.
         private const string UploadPreset =
-            "REPLACE_WITH_YOUR_UPLOAD_PRESET";
+            "cct_uscf_mobile";
 
         private readonly HttpClient _httpClient;
 
@@ -49,7 +45,7 @@ namespace CCT_USCF.Services.Cloudinary
         {
             return UploadAsync(
                 file,
-                resourceType: "image");
+                "image");
         }
 
         // ============================================================
@@ -62,14 +58,14 @@ namespace CCT_USCF.Services.Cloudinary
         {
             return UploadAsync(
                 file,
-                resourceType: "video");
+                "video");
         }
 
         // ============================================================
         // UPLOAD AUDIO
         //
-        // IMPORTANT:
-        // Cloudinary treats audio as resource_type = video.
+        // Cloudinary uses the "video" resource type
+        // for audio uploads.
         // ============================================================
 
         public Task<CloudinaryUploadResult>
@@ -78,7 +74,7 @@ namespace CCT_USCF.Services.Cloudinary
         {
             return UploadAsync(
                 file,
-                resourceType: "video");
+                "video");
         }
 
         // ============================================================
@@ -96,42 +92,11 @@ namespace CCT_USCF.Services.Cloudinary
                     nameof(file));
             }
 
-            if (string.IsNullOrWhiteSpace(
-                    resourceType))
-            {
-                throw new ArgumentException(
-                    "Cloudinary resource type is required.",
-                    nameof(resourceType));
-            }
-
-            if (string.Equals(
-                    UploadPreset,
-                    "REPLACE_WITH_YOUR_UPLOAD_PRESET",
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Cloudinary upload preset has not been configured.");
-            }
-
-            if (string.IsNullOrWhiteSpace(
-                    CloudName))
-            {
-                throw new InvalidOperationException(
-                    "Cloudinary cloud name is not configured.");
-            }
-
-            if (file == null)
-            {
-                throw new ArgumentNullException(
-                    nameof(file));
-            }
-
-            // --------------------------------------------------------
-            // Validate selected resource type.
-            // --------------------------------------------------------
-
             var normalizedResourceType =
-                resourceType.Trim().ToLowerInvariant();
+                resourceType?
+                    .Trim()
+                    .ToLowerInvariant()
+                ?? string.Empty;
 
             if (normalizedResourceType != "image" &&
                 normalizedResourceType != "video")
@@ -141,8 +106,22 @@ namespace CCT_USCF.Services.Cloudinary
                     nameof(resourceType));
             }
 
+            if (string.IsNullOrWhiteSpace(
+                    CloudName))
+            {
+                throw new InvalidOperationException(
+                    "Cloudinary cloud name is not configured.");
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    UploadPreset))
+            {
+                throw new InvalidOperationException(
+                    "Cloudinary upload preset is not configured.");
+            }
+
             // --------------------------------------------------------
-            // Open the selected file.
+            // OPEN FILE
             // --------------------------------------------------------
 
             await using var stream =
@@ -155,13 +134,13 @@ namespace CCT_USCF.Services.Cloudinary
             }
 
             // --------------------------------------------------------
-            // Cloudinary REST upload endpoint.
+            // CLOUDINARY UPLOAD ENDPOINT
             //
-            // Images:
-            // /image/upload
+            // image:
+            // https://api.cloudinary.com/v1_1/<cloud>/image/upload
             //
-            // Videos and audio:
-            // /video/upload
+            // video/audio:
+            // https://api.cloudinary.com/v1_1/<cloud>/video/upload
             // --------------------------------------------------------
 
             var uploadUrl =
@@ -173,7 +152,7 @@ namespace CCT_USCF.Services.Cloudinary
                 new MultipartFormDataContent();
 
             // --------------------------------------------------------
-            // File content.
+            // FILE
             // --------------------------------------------------------
 
             using var fileContent =
@@ -181,7 +160,8 @@ namespace CCT_USCF.Services.Cloudinary
 
             fileContent.Headers.ContentType =
                 new MediaTypeHeaderValue(
-                    GetContentType(file.FileName));
+                    GetContentType(
+                        file.FileName));
 
             form.Add(
                 fileContent,
@@ -198,7 +178,7 @@ namespace CCT_USCF.Services.Cloudinary
                 "upload_preset");
 
             // --------------------------------------------------------
-            // Send upload request.
+            // DEBUG
             // --------------------------------------------------------
 
             System.Diagnostics.Debug.WriteLine(
@@ -209,6 +189,9 @@ namespace CCT_USCF.Services.Cloudinary
 
             System.Diagnostics.Debug.WriteLine(
                 $"CloudName={CloudName}");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"UploadPreset={UploadPreset}");
 
             System.Diagnostics.Debug.WriteLine(
                 $"ResourceType={normalizedResourceType}");
@@ -222,13 +205,22 @@ namespace CCT_USCF.Services.Cloudinary
             System.Diagnostics.Debug.WriteLine(
                 "================================================");
 
+            // --------------------------------------------------------
+            // SEND
+            // --------------------------------------------------------
+
             using var response =
                 await _httpClient.PostAsync(
                     uploadUrl,
                     form);
 
             var rawJson =
-                await response.Content.ReadAsStringAsync();
+                await response.Content
+                    .ReadAsStringAsync();
+
+            // --------------------------------------------------------
+            // ERROR RESPONSE
+            // --------------------------------------------------------
 
             if (!response.IsSuccessStatusCode)
             {
@@ -247,14 +239,15 @@ namespace CCT_USCF.Services.Cloudinary
                     $"{rawJson}");
             }
 
-            if (string.IsNullOrWhiteSpace(rawJson))
+            if (string.IsNullOrWhiteSpace(
+                    rawJson))
             {
                 throw new InvalidOperationException(
                     "Cloudinary returned an empty upload response.");
             }
 
             // --------------------------------------------------------
-            // Parse Cloudinary response.
+            // DESERIALIZE CLOUDINARY RESPONSE
             // --------------------------------------------------------
 
             CloudinaryUploadResponse? responseModel;
@@ -267,11 +260,15 @@ namespace CCT_USCF.Services.Cloudinary
                         rawJson,
                         new JsonSerializerOptions
                         {
-                            PropertyNameCaseInsensitive = true
+                            PropertyNameCaseInsensitive =
+                                true
                         });
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CLOUDINARY] Response parsing failed: {ex}");
+
                 throw new InvalidOperationException(
                     "Cloudinary returned an invalid upload response.",
                     ex);
@@ -283,15 +280,22 @@ namespace CCT_USCF.Services.Cloudinary
                     "Cloudinary upload response could not be parsed.");
             }
 
+            // --------------------------------------------------------
+            // SECURE URL IS REQUIRED
+            // --------------------------------------------------------
+
             if (string.IsNullOrWhiteSpace(
                     responseModel.SecureUrl))
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CLOUDINARY] Raw response: {rawJson}");
+
                 throw new InvalidOperationException(
                     "Cloudinary did not return a secure media URL.");
             }
 
             // --------------------------------------------------------
-            // Build application result.
+            // BUILD APPLICATION RESULT
             // --------------------------------------------------------
 
             var result =
@@ -332,6 +336,10 @@ namespace CCT_USCF.Services.Cloudinary
                         responseModel.CreatedAt
                 };
 
+            // --------------------------------------------------------
+            // SUCCESS LOG
+            // --------------------------------------------------------
+
             System.Diagnostics.Debug.WriteLine(
                 "================================================");
 
@@ -357,20 +365,27 @@ namespace CCT_USCF.Services.Cloudinary
                 $"Duration={result.Duration}");
 
             System.Diagnostics.Debug.WriteLine(
+                $"Width={result.Width}");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Height={result.Height}");
+
+            System.Diagnostics.Debug.WriteLine(
                 "================================================");
 
             return result;
         }
 
         // ============================================================
-        // CONTENT TYPE HELPER
+        // CONTENT TYPE
         // ============================================================
 
         private static string
             GetContentType(
                 string? fileName)
         {
-            if (string.IsNullOrWhiteSpace(fileName))
+            if (string.IsNullOrWhiteSpace(
+                    fileName))
             {
                 return "application/octet-stream";
             }
@@ -421,6 +436,9 @@ namespace CCT_USCF.Services.Cloudinary
                 ".aac" =>
                     "audio/aac",
 
+                ".ogg" =>
+                    "audio/ogg",
+
                 _ =>
                     "application/octet-stream"
             };
@@ -428,7 +446,7 @@ namespace CCT_USCF.Services.Cloudinary
     }
 
     // ================================================================
-    // APPLICATION UPLOAD RESULT
+    // APPLICATION RESULT
     // ================================================================
 
     public sealed class CloudinaryUploadResult
@@ -461,28 +479,41 @@ namespace CCT_USCF.Services.Cloudinary
 
     // ================================================================
     // CLOUDINARY API RESPONSE
+    //
+    // JsonPropertyName is important because Cloudinary returns
+    // snake_case property names.
     // ================================================================
 
     internal sealed class CloudinaryUploadResponse
     {
+        [JsonPropertyName("secure_url")]
         public string? SecureUrl { get; set; }
 
+        [JsonPropertyName("public_id")]
         public string? PublicId { get; set; }
 
+        [JsonPropertyName("resource_type")]
         public string? ResourceType { get; set; }
 
+        [JsonPropertyName("format")]
         public string? Format { get; set; }
 
+        [JsonPropertyName("original_filename")]
         public string? OriginalFilename { get; set; }
 
+        [JsonPropertyName("bytes")]
         public long Bytes { get; set; }
 
+        [JsonPropertyName("duration")]
         public double Duration { get; set; }
 
+        [JsonPropertyName("width")]
         public int Width { get; set; }
 
+        [JsonPropertyName("height")]
         public int Height { get; set; }
 
+        [JsonPropertyName("created_at")]
         public string? CreatedAt { get; set; }
     }
 }
