@@ -1,6 +1,4 @@
-
 <?xml version="1.0" encoding="utf-8" ?>
-
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -9,21 +7,16 @@
     BackgroundColor="#F8FAFC">
 
     <Grid
-        RowDefinitions="Auto,Auto,*,Auto"
-        Padding="0">
+        RowDefinitions="Auto,Auto,*,Auto">
 
-        <!-- ====================================================== -->
-        <!-- HEADER                                                  -->
-        <!-- ====================================================== -->
-
+        <!-- HEADER -->
         <Border
             Grid.Row="0"
             BackgroundColor="#EEF2FF"
             Padding="18,16"
             StrokeThickness="0">
 
-            <VerticalStackLayout
-                Spacing="4">
+            <VerticalStackLayout Spacing="4">
 
                 <Label
                     x:Name="GroupTitleLabel"
@@ -39,14 +32,9 @@
                     TextColor="#475569" />
 
             </VerticalStackLayout>
-
         </Border>
 
-
-        <!-- ====================================================== -->
-        <!-- MEMBERS                                                 -->
-        <!-- ====================================================== -->
-
+        <!-- MEMBERS -->
         <Grid
             Grid.Row="1"
             Margin="12,8,12,0"
@@ -64,7 +52,6 @@
                     Text="Members"
                     FontSize="12"
                     TextColor="#475569" />
-
             </Border>
 
             <Button
@@ -80,11 +67,7 @@
 
         </Grid>
 
-
-        <!-- ====================================================== -->
-        <!-- MESSAGES                                                -->
-        <!-- ====================================================== -->
-
+        <!-- MESSAGES -->
         <RefreshView
             x:Name="MessagesRefreshView"
             Grid.Row="2"
@@ -98,67 +81,111 @@
                     Spacing="10" />
 
             </ScrollView>
-
         </RefreshView>
 
-
-        <!-- ====================================================== -->
-        <!-- MESSAGE COMPOSER                                        -->
-        <!-- ====================================================== -->
-
+        <!-- COMPOSER -->
         <Border
             Grid.Row="3"
             BackgroundColor="White"
             Padding="12,10"
             StrokeThickness="0">
 
-            <Grid
-                ColumnDefinitions="Auto,*,Auto"
-                ColumnSpacing="8">
+            <VerticalStackLayout
+                Spacing="8">
 
-                <!-- ATTACHMENT -->
+                <!-- PENDING ATTACHMENT PREVIEW -->
+                <Grid
+                    x:Name="AttachmentPreviewContainer"
+                    IsVisible="False"
+                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="8"
+                    BackgroundColor="#F8FAFC"
+                    Padding="8">
 
-                <Button
-                    x:Name="AttachmentButton"
-                    Grid.Column="0"
-                    Text="📎"
-                    FontSize="22"
-                    WidthRequest="48"
-                    HeightRequest="48"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="#1E40AF"
-                    Clicked="OnAttachmentClicked"
-                    VerticalOptions="Center" />
+                    <Image
+                        x:Name="AttachmentPreviewImage"
+                        Grid.Column="0"
+                        WidthRequest="70"
+                        HeightRequest="70"
+                        Aspect="AspectFill"
+                        IsVisible="False" />
+
+                    <VerticalStackLayout
+                        Grid.Column="1"
+                        VerticalOptions="Center">
+
+                        <Label
+                            x:Name="AttachmentPreviewNameLabel"
+                            Text="Attachment"
+                            FontSize="13"
+                            FontAttributes="Bold"
+                            TextColor="#0F172A" />
+
+                        <Label
+                            x:Name="AttachmentPreviewTypeLabel"
+                            Text=""
+                            FontSize="11"
+                            TextColor="#64748B" />
+
+                    </VerticalStackLayout>
+
+                    <Button
+                        x:Name="RemoveAttachmentButton"
+                        Grid.Column="2"
+                        Text="✕"
+                        FontSize="16"
+                        WidthRequest="40"
+                        HeightRequest="40"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="#DC2626"
+                        Clicked="OnRemoveAttachmentClicked" />
+
+                </Grid>
 
                 <!-- MESSAGE INPUT -->
+                <Grid
+                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="8">
 
-                <Entry
-                    x:Name="MessageEntry"
-                    Grid.Column="1"
-                    Placeholder="Type a message..."
-                    BackgroundColor="#F8FAFC"
-                    TextColor="#0F172A"
-                    PlaceholderColor="#64748B"
-                    VerticalOptions="Center"
-                    ReturnType="Send"
-                    Completed="OnMessageEntryCompleted" />
+                    <Button
+                        x:Name="AttachmentButton"
+                        Grid.Column="0"
+                        Text="📎"
+                        FontSize="22"
+                        WidthRequest="48"
+                        HeightRequest="48"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="#1E40AF"
+                        Clicked="OnAttachmentClicked"
+                        VerticalOptions="Center" />
 
-                <!-- SEND -->
+                    <Entry
+                        x:Name="MessageEntry"
+                        Grid.Column="1"
+                        Placeholder="Type a message..."
+                        BackgroundColor="#F8FAFC"
+                        TextColor="#0F172A"
+                        PlaceholderColor="#64748B"
+                        VerticalOptions="Center"
+                        ReturnType="Send"
+                        Completed="OnMessageEntryCompleted" />
 
-                <Button
-                    x:Name="SendButton"
-                    Grid.Column="2"
-                    Text="Send"
-                    Clicked="OnSendClicked"
-                    Padding="14,8"
-                    CornerRadius="10"
-                    BackgroundColor="#2563EB"
-                    TextColor="White"
-                    VerticalOptions="Center" />
+                    <Button
+                        x:Name="SendButton"
+                        Grid.Column="2"
+                        Text="Send"
+                        Clicked="OnSendClicked"
+                        Padding="14,8"
+                        CornerRadius="10"
+                        BackgroundColor="#2563EB"
+                        TextColor="White"
+                        VerticalOptions="Center" />
 
-            </Grid>
+                </Grid>
 
+            </VerticalStackLayout>
         </Border>
 
     </Grid>

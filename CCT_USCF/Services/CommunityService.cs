@@ -57,10 +57,17 @@ namespace CCT_USCF.Services
             public string MessageId { get; set; } = string.Empty;
 
             [Indexed]
-            public string CommunityId { get; set; } = string.Empty;
+public string CommunityId { get; set; } = string.Empty;
 
-            public string SenderUid { get; set; } = string.Empty;
+public string OrganizationalLevel { get; set; } = string.Empty;
 
+public string BranchId { get; set; } = string.Empty;
+
+public string RegionId { get; set; } = string.Empty;
+
+public string DistrictId { get; set; } = string.Empty;
+
+public string SenderUid { get; set; } = string.Empty;
             public string SenderName { get; set; } = string.Empty;
 
             public string Content { get; set; } = string.Empty;
@@ -199,30 +206,44 @@ namespace CCT_USCF.Services
                         .ToHashSet(
                             StringComparer.OrdinalIgnoreCase);
 
-                var migrations =
-                    new Dictionary<string, string>(
-                        StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["MediaUrl"] =
-                            "ALTER TABLE community_message_cache " +
-                            "ADD COLUMN MediaUrl TEXT NOT NULL DEFAULT '';",
+var migrations = new Dictionary<string, string>
+{
+    ["MediaUrl"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN MediaUrl TEXT NOT NULL DEFAULT '';",
 
-                        ["ThumbnailUrl"] =
-                            "ALTER TABLE community_message_cache " +
-                            "ADD COLUMN ThumbnailUrl TEXT NOT NULL DEFAULT '';",
+    ["ThumbnailUrl"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN ThumbnailUrl TEXT NOT NULL DEFAULT '';",
 
-                        ["FileName"] =
-                            "ALTER TABLE community_message_cache " +
-                            "ADD COLUMN FileName TEXT NOT NULL DEFAULT '';",
+    ["FileName"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN FileName TEXT NOT NULL DEFAULT '';",
 
-                        ["FileSize"] =
-                            "ALTER TABLE community_message_cache " +
-                            "ADD COLUMN FileSize INTEGER NOT NULL DEFAULT 0;",
+    ["FileSize"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN FileSize INTEGER NOT NULL DEFAULT 0;",
 
-                        ["Duration"] =
-                            "ALTER TABLE community_message_cache " +
-                            "ADD COLUMN Duration REAL NOT NULL DEFAULT 0;"
-                    };
+    ["Duration"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN Duration REAL NOT NULL DEFAULT 0;",
+
+    ["OrganizationalLevel"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN OrganizationalLevel TEXT NOT NULL DEFAULT '';",
+
+    ["BranchId"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN BranchId TEXT NOT NULL DEFAULT '';",
+
+    ["RegionId"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN RegionId TEXT NOT NULL DEFAULT '';",
+
+    ["DistrictId"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN DistrictId TEXT NOT NULL DEFAULT '';"
+};
 
                 foreach (var migration in migrations)
                 {
@@ -280,10 +301,34 @@ namespace CCT_USCF.Services
                 Content =
                     cached.Content,
 
-                CommunityId =
-                    cached.CommunityId,
+CommunityId =
+    cached.CommunityId,
 
-                MessageType =
+OrganizationalLevel =
+    string.IsNullOrWhiteSpace(
+        cached.OrganizationalLevel)
+        ? null
+        : cached.OrganizationalLevel,
+
+BranchId =
+    string.IsNullOrWhiteSpace(
+        cached.BranchId)
+        ? null
+        : cached.BranchId,
+
+RegionId =
+    string.IsNullOrWhiteSpace(
+        cached.RegionId)
+        ? null
+        : cached.RegionId,
+
+DistrictId =
+    string.IsNullOrWhiteSpace(
+        cached.DistrictId)
+        ? null
+        : cached.DistrictId,
+
+MessageType =
                     string.IsNullOrWhiteSpace(
                         cached.MessageType)
                         ? "text"
@@ -310,20 +355,6 @@ namespace CCT_USCF.Services
                 GroupId =
                     cached.CommunityId,
 
-                BranchId =
-                    cached.CommunityId,
-
-                ReceiverId =
-                    null,
-
-                ConversationId =
-                    string.Empty,
-
-                RegionId =
-                    null,
-
-                DistrictId =
-                    null,
 
                 Status =
                     "sent",
@@ -362,11 +393,26 @@ namespace CCT_USCF.Services
                 MessageId =
                     messageId?.Trim()
                     ?? string.Empty,
+CommunityId =
+    communityId,
 
-                CommunityId =
-                    communityId,
+OrganizationalLevel =
+    message.OrganizationalLevel
+    ?? string.Empty,
 
-                SenderUid =
+BranchId =
+    message.BranchId
+    ?? string.Empty,
+
+RegionId =
+    message.RegionId
+    ?? string.Empty,
+
+DistrictId =
+    message.DistrictId
+    ?? string.Empty,
+
+SenderUid =
                     message.SenderUid
                     ?? string.Empty,
 
@@ -1161,6 +1207,21 @@ namespace CCT_USCF.Services
                         Math.Max(
                             0,
                             fileSize),
+                    ["organizational_level"] =
+    organizationalLevel?.Trim()
+    ?? string.Empty,
+
+["branch_id"] =
+    branchId?.Trim()
+    ?? string.Empty,
+
+["region_id"] =
+    regionId?.Trim()
+    ?? string.Empty,
+
+["district_id"] =
+    districtId?.Trim()
+    ?? string.Empty,
 
                     ["duration"] =
                         Math.Max(
@@ -2407,20 +2468,43 @@ namespace CCT_USCF.Services
                     string.Empty)
                 ?? string.Empty;
 
-            var communityId =
-                TryGetString(
-                    data,
-                    "community_id",
-                    string.Empty)
-                ?? string.Empty;
+var communityId =
+    TryGetString(
+        data,
+        "community_id",
+        string.Empty)
+    ?? string.Empty;
 
-            var messageType =
-                TryGetString(
-                    data,
-                    "message_type",
-                    "text")
-                ?? "text";
+var organizationalLevel =
+    TryGetString(
+        data,
+        "organizational_level",
+        null);
 
+var branchId =
+    TryGetString(
+        data,
+        "branch_id",
+        null);
+
+var regionId =
+    TryGetString(
+        data,
+        "region_id",
+        null);
+
+var districtId =
+    TryGetString(
+        data,
+        "district_id",
+        null);
+
+var messageType =
+    TryGetString(
+        data,
+        "message_type",
+        "text")
+    ?? "text";
             var mediaUrl =
                 TryGetString(
                     data,
@@ -2493,15 +2577,26 @@ namespace CCT_USCF.Services
                 Content =
                     content,
 
-                CommunityId =
-                    communityId,
+CommunityId =
+    communityId,
 
-                MessageType =
-                    messageType,
+OrganizationalLevel =
+    organizationalLevel,
 
-                MediaUrl =
-                    mediaUrl,
+BranchId =
+    branchId,
 
+RegionId =
+    regionId,
+
+DistrictId =
+    districtId,
+
+MessageType =
+    messageType,
+
+MediaUrl =
+    mediaUrl,
                 ThumbnailUrl =
                     thumbnailUrl,
 
@@ -2520,23 +2615,14 @@ namespace CCT_USCF.Services
                 UpdatedAt =
                     updatedAt,
 
-                GroupId =
-                    communityId,
+ GroupId =
+    communityId,
 
-                BranchId =
-                    communityId,
+ReceiverId =
+    null,
 
-                ReceiverId =
-                    null,
-
-                ConversationId =
-                    string.Empty,
-
-                RegionId =
-                    null,
-
-                DistrictId =
-                    null,
+ConversationId =
+    string.Empty,
 
                 Status =
                     "sent",
