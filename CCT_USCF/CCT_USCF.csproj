@@ -63,20 +63,10 @@
   <ItemGroup>
 
     <!-- Application Icon -->
-    <MauiIcon
-      Include="Resources\AppIcon\uscf_logo.png"
-      Link="uscf_app_icon.png"
-      LogicalName="uscf_app_icon.png"
-      BaseSize="128,128"
-      Color="#FFFFFF" />
+    <MauiIcon Include="Resources\AppIcon\uscf_logo.png" Link="uscf_app_icon.png" LogicalName="uscf_app_icon.png" BaseSize="128,128" Color="#FFFFFF" />
 
     <!-- Splash Screen -->
-    <MauiSplashScreen
-      Include="Resources\Splash\uscf_logo.png"
-      Link="uscf_splash_screen.png"
-      LogicalName="uscf_splash_screen.png"
-      BaseSize="128,128"
-      Color="#FFFFFF" />
+    <MauiSplashScreen Include="Resources\Splash\uscf_logo.png" Link="uscf_splash_screen.png" LogicalName="uscf_splash_screen.png" BaseSize="128,128" Color="#FFFFFF" />
 
     <!-- Images -->
     <MauiImage Include="Resources\Images\*" />
@@ -85,9 +75,7 @@
     <MauiFont Include="Resources\Fonts\*" />
 
     <!-- Raw assets -->
-    <MauiAsset
-      Include="Resources\Raw\**"
-      LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 
   </ItemGroup>
 
@@ -99,9 +87,7 @@
   <ItemGroup>
 
     <!-- .NET MAUI -->
-    <PackageReference
-      Include="Microsoft.Maui.Controls"
-      Version="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 
     <!-- Appwrite
          Used for:
@@ -110,9 +96,7 @@
          - Audio
          - Documents
     -->
-    <PackageReference
-      Include="Appwrite"
-      Version="7.0.0" />
+    <PackageReference Include="Appwrite" Version="7.0.0" />
 
     <!-- Firebase
          Used for:
@@ -121,14 +105,11 @@
          - Cloud Messaging
          - Firebase services
     -->
-    <PackageReference
-      Include="Plugin.Firebase"
-      Version="4.2.1" />
+    <PackageReference Include="Plugin.Firebase" Version="4.2.1" />
 
     <!-- Logging -->
-    <PackageReference
-      Include="Microsoft.Extensions.Logging.Debug"
-      Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
 
   </ItemGroup>
 
@@ -137,8 +118,7 @@
        FIREBASE ANDROID CONFIGURATION
        ========================================================= -->
 
-  <ItemGroup
-    Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 
     <!--
       IMPORTANT:

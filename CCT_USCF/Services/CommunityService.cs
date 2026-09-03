@@ -1,15 +1,19 @@
-
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Appwrite;
 using CCT_USCF.Models;
 using CCT_USCF.Services.Appwrite;
+using SQLite;
 
 namespace CCT_USCF.Services
 {
     public class CommunityService
     {
+        // ============================================================
+        // APPWRITE COLLECTIONS
+        // ============================================================
+
         private const string MessagesCollectionId =
             AppwriteService.MessagesCollectionId;
 
@@ -22,9 +26,73 @@ namespace CCT_USCF.Services
         private const string BiblePostsCollectionId =
             "cct_posts";
 
+        // ============================================================
+        // SERVICES
+        // ============================================================
+
         private readonly AuthService _authService;
         private readonly AppwriteService _appwriteService;
         private readonly HttpClient _httpClient;
+
+        // ============================================================
+        // LOCAL SQLITE COMMUNITY MESSAGE CACHE
+        // ============================================================
+
+        private SQLiteAsyncConnection? _messageCacheDatabase;
+
+        private readonly SemaphoreSlim
+            _messageCacheInitializationLock =
+                new(1, 1);
+
+        private bool _messageCacheInitialized;
+
+        // ============================================================
+        // SQLITE CACHE MODEL
+        // ============================================================
+
+        [Table("community_message_cache")]
+        private sealed class CachedCommunityMessage
+        {
+            [PrimaryKey]
+            public string MessageId { get; set; } = string.Empty;
+
+            [Indexed]
+            public string CommunityId { get; set; } = string.Empty;
+
+            public string SenderUid { get; set; } = string.Empty;
+
+            public string SenderName { get; set; } = string.Empty;
+
+            public string Content { get; set; } = string.Empty;
+
+            public string MessageType { get; set; } = "text";
+
+            public string MediaUrl { get; set; } = string.Empty;
+
+            public string ThumbnailUrl { get; set; } = string.Empty;
+
+            public string FileName { get; set; } = string.Empty;
+
+            public long FileSize { get; set; }
+
+            public double Duration { get; set; }
+
+            [Indexed]
+            public DateTime CreatedAt { get; set; }
+        }
+
+        // ============================================================
+        // SQLITE MIGRATION HELPER
+        // ============================================================
+
+        private sealed class SqliteColumnInfo
+        {
+            public string Name { get; set; } = string.Empty;
+        }
+
+        // ============================================================
+        // CONSTRUCTOR
+        // ============================================================
 
         public CommunityService(
             AuthService authService,
@@ -33,15 +101,630 @@ namespace CCT_USCF.Services
         {
             _authService =
                 authService
-                ?? throw new ArgumentNullException(nameof(authService));
+                ?? throw new ArgumentNullException(
+                    nameof(authService));
 
             _appwriteService =
                 appwriteService
-                ?? throw new ArgumentNullException(nameof(appwriteService));
+                ?? throw new ArgumentNullException(
+                    nameof(appwriteService));
 
             _httpClient =
                 httpClient
-                ?? throw new ArgumentNullException(nameof(httpClient));
+                ?? throw new ArgumentNullException(
+                    nameof(httpClient));
+        }
+
+        // ============================================================
+        // SQLITE CACHE DATABASE
+        // ============================================================
+
+        private async Task<SQLiteAsyncConnection>
+            GetMessageCacheDatabaseAsync()
+        {
+            if (_messageCacheDatabase == null)
+            {
+                var databasePath =
+                    Path.Combine(
+                        FileSystem.AppDataDirectory,
+                        "cct-uscf-community-cache.db3");
+
+                _messageCacheDatabase =
+                    new SQLiteAsyncConnection(databasePath);
+            }
+
+            if (!_messageCacheInitialized)
+            {
+                await _messageCacheInitializationLock.WaitAsync();
+
+                try
+                {
+                    if (!_messageCacheInitialized)
+                    {
+                        // ------------------------------------------------
+                        // Create table if it does not exist.
+                        // ------------------------------------------------
+
+                        await _messageCacheDatabase
+                            .CreateTableAsync<CachedCommunityMessage>();
+
+                        // ------------------------------------------------
+                        // IMPORTANT:
+                        //
+                        // CreateTableAsync does NOT automatically add
+                        // new columns to an existing SQLite table.
+                        //
+                        // Therefore we explicitly migrate the old
+                        // community_message_cache table.
+                        // ------------------------------------------------
+
+                        await MigrateCommunityMessageCacheAsync(
+                            _messageCacheDatabase);
+
+                        _messageCacheInitialized = true;
+
+                        System.Diagnostics.Debug.WriteLine(
+                            "[COMMUNITY_CACHE] SQLite initialized: " +
+                            $"{FileSystem.AppDataDirectory}");
+                    }
+                }
+                finally
+                {
+                    _messageCacheInitializationLock.Release();
+                }
+            }
+
+            return _messageCacheDatabase;
+        }
+
+        // ============================================================
+        // SQLITE CACHE MIGRATION
+        // ============================================================
+
+        private static async Task
+            MigrateCommunityMessageCacheAsync(
+                SQLiteAsyncConnection database)
+        {
+            try
+            {
+                var columns =
+                    await database.QueryAsync<SqliteColumnInfo>(
+                        "PRAGMA table_info('community_message_cache');");
+
+                var existingColumns =
+                    columns
+                        .Select(x => x.Name)
+                        .Where(x =>
+                            !string.IsNullOrWhiteSpace(x))
+                        .ToHashSet(
+                            StringComparer.OrdinalIgnoreCase);
+
+                var migrations =
+                    new Dictionary<string, string>(
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["MediaUrl"] =
+                            "ALTER TABLE community_message_cache " +
+                            "ADD COLUMN MediaUrl TEXT NOT NULL DEFAULT '';",
+
+                        ["ThumbnailUrl"] =
+                            "ALTER TABLE community_message_cache " +
+                            "ADD COLUMN ThumbnailUrl TEXT NOT NULL DEFAULT '';",
+
+                        ["FileName"] =
+                            "ALTER TABLE community_message_cache " +
+                            "ADD COLUMN FileName TEXT NOT NULL DEFAULT '';",
+
+                        ["FileSize"] =
+                            "ALTER TABLE community_message_cache " +
+                            "ADD COLUMN FileSize INTEGER NOT NULL DEFAULT 0;",
+
+                        ["Duration"] =
+                            "ALTER TABLE community_message_cache " +
+                            "ADD COLUMN Duration REAL NOT NULL DEFAULT 0;"
+                    };
+
+                foreach (var migration in migrations)
+                {
+                    if (existingColumns.Contains(
+                            migration.Key))
+                    {
+                        continue;
+                    }
+
+                    await database.ExecuteAsync(
+                        migration.Value);
+
+                    System.Diagnostics.Debug.WriteLine(
+                        "[COMMUNITY_CACHE] Added SQLite column: " +
+                        migration.Key);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[COMMUNITY_CACHE] Migration failed: " +
+                    ex);
+
+                throw new InvalidOperationException(
+                    "Unable to update the local community message cache.",
+                    ex);
+            }
+        }
+
+        // ============================================================
+        // MAP SQLITE CACHE → COMMUNITY MESSAGE
+        // ============================================================
+
+        private static CommunityMessage
+            MapCachedCommunityMessage(
+                CachedCommunityMessage cached)
+        {
+            return new CommunityMessage
+            {
+                Id =
+                    cached.MessageId,
+
+                MessageId =
+                    cached.MessageId,
+
+                SenderUid =
+                    cached.SenderUid,
+
+                SenderName =
+                    string.IsNullOrWhiteSpace(
+                        cached.SenderName)
+                        ? "Community member"
+                        : cached.SenderName,
+
+                Content =
+                    cached.Content,
+
+                CommunityId =
+                    cached.CommunityId,
+
+                MessageType =
+                    string.IsNullOrWhiteSpace(
+                        cached.MessageType)
+                        ? "text"
+                        : cached.MessageType,
+
+                MediaUrl =
+                    cached.MediaUrl,
+
+                ThumbnailUrl =
+                    cached.ThumbnailUrl,
+
+                FileName =
+                    cached.FileName,
+
+                FileSize =
+                    cached.FileSize,
+
+                Duration =
+                    cached.Duration,
+
+                CreatedAt =
+                    EnsureUtc(cached.CreatedAt),
+
+                GroupId =
+                    cached.CommunityId,
+
+                BranchId =
+                    cached.CommunityId,
+
+                ReceiverId =
+                    null,
+
+                ConversationId =
+                    string.Empty,
+
+                RegionId =
+                    null,
+
+                DistrictId =
+                    null,
+
+                Status =
+                    "sent",
+
+                UpdatedAt =
+                    null,
+
+                ReadAt =
+                    null
+            };
+        }
+
+        // ============================================================
+        // MAP COMMUNITY MESSAGE → SQLITE CACHE
+        // ============================================================
+
+        private static CachedCommunityMessage
+            MapToCachedCommunityMessage(
+                CommunityMessage message)
+        {
+            var messageId =
+                string.IsNullOrWhiteSpace(
+                    message.MessageId)
+                    ? message.Id
+                    : message.MessageId;
+
+            var communityId =
+                message.CommunityId?.Trim()
+                ?? string.Empty;
+
+            var createdAt =
+                EnsureUtc(message.CreatedAt);
+
+            return new CachedCommunityMessage
+            {
+                MessageId =
+                    messageId?.Trim()
+                    ?? string.Empty,
+
+                CommunityId =
+                    communityId,
+
+                SenderUid =
+                    message.SenderUid
+                    ?? string.Empty,
+
+                SenderName =
+                    string.IsNullOrWhiteSpace(
+                        message.SenderName)
+                        ? "Community member"
+                        : message.SenderName,
+
+                Content =
+                    message.Content
+                    ?? string.Empty,
+
+                MessageType =
+                    string.IsNullOrWhiteSpace(
+                        message.MessageType)
+                        ? "text"
+                        : message.MessageType,
+
+                MediaUrl =
+                    message.MediaUrl
+                    ?? string.Empty,
+
+                ThumbnailUrl =
+                    message.ThumbnailUrl
+                    ?? string.Empty,
+
+                FileName =
+                    message.FileName
+                    ?? string.Empty,
+
+                FileSize =
+                    message.FileSize,
+
+                Duration =
+                    message.Duration,
+
+                CreatedAt =
+                    createdAt
+            };
+        }
+
+        // ============================================================
+        // CACHE ONE COMMUNITY MESSAGE
+        // ============================================================
+
+        public async Task
+            CacheCommunityMessageAsync(
+                CommunityMessage message)
+        {
+            if (message == null)
+            {
+                return;
+            }
+
+            var messageId =
+                string.IsNullOrWhiteSpace(
+                    message.MessageId)
+                    ? message.Id
+                    : message.MessageId;
+
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                return;
+            }
+
+            var communityId =
+                message.CommunityId?.Trim()
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(communityId))
+            {
+                return;
+            }
+
+            var database =
+                await GetMessageCacheDatabaseAsync();
+
+            var cachedMessage =
+                MapToCachedCommunityMessage(message);
+
+            await database.InsertOrReplaceAsync(
+                cachedMessage);
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Message cached: " +
+                $"message_id={cachedMessage.MessageId}, " +
+                $"community_id={cachedMessage.CommunityId}");
+        }
+
+        // ============================================================
+        // CACHE MULTIPLE COMMUNITY MESSAGES
+        // ============================================================
+
+        public async Task
+            CacheCommunityMessagesAsync(
+                IEnumerable<CommunityMessage> messages)
+        {
+            if (messages == null)
+            {
+                return;
+            }
+
+            var database =
+                await GetMessageCacheDatabaseAsync();
+
+            var count = 0;
+
+            foreach (var message in messages)
+            {
+                if (message == null)
+                {
+                    continue;
+                }
+
+                var messageId =
+                    string.IsNullOrWhiteSpace(
+                        message.MessageId)
+                        ? message.Id
+                        : message.MessageId;
+
+                if (string.IsNullOrWhiteSpace(messageId))
+                {
+                    continue;
+                }
+
+                var communityId =
+                    message.CommunityId?.Trim()
+                    ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(communityId))
+                {
+                    continue;
+                }
+
+                await database.InsertOrReplaceAsync(
+                    MapToCachedCommunityMessage(message));
+
+                count++;
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Batch cache completed: " +
+                $"count={count}");
+        }
+
+        // ============================================================
+        // DELETE MESSAGE FROM LOCAL CACHE
+        // ============================================================
+
+        private async Task
+            DeleteCachedCommunityMessageAsync(
+                string messageId)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                return;
+            }
+
+            var database =
+                await GetMessageCacheDatabaseAsync();
+
+            await database.DeleteAsync<CachedCommunityMessage>(
+                messageId.Trim());
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Message removed: " +
+                messageId);
+        }
+
+        // ============================================================
+        // LOAD CACHED COMMUNITY MESSAGES
+        // ============================================================
+
+        public async Task<List<CommunityMessage>>
+            GetCachedCommunityMessagesAsync(
+                string communityId,
+                int limit = 100)
+        {
+            if (string.IsNullOrWhiteSpace(communityId))
+            {
+                throw new ArgumentException(
+                    "A community id is required.",
+                    nameof(communityId));
+            }
+
+            var normalizedCommunityId =
+                communityId.Trim();
+
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
+
+            var database =
+                await GetMessageCacheDatabaseAsync();
+
+            var cachedRows =
+                await database
+                    .Table<CachedCommunityMessage>()
+                    .Where(row =>
+                        row.CommunityId ==
+                        normalizedCommunityId)
+                    .OrderByDescending(row =>
+                        row.CreatedAt)
+                    .Take(safeLimit)
+                    .ToListAsync();
+
+            return cachedRows
+                .OrderBy(row => row.CreatedAt)
+                .Select(MapCachedCommunityMessage)
+                .ToList();
+        }
+
+        // ============================================================
+        // LOAD GROUP MESSAGES WITH CACHE
+        // ============================================================
+
+        public async Task<List<CommunityMessage>>
+            LoadGroupMessagesWithCacheAsync(
+                string groupId,
+                int limit = 100)
+        {
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                throw new ArgumentException(
+                    "A group id is required.",
+                    nameof(groupId));
+            }
+
+            var normalizedGroupId =
+                groupId.Trim();
+
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
+
+            var cachedMessages =
+                await GetCachedCommunityMessagesAsync(
+                    normalizedGroupId,
+                    safeLimit);
+
+            if (cachedMessages.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[COMMUNITY_CACHE] Cache HIT: " +
+                    $"community_id={normalizedGroupId}, " +
+                    $"count={cachedMessages.Count}");
+
+                return cachedMessages;
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Cache MISS: " +
+                $"community_id={normalizedGroupId}");
+
+            var remoteMessages =
+                await GetGroupMessagesAsync(
+                    normalizedGroupId,
+                    safeLimit);
+
+            if (remoteMessages.Count > 0)
+            {
+                await CacheCommunityMessagesAsync(
+                    remoteMessages);
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Initial Appwrite load cached: " +
+                $"{remoteMessages.Count} messages.");
+
+            return remoteMessages;
+        }
+
+        // ============================================================
+        // INCREMENTAL GROUP MESSAGE SYNC
+        // ============================================================
+
+        public async Task<List<CommunityMessage>>
+            SyncNewerGroupMessagesAsync(
+                string groupId,
+                int limit = 100)
+        {
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                throw new ArgumentException(
+                    "A group id is required.",
+                    nameof(groupId));
+            }
+
+            var normalizedGroupId =
+                groupId.Trim();
+
+            var safeLimit =
+                Math.Clamp(limit, 1, 100);
+
+            var database =
+                await GetMessageCacheDatabaseAsync();
+
+            var newestCached =
+                await database
+                    .Table<CachedCommunityMessage>()
+                    .Where(row =>
+                        row.CommunityId ==
+                        normalizedGroupId)
+                    .OrderByDescending(row =>
+                        row.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+            if (newestCached == null)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[COMMUNITY_CACHE] Incremental sync found " +
+                    "empty cache. Performing initial load for " +
+                    $"{normalizedGroupId}.");
+
+                var initialMessages =
+                    await GetGroupMessagesAsync(
+                        normalizedGroupId,
+                        safeLimit);
+
+                if (initialMessages.Count > 0)
+                {
+                    await CacheCommunityMessagesAsync(
+                        initialMessages);
+                }
+
+                return initialMessages;
+            }
+
+            var newestCreatedAt =
+                EnsureUtc(newestCached.CreatedAt);
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Incremental sync: " +
+                $"community_id={normalizedGroupId}, " +
+                $"newestCachedCreatedAt={newestCreatedAt:O}");
+
+            var newMessages =
+                await GetGroupMessagesAsync(
+                    normalizedGroupId,
+                    safeLimit,
+                    newestCreatedAt);
+
+            if (newMessages.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[COMMUNITY_CACHE] No newer messages found for " +
+                    $"community_id={normalizedGroupId}");
+
+                return new List<CommunityMessage>();
+            }
+
+            await CacheCommunityMessagesAsync(
+                newMessages);
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_CACHE] Incremental sync received " +
+                $"{newMessages.Count} new messages.");
+
+            return newMessages;
         }
 
         // ============================================================
@@ -52,14 +735,16 @@ namespace CCT_USCF.Services
         {
             return
                 $"databases.{AppwriteService.DatabaseId}" +
-                $".collections.{CommunityMessagesCollectionId}.documents";
+                $".collections.{CommunityMessagesCollectionId}" +
+                ".documents";
         }
 
         public string GetMessagesChannel()
         {
             return
                 $"databases.{AppwriteService.DatabaseId}" +
-                $".collections.{MessagesCollectionId}.documents";
+                $".collections.{MessagesCollectionId}" +
+                ".documents";
         }
 
         // ============================================================
@@ -77,7 +762,13 @@ namespace CCT_USCF.Services
             var trimmed =
                 content?.Trim() ?? string.Empty;
 
-            if (string.IsNullOrWhiteSpace(trimmed))
+            var normalizedMessageType =
+                string.IsNullOrWhiteSpace(messageType)
+                    ? "text"
+                    : messageType.Trim();
+
+            if (normalizedMessageType == "text" &&
+                string.IsNullOrWhiteSpace(trimmed))
             {
                 throw new ArgumentException(
                     "Message content is required.",
@@ -119,9 +810,7 @@ namespace CCT_USCF.Services
                         DateTime.UtcNow.ToString("O"),
 
                     ["message_type"] =
-                        string.IsNullOrWhiteSpace(messageType)
-                            ? "text"
-                            : messageType.Trim(),
+                        normalizedMessageType,
 
                     ["status"] =
                         string.IsNullOrWhiteSpace(status)
@@ -129,7 +818,8 @@ namespace CCT_USCF.Services
                             : status.Trim()
                 };
 
-            if (!string.IsNullOrWhiteSpace(normalizedReceiverId))
+            if (!string.IsNullOrWhiteSpace(
+                    normalizedReceiverId))
             {
                 payload["receiver_id"] =
                     normalizedReceiverId;
@@ -140,7 +830,8 @@ namespace CCT_USCF.Services
                         normalizedReceiverId);
             }
 
-            if (!string.IsNullOrWhiteSpace(normalizedGroupId))
+            if (!string.IsNullOrWhiteSpace(
+                    normalizedGroupId))
             {
                 payload["group_id"] =
                     normalizedGroupId;
@@ -155,27 +846,6 @@ namespace CCT_USCF.Services
             {
                 System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_MESSAGES] Creating private message.");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Database={AppwriteService.DatabaseId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Collection={MessagesCollectionId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"MessageId={messageId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Sender={firebaseUid}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Receiver={normalizedReceiverId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Group={normalizedGroupId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"PermissionCount={permissions.Count}");
 
                 var document =
                     await _appwriteService.Databases.CreateDocument(
@@ -221,9 +891,10 @@ namespace CCT_USCF.Services
         // ============================================================
 
         [Obsolete]
-        public async Task<List<Message>> GetConversationMessagesAsync(
-            string otherUserId,
-            int limit = 100)
+        public async Task<List<Message>>
+            GetConversationMessagesAsync(
+                string otherUserId,
+                int limit = 100)
         {
             var firebaseUid =
                 _authService.GetCurrentFirebaseUid();
@@ -297,9 +968,11 @@ namespace CCT_USCF.Services
         // LOAD GROUP MESSAGES
         // ============================================================
 
-        public async Task<List<CommunityMessage>> GetGroupMessagesAsync(
-            string groupId,
-            int limit = 100)
+        public async Task<List<CommunityMessage>>
+            GetGroupMessagesAsync(
+                string groupId,
+                int limit = 100,
+                DateTime? newerThan = null)
         {
             if (string.IsNullOrWhiteSpace(groupId))
             {
@@ -309,34 +982,35 @@ namespace CCT_USCF.Services
             }
 
             return await GetCommunityMessagesAsync(
-                communityId: groupId.Trim(),
-                limit: limit,
-                organizationalLevel: "Branch",
-                branchId: groupId.Trim());
+                communityId:
+                    groupId.Trim(),
+
+                limit:
+                    limit,
+
+                newerThan:
+                    newerThan,
+
+                organizationalLevel:
+                    "Branch",
+
+                branchId:
+                    groupId.Trim());
         }
 
         // ============================================================
         // CREATE COMMUNITY MESSAGE
         //
-        // APPWRITE FIELDS:
+        // Supports:
+        // text
+        // image
+        // video
+        // audio
         //
-        // message_id
-        // sender_uid
-        // sender_name
-        // content
-        // community_id
-        // message_type
-        // created_at
-        //
-        // Appwrite system fields:
-        // $id
-        // $createdAt
-        // $updatedAt
-        //
-        // are managed by Appwrite.
+        // Media itself is stored externally.
+        // This document stores the media URL and metadata.
         // ============================================================
 
-        [Obsolete]
         public async Task<CommunityMessage>
             CreateCommunityMessageAsync(
                 string communityId,
@@ -345,7 +1019,12 @@ namespace CCT_USCF.Services
                 string? branchId = null,
                 string? regionId = null,
                 string? districtId = null,
-                string? organizationalLevel = null)
+                string? organizationalLevel = null,
+                string? mediaUrl = null,
+                string? thumbnailUrl = null,
+                string? fileName = null,
+                long fileSize = 0,
+                double duration = 0)
         {
             if (string.IsNullOrWhiteSpace(communityId))
             {
@@ -354,10 +1033,46 @@ namespace CCT_USCF.Services
                     nameof(communityId));
             }
 
+            var normalizedCommunityId =
+                communityId.Trim();
+
             var trimmed =
                 content?.Trim() ?? string.Empty;
 
-            if (string.IsNullOrWhiteSpace(trimmed))
+            var normalizedMessageType =
+                string.IsNullOrWhiteSpace(messageType)
+                    ? "text"
+                    : messageType.Trim().ToLowerInvariant();
+
+            // --------------------------------------------------------
+            // VALID MESSAGE TYPES
+            // --------------------------------------------------------
+
+            var allowedTypes =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase)
+                {
+                    "text",
+                    "image",
+                    "video",
+                    "audio"
+                };
+
+            if (!allowedTypes.Contains(
+                    normalizedMessageType))
+            {
+                throw new ArgumentException(
+                    "Unsupported community message type. " +
+                    "Allowed types are text, image, video, and audio.",
+                    nameof(messageType));
+            }
+
+            // --------------------------------------------------------
+            // TEXT VALIDATION
+            // --------------------------------------------------------
+
+            if (normalizedMessageType == "text" &&
+                string.IsNullOrWhiteSpace(trimmed))
             {
                 throw new ArgumentException(
                     "Message content is required.",
@@ -365,8 +1080,16 @@ namespace CCT_USCF.Services
             }
 
             // --------------------------------------------------------
-            // FIREBASE UID
+            // MEDIA VALIDATION
             // --------------------------------------------------------
+
+            if (normalizedMessageType != "text" &&
+                string.IsNullOrWhiteSpace(mediaUrl))
+            {
+                throw new ArgumentException(
+                    "Media URL is required for media messages.",
+                    nameof(mediaUrl));
+            }
 
             var firebaseUid =
                 _authService.GetCurrentFirebaseUid();
@@ -377,10 +1100,6 @@ namespace CCT_USCF.Services
                     "The current Firebase user is not available.");
             }
 
-            // --------------------------------------------------------
-            // CURRENT USER
-            // --------------------------------------------------------
-
             var currentUser =
                 await _authService.GetCurrentUserAsync();
 
@@ -389,10 +1108,6 @@ namespace CCT_USCF.Services
                 throw new InvalidOperationException(
                     "The current user profile is not available.");
             }
-
-            // --------------------------------------------------------
-            // SENDER NAME
-            // --------------------------------------------------------
 
             var senderName =
                 currentUser.FullName?.Trim();
@@ -403,58 +1118,11 @@ namespace CCT_USCF.Services
                     "Community member";
             }
 
-            // --------------------------------------------------------
-            // COMMUNITY ID
-            // --------------------------------------------------------
-
-            var normalizedCommunityId =
-                communityId.Trim();
-
-            // --------------------------------------------------------
-            // MESSAGE TYPE
-            // --------------------------------------------------------
-
-            var normalizedMessageType =
-                string.IsNullOrWhiteSpace(messageType)
-                    ? "text"
-                    : messageType.Trim();
-
-            // --------------------------------------------------------
-            // MESSAGE ID
-            //
-            // Same ID is used for:
-            //
-            // 1. Appwrite document ID
-            // 2. message_id
-            // --------------------------------------------------------
-
             var messageId =
                 Guid.NewGuid().ToString("N");
 
-            // --------------------------------------------------------
-            // CREATED AT
-            // --------------------------------------------------------
-
             var createdAt =
                 DateTime.UtcNow;
-
-            // --------------------------------------------------------
-            // EXACT APPWRITE PAYLOAD
-            //
-            // DO NOT ADD:
-            //
-            // sender_id
-            // receiver_id
-            // group_id
-            // conversation_id
-            // status
-            // read_at
-            // branch_id
-            // region_id
-            // district_id
-            //
-            // to this community message.
-            // --------------------------------------------------------
 
             var payload =
                 new Dictionary<string, object?>
@@ -477,6 +1145,28 @@ namespace CCT_USCF.Services
                     ["message_type"] =
                         normalizedMessageType,
 
+                    ["media_url"] =
+                        mediaUrl?.Trim()
+                        ?? string.Empty,
+
+                    ["thumbnail_url"] =
+                        thumbnailUrl?.Trim()
+                        ?? string.Empty,
+
+                    ["file_name"] =
+                        fileName?.Trim()
+                        ?? string.Empty,
+
+                    ["file_size"] =
+                        Math.Max(
+                            0,
+                            fileSize),
+
+                    ["duration"] =
+                        Math.Max(
+                            0,
+                            duration),
+
                     ["created_at"] =
                         createdAt.ToString("O")
                 };
@@ -490,22 +1180,13 @@ namespace CCT_USCF.Services
                     "[APPWRITE_COMMUNITY_MESSAGE] CREATE START");
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"Endpoint={AppwriteService.Endpoint}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Project={AppwriteService.ProjectId}");
-
-                System.Diagnostics.Debug.WriteLine(
                     $"Database={AppwriteService.DatabaseId}");
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"Collection={MessagesCollectionId}");
+                    $"Collection={CommunityMessagesCollectionId}");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"DocumentId={messageId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"message_id={messageId}");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"sender_uid={firebaseUid}");
@@ -514,13 +1195,22 @@ namespace CCT_USCF.Services
                     $"sender_name={senderName}");
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"content={trimmed}");
-
-                System.Diagnostics.Debug.WriteLine(
                     $"community_id={normalizedCommunityId}");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"message_type={normalizedMessageType}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"media_url={mediaUrl}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"file_name={fileName}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"file_size={fileSize}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"duration={duration}");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"created_at={createdAt:O}");
@@ -534,7 +1224,7 @@ namespace CCT_USCF.Services
                             AppwriteService.DatabaseId,
 
                         collectionId:
-                            MessagesCollectionId,
+                            CommunityMessagesCollectionId,
 
                         documentId:
                             messageId,
@@ -546,16 +1236,7 @@ namespace CCT_USCF.Services
                             null);
 
                 System.Diagnostics.Debug.WriteLine(
-                    "================================================");
-
-                System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_COMMUNITY_MESSAGE] CREATE SUCCESS");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"AppwriteDocumentId={document.Id}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    "================================================");
 
                 return MapCommunityDocument(document);
             }
@@ -589,20 +1270,274 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
-        // LOAD COMMUNITY MESSAGES
+        // UPDATE COMMUNITY MESSAGE
         //
-        // Searches ONLY by:
+        // IMPORTANT:
+        // Only the original sender may edit the message.
         //
-        // community_id
+        // For text messages:
+        // content is updated.
         //
-        // It does NOT use group_id.
+        // For media messages:
+        // the existing media remains unchanged and only content
+        // can be changed.
         // ============================================================
 
-        [Obsolete]
+        public async Task<CommunityMessage>
+            UpdateCommunityMessageAsync(
+                string messageId,
+                string content)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                throw new ArgumentException(
+                    "A message id is required.",
+                    nameof(messageId));
+            }
+
+            var normalizedMessageId =
+                messageId.Trim();
+
+            var trimmedContent =
+                content?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(trimmedContent))
+            {
+                throw new ArgumentException(
+                    "Message content is required.",
+                    nameof(content));
+            }
+
+            var currentFirebaseUid =
+                _authService.GetCurrentFirebaseUid();
+
+            if (string.IsNullOrWhiteSpace(
+                    currentFirebaseUid))
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
+
+            try
+            {
+                var document =
+                    await _appwriteService.Databases.GetDocument(
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            CommunityMessagesCollectionId,
+
+                        documentId:
+                            normalizedMessageId);
+
+                var data =
+                    document.Data ??
+                    new Dictionary<string, object?>();
+
+                var senderUid =
+                    TryGetString(
+                        data,
+                        "sender_uid",
+                        string.Empty)
+                    ?? string.Empty;
+
+                if (!string.Equals(
+                        senderUid,
+                        currentFirebaseUid,
+                        StringComparison.Ordinal))
+                {
+                    throw new UnauthorizedAccessException(
+                        "You are not authorized to edit this message.");
+                }
+
+                var updatedAt =
+                    DateTime.UtcNow;
+
+                var updated =
+                    await _appwriteService.Databases.UpdateDocument(
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            CommunityMessagesCollectionId,
+
+                        documentId:
+                            normalizedMessageId,
+
+                        data:
+                            new Dictionary<string, object?>
+                            {
+                                ["content"] =
+                                    trimmedContent,
+
+                                ["updated_at"] =
+                                    updatedAt.ToString("O")
+                            },
+
+                        permissions:
+                            null,
+
+                        transactionId:
+                            null);
+
+                var result =
+                    MapCommunityDocument(updated);
+
+                // ----------------------------------------------------
+                // Update local cache immediately.
+                // ----------------------------------------------------
+
+                await CacheCommunityMessageAsync(
+                    result);
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] UPDATE SUCCESS: " +
+                    normalizedMessageId);
+
+                return result;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] UPDATE FAILED");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Message={ex.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Inner={ex.InnerException?.Message}");
+
+                throw new InvalidOperationException(
+                    "Unable to edit message.",
+                    ex);
+            }
+        }
+
+        // ============================================================
+        // DELETE COMMUNITY MESSAGE
+        //
+        // IMPORTANT:
+        // Only the original sender may delete the message.
+        // ============================================================
+
+        public async Task<bool>
+            DeleteCommunityMessageAsync(
+                string messageId)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                throw new ArgumentException(
+                    "A message id is required.",
+                    nameof(messageId));
+            }
+
+            var normalizedMessageId =
+                messageId.Trim();
+
+            var currentFirebaseUid =
+                _authService.GetCurrentFirebaseUid();
+
+            if (string.IsNullOrWhiteSpace(
+                    currentFirebaseUid))
+            {
+                throw new InvalidOperationException(
+                    "The current Firebase user is not available.");
+            }
+
+            try
+            {
+                var document =
+                    await _appwriteService.Databases.GetDocument(
+                        databaseId:
+                            AppwriteService.DatabaseId,
+
+                        collectionId:
+                            CommunityMessagesCollectionId,
+
+                        documentId:
+                            normalizedMessageId);
+
+                var data =
+                    document.Data ??
+                    new Dictionary<string, object?>();
+
+                var senderUid =
+                    TryGetString(
+                        data,
+                        "sender_uid",
+                        string.Empty)
+                    ?? string.Empty;
+
+                if (!string.Equals(
+                        senderUid,
+                        currentFirebaseUid,
+                        StringComparison.Ordinal))
+                {
+                    throw new UnauthorizedAccessException(
+                        "You are not authorized to delete this message.");
+                }
+
+                await _appwriteService.Databases.DeleteDocument(
+                    databaseId:
+                        AppwriteService.DatabaseId,
+
+                    collectionId:
+                        CommunityMessagesCollectionId,
+
+                    documentId:
+                        normalizedMessageId,
+
+                    transactionId:
+                        null);
+
+                // ----------------------------------------------------
+                // Remove from local cache.
+                // ----------------------------------------------------
+
+                await DeleteCachedCommunityMessageAsync(
+                    normalizedMessageId);
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] DELETE SUCCESS: " +
+                    normalizedMessageId);
+
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[APPWRITE_COMMUNITY_MESSAGE] DELETE FAILED");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Message={ex.Message}");
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"Inner={ex.InnerException?.Message}");
+
+                throw new InvalidOperationException(
+                    "Unable to delete message.",
+                    ex);
+            }
+        }
+
+        // ============================================================
+        // LOAD COMMUNITY MESSAGES
+        // ============================================================
+
         public async Task<List<CommunityMessage>>
             GetCommunityMessagesAsync(
                 string communityId,
                 int limit = 50,
+                DateTime? newerThan = null,
                 string? organizationalLevel = null,
                 string? branchId = null,
                 string? regionId = null,
@@ -630,16 +1565,10 @@ namespace CCT_USCF.Services
                     "[APPWRITE_COMMUNITY_MESSAGE] LOAD START");
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"Endpoint={AppwriteService.Endpoint}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Project={AppwriteService.ProjectId}");
-
-                System.Diagnostics.Debug.WriteLine(
                     $"Database={AppwriteService.DatabaseId}");
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"Collection={MessagesCollectionId}");
+                    $"Collection={CommunityMessagesCollectionId}");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"community_id={normalizedCommunityId}");
@@ -648,26 +1577,54 @@ namespace CCT_USCF.Services
                     $"limit={safeLimit}");
 
                 System.Diagnostics.Debug.WriteLine(
-                    "================================================");
+                    $"newerThan={newerThan:O}");
 
                 var queries =
                     new List<string>
                     {
                         global::Appwrite.Query.Equal(
                             "community_id",
-                            normalizedCommunityId),
-
-                        global::Appwrite.Query.OrderAsc(
-                            "created_at"),
-
-                        global::Appwrite.Query.Limit(
-                            safeLimit)
+                            normalizedCommunityId)
                     };
+
+                // ----------------------------------------------------
+                // INCREMENTAL LOAD
+                // ----------------------------------------------------
+
+                if (newerThan.HasValue)
+                {
+                    var normalizedTimestamp =
+                        EnsureUtc(newerThan.Value)
+                            .ToString("O");
+
+                    queries.Add(
+                        global::Appwrite.Query.GreaterThan(
+                            "created_at",
+                            normalizedTimestamp));
+
+                    queries.Add(
+                        global::Appwrite.Query.OrderAsc(
+                            "created_at"));
+                }
+                else
+                {
+                    // ------------------------------------------------
+                    // INITIAL LOAD
+                    // ------------------------------------------------
+
+                    queries.Add(
+                        global::Appwrite.Query.OrderDesc(
+                            "created_at"));
+                }
+
+                queries.Add(
+                    global::Appwrite.Query.Limit(
+                        safeLimit));
 
                 var result =
                     await _appwriteService.Databases.ListDocuments(
                         AppwriteService.DatabaseId,
-                        MessagesCollectionId,
+                        CommunityMessagesCollectionId,
                         queries,
                         null,
                         null,
@@ -676,12 +1633,14 @@ namespace CCT_USCF.Services
                 var messages =
                     result.Documents
                         .Select(MapCommunityDocument)
-                        .OrderBy(
-                            message => message.CreatedAt)
+                        .Where(message =>
+                            string.Equals(
+                                message.CommunityId,
+                                normalizedCommunityId,
+                                StringComparison.Ordinal))
+                        .OrderBy(message =>
+                            message.CreatedAt)
                         .ToList();
-
-                System.Diagnostics.Debug.WriteLine(
-                    "================================================");
 
                 System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_COMMUNITY_MESSAGE] LOAD SUCCESS");
@@ -727,10 +1686,11 @@ namespace CCT_USCF.Services
         // AUTHORIZED COMMUNITY API
         // ============================================================
 
-        private async Task<T> SendAuthorizedCommunityApiAsync<T>(
-            HttpMethod method,
-            string requestUri,
-            object? body = null)
+        private async Task<T>
+            SendAuthorizedCommunityApiAsync<T>(
+                HttpMethod method,
+                string requestUri,
+                object? body = null)
         {
             var firebaseIdToken =
                 await _authService.GetCurrentFirebaseIdTokenAsync();
@@ -798,7 +1758,8 @@ namespace CCT_USCF.Services
                 return (T)(object)message;
             }
 
-            if (typeof(T) == typeof(List<CommunityMessage>))
+            if (typeof(T) ==
+                typeof(List<CommunityMessage>))
             {
                 var messages =
                     DeserializeCommunityMessages(
@@ -888,8 +1849,8 @@ namespace CCT_USCF.Services
                 return
                     JsonSerializer.Deserialize<
                         List<CommunityMessage>>(
-                            root.GetRawText(),
-                            options)
+                        root.GetRawText(),
+                        options)
                     ?? new List<CommunityMessage>();
             }
 
@@ -905,8 +1866,8 @@ namespace CCT_USCF.Services
                     return
                         JsonSerializer.Deserialize<
                             List<CommunityMessage>>(
-                                messagesValue.GetRawText(),
-                                options)
+                            messagesValue.GetRawText(),
+                            options)
                         ?? new List<CommunityMessage>();
                 }
 
@@ -919,8 +1880,8 @@ namespace CCT_USCF.Services
                     return
                         JsonSerializer.Deserialize<
                             List<CommunityMessage>>(
-                                dataValue.GetRawText(),
-                                options)
+                            dataValue.GetRawText(),
+                            options)
                         ?? new List<CommunityMessage>();
                 }
             }
@@ -934,8 +1895,9 @@ namespace CCT_USCF.Services
         // ============================================================
 
         [Obsolete]
-        public async Task<Message?> MarkMessageAsReadAsync(
-            string messageId)
+        public async Task<Message?>
+            MarkMessageAsReadAsync(
+                string messageId)
         {
             if (string.IsNullOrWhiteSpace(messageId))
             {
@@ -947,7 +1909,8 @@ namespace CCT_USCF.Services
             var currentFirebaseUid =
                 _authService.GetCurrentFirebaseUid();
 
-            if (string.IsNullOrWhiteSpace(currentFirebaseUid))
+            if (string.IsNullOrWhiteSpace(
+                    currentFirebaseUid))
             {
                 throw new InvalidOperationException(
                     "The current Firebase user is not available.");
@@ -1072,8 +2035,9 @@ namespace CCT_USCF.Services
         // ============================================================
 
         [Obsolete]
-        public async Task<bool> DeleteMessageAsync(
-            string messageId)
+        public async Task<bool>
+            DeleteMessageAsync(
+                string messageId)
         {
             if (string.IsNullOrWhiteSpace(messageId))
             {
@@ -1085,7 +2049,8 @@ namespace CCT_USCF.Services
             var currentFirebaseUid =
                 _authService.GetCurrentFirebaseUid();
 
-            if (string.IsNullOrWhiteSpace(currentFirebaseUid))
+            if (string.IsNullOrWhiteSpace(
+                    currentFirebaseUid))
             {
                 throw new InvalidOperationException(
                     "The current Firebase user is not available.");
@@ -1104,11 +2069,9 @@ namespace CCT_USCF.Services
                         documentId:
                             messageId);
 
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
                 var data =
                     document.Data ??
                     new Dictionary<string, object?>();
-#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
 
                 var senderId =
                     TryGetString(
@@ -1156,30 +2119,21 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
-        // DELETE COMMUNITY MESSAGE
+        // CONVERSATION IDS
         // ============================================================
 
-        public Task<bool> DeleteCommunityMessageAsync(
-            string messageId)
-        {
-            throw new UnauthorizedAccessException(
-                "Community message deletion is not available until a server-side deletion authority is defined.");
-        }
-
-        // ============================================================
-        // CONVERSATION IDs
-        // ============================================================
-
-        private static string BuildGroupConversationId(
-            string groupId)
+        private static string
+            BuildGroupConversationId(
+                string groupId)
         {
             return
                 $"branch:{groupId.Trim()}";
         }
 
-        private static string BuildConversationId(
-            string senderId,
-            string receiverId)
+        private static string
+            BuildConversationId(
+                string senderId,
+                string receiverId)
         {
             var participants =
                 new[]
@@ -1207,9 +2161,10 @@ namespace CCT_USCF.Services
         // GROUP AUTHORIZATION
         // ============================================================
 
-        private static bool IsCurrentUserAuthorizedForGroup(
-            CCT_USCF.Models.CurrentUser currentUser,
-            string groupId)
+        private static bool
+            IsCurrentUserAuthorizedForGroup(
+                CCT_USCF.Models.CurrentUser currentUser,
+                string groupId)
         {
             if (string.IsNullOrWhiteSpace(groupId))
             {
@@ -1322,50 +2277,19 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
-        // COMMUNITY MESSAGE PERMISSIONS
-        // ============================================================
-
-        private async Task<List<string>>
-            BuildCommunityMessagePermissionsAsync(
-                string senderUid,
-                string groupId,
-                string? branchId = null,
-                string? regionId = null,
-                string? districtId = null)
-        {
-            var appwriteUserId =
-                await RequireAppwriteUserIdAsync();
-
-            if (string.IsNullOrWhiteSpace(
-                    appwriteUserId))
-            {
-                throw new InvalidOperationException(
-                    "Appwrite community message permissions require a valid Appwrite user/session identity.");
-            }
-
-            if (string.IsNullOrWhiteSpace(
-                    groupId))
-            {
-                throw new InvalidOperationException(
-                    "A group/community identifier is required for Appwrite document permissions.");
-            }
-
-            throw new InvalidOperationException(
-                "Community/group messaging requires an Appwrite team/role membership model for branch members. The current project only authenticates through Firebase and has no Appwrite team mapping configured for authorized branch members.");
-        }
-
-        // ============================================================
         // APPWRITE USER ID
         // ============================================================
 
-        private Task<string> RequireAppwriteUserIdAsync()
+        private Task<string>
+            RequireAppwriteUserIdAsync()
         {
             return Task.FromResult(
                 string.Empty);
         }
 
-        private Task<string> TryResolveAppwriteUserIdAsync(
-            string firebaseUid)
+        private Task<string>
+            TryResolveAppwriteUserIdAsync(
+                string firebaseUid)
         {
             return Task.FromResult(
                 string.Empty);
@@ -1375,8 +2299,9 @@ namespace CCT_USCF.Services
         // MAP PRIVATE MESSAGE
         // ============================================================
 
-        private static Message MapMessageDocument(
-            global::Appwrite.Models.Document document)
+        private static Message
+            MapMessageDocument(
+                global::Appwrite.Models.Document document)
         {
             var data =
                 document.Data ??
@@ -1444,20 +2369,6 @@ namespace CCT_USCF.Services
 
         // ============================================================
         // MAP COMMUNITY MESSAGE
-        //
-        // IMPORTANT:
-        //
-        // This mapper reads ONLY the seven Community Message fields:
-        //
-        // message_id
-        // sender_uid
-        // sender_name
-        // content
-        // community_id
-        // message_type
-        // created_at
-        //
-        // Appwrite system fields are handled separately.
         // ============================================================
 
         private static CommunityMessage
@@ -1468,20 +2379,12 @@ namespace CCT_USCF.Services
                 document.Data ??
                 new Dictionary<string, object?>();
 
-            // --------------------------------------------------------
-            // message_id
-            // --------------------------------------------------------
-
             var messageId =
                 TryGetString(
                     data,
                     "message_id",
                     document.Id)
                 ?? document.Id;
-
-            // --------------------------------------------------------
-            // sender_uid
-            // --------------------------------------------------------
 
             var senderUid =
                 TryGetString(
@@ -1490,20 +2393,12 @@ namespace CCT_USCF.Services
                     string.Empty)
                 ?? string.Empty;
 
-            // --------------------------------------------------------
-            // sender_name
-            // --------------------------------------------------------
-
             var senderName =
                 TryGetString(
                     data,
                     "sender_name",
                     "Community member")
                 ?? "Community member";
-
-            // --------------------------------------------------------
-            // content
-            // --------------------------------------------------------
 
             var content =
                 TryGetString(
@@ -1512,20 +2407,12 @@ namespace CCT_USCF.Services
                     string.Empty)
                 ?? string.Empty;
 
-            // --------------------------------------------------------
-            // community_id
-            // --------------------------------------------------------
-
             var communityId =
                 TryGetString(
                     data,
                     "community_id",
                     string.Empty)
                 ?? string.Empty;
-
-            // --------------------------------------------------------
-            // message_type
-            // --------------------------------------------------------
 
             var messageType =
                 TryGetString(
@@ -1534,9 +2421,36 @@ namespace CCT_USCF.Services
                     "text")
                 ?? "text";
 
-            // --------------------------------------------------------
-            // created_at
-            // --------------------------------------------------------
+            var mediaUrl =
+                TryGetString(
+                    data,
+                    "media_url",
+                    string.Empty)
+                ?? string.Empty;
+
+            var thumbnailUrl =
+                TryGetString(
+                    data,
+                    "thumbnail_url",
+                    string.Empty)
+                ?? string.Empty;
+
+            var fileName =
+                TryGetString(
+                    data,
+                    "file_name",
+                    string.Empty)
+                ?? string.Empty;
+
+            var fileSize =
+                TryGetLong(
+                    data,
+                    "file_size");
+
+            var duration =
+                TryGetDouble(
+                    data,
+                    "duration");
 
             var createdAt =
                 TryGetDateTime(
@@ -1544,9 +2458,23 @@ namespace CCT_USCF.Services
                     "created_at",
                     document.CreatedAt);
 
+            var updatedAt =
+                TryGetNullableDateTime(
+                    data,
+                    "updated_at");
+
             // --------------------------------------------------------
-            // RETURN COMMUNITY MESSAGE
+            // Some Appwrite responses may expose the system
+            // updatedAt field as $updatedAt.
             // --------------------------------------------------------
+
+            if (!updatedAt.HasValue)
+            {
+                updatedAt =
+                    TryGetNullableDateTime(
+                        data,
+                        "$updatedAt");
+            }
 
             return new CommunityMessage
             {
@@ -1571,14 +2499,26 @@ namespace CCT_USCF.Services
                 MessageType =
                     messageType,
 
+                MediaUrl =
+                    mediaUrl,
+
+                ThumbnailUrl =
+                    thumbnailUrl,
+
+                FileName =
+                    fileName,
+
+                FileSize =
+                    fileSize,
+
+                Duration =
+                    duration,
+
                 CreatedAt =
                     createdAt,
 
-                // ----------------------------------------------------
-                // Compatibility values for the existing C# model.
-                //
-                // These are NOT read from Appwrite.
-                // ----------------------------------------------------
+                UpdatedAt =
+                    updatedAt,
 
                 GroupId =
                     communityId,
@@ -1600,11 +2540,6 @@ namespace CCT_USCF.Services
 
                 Status =
                     "sent",
-
-                UpdatedAt =
-                    TryGetNullableDateTime(
-                        data,
-                        "$updatedAt"),
 
                 ReadAt =
                     null
@@ -1798,7 +2733,8 @@ namespace CCT_USCF.Services
 
         [Obsolete]
         public async Task<bool>
-            DeletePrayerRequestAsync(Guid id)
+            DeletePrayerRequestAsync(
+                Guid id)
         {
             try
             {
@@ -2023,7 +2959,8 @@ namespace CCT_USCF.Services
 
         [Obsolete]
         public async Task<bool>
-            DeleteBiblePostAsync(Guid id)
+            DeleteBiblePostAsync(
+                Guid id)
         {
             try
             {
@@ -2177,7 +3114,8 @@ namespace CCT_USCF.Services
                 try
                 {
                     payload =
-                        JsonSerializer.Deserialize<BiblePostPayload>(
+                        JsonSerializer.Deserialize<
+                            BiblePostPayload>(
                             content)
                         ?? payload;
                 }
@@ -2237,10 +3175,11 @@ namespace CCT_USCF.Services
         // STRING HELPER
         // ============================================================
 
-        private static string? TryGetString(
-            Dictionary<string, object?> data,
-            string key,
-            string? fallback)
+        private static string?
+            TryGetString(
+                Dictionary<string, object?> data,
+                string key,
+                string? fallback)
         {
             if (data.TryGetValue(
                     key,
@@ -2254,13 +3193,117 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
+        // LONG HELPER
+        // ============================================================
+
+        private static long
+            TryGetLong(
+                Dictionary<string, object?> data,
+                string key)
+        {
+            if (!data.TryGetValue(
+                    key,
+                    out var value) ||
+                value is null)
+            {
+                return 0;
+            }
+
+            try
+            {
+                if (value is long longValue)
+                {
+                    return longValue;
+                }
+
+                if (value is int intValue)
+                {
+                    return intValue;
+                }
+
+                if (value is double doubleValue)
+                {
+                    return Convert.ToInt64(doubleValue);
+                }
+
+                if (value is decimal decimalValue)
+                {
+                    return Convert.ToInt64(decimalValue);
+                }
+
+                if (long.TryParse(
+                        Convert.ToString(value),
+                        out var parsed))
+                {
+                    return parsed;
+                }
+            }
+            catch
+            {
+                // Ignore malformed values.
+            }
+
+            return 0;
+        }
+
+        // ============================================================
+        // DOUBLE HELPER
+        // ============================================================
+
+        private static double
+            TryGetDouble(
+                Dictionary<string, object?> data,
+                string key)
+        {
+            if (!data.TryGetValue(
+                    key,
+                    out var value) ||
+                value is null)
+            {
+                return 0;
+            }
+
+            try
+            {
+                if (value is double doubleValue)
+                {
+                    return doubleValue;
+                }
+
+                if (value is float floatValue)
+                {
+                    return floatValue;
+                }
+
+                if (value is decimal decimalValue)
+                {
+                    return Convert.ToDouble(decimalValue);
+                }
+
+                if (double.TryParse(
+                        Convert.ToString(value),
+                        out var parsed))
+                {
+                    return parsed;
+                }
+            }
+            catch
+            {
+                // Ignore malformed values.
+            }
+
+            return 0;
+        }
+
+        // ============================================================
         // DATE HELPER
         // ============================================================
 
-        private static DateTime TryGetDateTime(
-            Dictionary<string, object?> data,
-            string key,
-            string fallback)
+        private static DateTime
+            TryGetDateTime(
+                Dictionary<string, object?> data,
+                string key,
+                string fallback)
         {
             if (data.TryGetValue(
                     key,
@@ -2269,14 +3312,14 @@ namespace CCT_USCF.Services
             {
                 if (value is DateTime dateTime)
                 {
-                    return dateTime;
+                    return EnsureUtc(dateTime);
                 }
 
                 if (DateTime.TryParse(
                         Convert.ToString(value),
                         out var parsed))
                 {
-                    return parsed;
+                    return EnsureUtc(parsed);
                 }
             }
 
@@ -2284,7 +3327,7 @@ namespace CCT_USCF.Services
                     fallback,
                     out var fallbackDate))
             {
-                return fallbackDate;
+                return EnsureUtc(fallbackDate);
             }
 
             return DateTime.UtcNow;
@@ -2306,14 +3349,14 @@ namespace CCT_USCF.Services
             {
                 if (value is DateTime dateTime)
                 {
-                    return dateTime;
+                    return EnsureUtc(dateTime);
                 }
 
                 if (DateTime.TryParse(
                         Convert.ToString(value),
                         out var parsed))
                 {
-                    return parsed;
+                    return EnsureUtc(parsed);
                 }
             }
 
@@ -2321,12 +3364,35 @@ namespace CCT_USCF.Services
         }
 
         // ============================================================
+        // UTC NORMALIZATION
+        // ============================================================
+
+        private static DateTime
+            EnsureUtc(DateTime value)
+        {
+            return value.Kind switch
+            {
+                DateTimeKind.Utc =>
+                    value,
+
+                DateTimeKind.Local =>
+                    value.ToUniversalTime(),
+
+                _ =>
+                    DateTime.SpecifyKind(
+                        value,
+                        DateTimeKind.Utc)
+            };
+        }
+
+        // ============================================================
         // PRAYER CONTENT
         // ============================================================
 
-        private static string BuildPrayerContent(
-            string title,
-            string description)
+        private static string
+            BuildPrayerContent(
+                string title,
+                string description)
         {
             var parts =
                 new List<string>();
@@ -2365,4 +3431,3 @@ namespace CCT_USCF.Services
         }
     }
 }
-

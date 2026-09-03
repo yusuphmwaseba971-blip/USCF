@@ -47,17 +47,41 @@
             BackgroundColor="White"
             Padding="12,10"
             StrokeThickness="0">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <Entry
-                    x:Name="MessageEntry"
-                    Placeholder="Type a message..."
-                    BackgroundColor="#F8FAFC"
-                    TextColor="#0F172A" />
-                <Button
-                    Grid.Column="1"
-                    Text="Send"
-                    Clicked="OnSendClicked" />
-            </Grid>
+<Grid
+    ColumnDefinitions="Auto,*,Auto"
+    ColumnSpacing="8">
+
+    <!-- ATTACHMENT -->
+    <Button
+        x:Name="AttachmentButton"
+        Grid.Column="0"
+        Text="📎"
+        FontSize="22"
+        WidthRequest="48"
+        HeightRequest="48"
+        Padding="0"
+        BackgroundColor="Transparent"
+        TextColor="#1E40AF"
+        Clicked="OnAttachmentClicked" />
+
+    <!-- MESSAGE -->
+    <Entry
+        x:Name="MessageEntry"
+        Grid.Column="1"
+        Placeholder="Type a message..."
+        BackgroundColor="#F8FAFC"
+        TextColor="#0F172A"
+        VerticalOptions="Center" />
+
+    <!-- SEND -->
+    <Button
+        Grid.Column="2"
+        Text="Send"
+        Clicked="OnSendClicked"
+        Padding="14,8"
+        CornerRadius="10" />
+
+</Grid>
         </Border>
     </Grid>
 </ContentPage>
