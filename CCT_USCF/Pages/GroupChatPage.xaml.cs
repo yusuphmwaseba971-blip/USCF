@@ -1,4 +1,3 @@
-
 using System.Globalization;
 using System.Net.WebSockets;
 using System.Text;
@@ -39,7 +38,6 @@ public partial class GroupChatPage : ContentPage
 
     private readonly List<GroupChatMessageUi> _messages = new();
 
-    private bool _isLoading;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
 
@@ -49,6 +47,14 @@ public partial class GroupChatPage : ContentPage
 
     private ClientWebSocket? _appwriteRealtimeSocket;
     private CancellationTokenSource? _appwriteRealtimeCts;
+
+    // ============================================================
+    // PENDING ATTACHMENT
+    // ============================================================
+
+    private FileResult? _pendingAttachment;
+    private string _pendingAttachmentType = string.Empty;
+    private string _pendingAttachmentLocalPath = string.Empty;
 
     // ============================================================
     // GROUP PARAMETERS
@@ -256,8 +262,7 @@ public partial class GroupChatPage : ContentPage
             return;
         }
 
-        _realtimeListenerAttached =
-            true;
+        _realtimeListenerAttached = true;
 
         try
         {
@@ -288,8 +293,7 @@ public partial class GroupChatPage : ContentPage
                         System.Diagnostics.Debug.WriteLine(
                             $"[GROUP_CHAT] Realtime listener failed: {ex}");
 
-                        _realtimeListenerAttached =
-                            false;
+                        _realtimeListenerAttached = false;
                     }
                 });
         }
@@ -298,8 +302,7 @@ public partial class GroupChatPage : ContentPage
             System.Diagnostics.Debug.WriteLine(
                 $"[GROUP_CHAT] Realtime setup failed: {ex}");
 
-            _realtimeListenerAttached =
-                false;
+            _realtimeListenerAttached = false;
         }
     }
 
@@ -309,8 +312,7 @@ public partial class GroupChatPage : ContentPage
 
     private void DisposeRealtimeListener()
     {
-        _realtimeListenerAttached =
-            false;
+        _realtimeListenerAttached = false;
 
         try
         {
@@ -321,8 +323,7 @@ public partial class GroupChatPage : ContentPage
         {
         }
 
-        _appwriteRealtimeCts =
-            null;
+        _appwriteRealtimeCts = null;
 
         try
         {
@@ -335,8 +336,7 @@ public partial class GroupChatPage : ContentPage
                 $"[GROUP_CHAT] Realtime socket dispose failed: {ex}");
         }
 
-        _appwriteRealtimeSocket =
-            null;
+        _appwriteRealtimeSocket = null;
     }
 
     // ============================================================
@@ -349,8 +349,7 @@ public partial class GroupChatPage : ContentPage
         using var socket =
             new ClientWebSocket();
 
-        _appwriteRealtimeSocket =
-            socket;
+        _appwriteRealtimeSocket = socket;
 
         var uriBuilder =
             new UriBuilder(
@@ -548,8 +547,7 @@ public partial class GroupChatPage : ContentPage
             if (string.IsNullOrWhiteSpace(
                     senderName))
             {
-                senderName =
-                    "Member";
+                senderName = "Member";
             }
 
             var content =
@@ -565,8 +563,7 @@ public partial class GroupChatPage : ContentPage
             if (string.IsNullOrWhiteSpace(
                     messageType))
             {
-                messageType =
-                    "text";
+                messageType = "text";
             }
 
             var mediaUrl =
@@ -668,29 +665,8 @@ public partial class GroupChatPage : ContentPage
             await MainThread.InvokeOnMainThreadAsync(
                 () =>
                 {
-                    var existingIndex =
-                        _messages.FindIndex(
-                            existing =>
-                                string.Equals(
-                                    existing.MessageId,
-                                    message.MessageId,
-                                    StringComparison.Ordinal));
-
-                    if (existingIndex >= 0)
-                    {
-                        _messages[existingIndex] =
-                            message;
-                    }
-                    else
-                    {
-                        _messages.Add(
-                            message);
-                    }
-
-                    _messages.Sort(
-                        (left, right) =>
-                            left.CreatedAt.CompareTo(
-                                right.CreatedAt));
+                    AddOrReplaceMessage(
+                        message);
 
                     RenderMessages();
                 });
@@ -778,8 +754,11 @@ public partial class GroupChatPage : ContentPage
 
     private async Task LoadMessagesAsync()
     {
+        var communityId =
+            GetBackendCommunityId();
+
         if (string.IsNullOrWhiteSpace(
-                GetBackendCommunityId()))
+                communityId))
         {
             return;
         }
@@ -790,7 +769,7 @@ public partial class GroupChatPage : ContentPage
                 await _communityService
                     .GetCommunityMessagesAsync(
                         communityId:
-                            GetBackendCommunityId(),
+                            communityId,
 
                         limit:
                             100,
@@ -815,11 +794,12 @@ public partial class GroupChatPage : ContentPage
 
             var loadedMessages =
                 appwriteMessages
-                    .Where(message =>
-                        string.Equals(
-                            message.CommunityId,
-                            GetBackendCommunityId(),
-                            StringComparison.Ordinal))
+                    .Where(
+                        message =>
+                            string.Equals(
+                                message.CommunityId,
+                                communityId,
+                                StringComparison.Ordinal))
                     .Select(
                         ToUiMessage)
                     .OrderBy(
@@ -842,7 +822,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // MAP COMMUNITY MESSAGE → UI MESSAGE
+    // MAP COMMUNITY MESSAGE
     // ============================================================
 
     private GroupChatMessageUi ToUiMessage(
@@ -1003,13 +983,10 @@ public partial class GroupChatPage : ContentPage
                     GetCurrentUserUid(),
                     StringComparison.Ordinal);
 
-            var bubble =
+            MessagesLayout.Children.Add(
                 CreateMessageBubble(
                     message,
-                    isCurrentUser);
-
-            MessagesLayout.Children.Add(
-                bubble);
+                    isCurrentUser));
         }
 
         _ =
@@ -1053,8 +1030,7 @@ public partial class GroupChatPage : ContentPage
                 StrokeShape =
                     new RoundRectangle
                     {
-                        CornerRadius =
-                            12
+                        CornerRadius = 12
                     },
 
                 HorizontalOptions =
@@ -1066,8 +1042,7 @@ public partial class GroupChatPage : ContentPage
         var stack =
             new VerticalStackLayout
             {
-                Spacing =
-                    6
+                Spacing = 6
             };
 
         stack.Children.Add(
@@ -1139,31 +1114,24 @@ public partial class GroupChatPage : ContentPage
         switch (type)
         {
             case "image":
-
                 AddImageContent(
                     stack,
                     message);
-
                 break;
 
             case "video":
-
                 AddVideoContent(
                     stack,
                     message);
-
                 break;
 
             case "audio":
-
                 AddAudioContent(
                     stack,
                     message);
-
                 break;
 
             default:
-
                 stack.Children.Add(
                     new Label
                     {
@@ -1179,13 +1147,12 @@ public partial class GroupChatPage : ContentPage
                         LineBreakMode =
                             LineBreakMode.WordWrap
                     });
-
                 break;
         }
     }
 
     // ============================================================
-    // IMAGE CONTENT
+    // IMAGE
     // ============================================================
 
     private void AddImageContent(
@@ -1243,7 +1210,11 @@ public partial class GroupChatPage : ContentPage
             image);
 
         if (!string.IsNullOrWhiteSpace(
-                message.Text))
+                message.Text) &&
+            !string.Equals(
+                message.Text,
+                message.FileName,
+                StringComparison.OrdinalIgnoreCase))
         {
             stack.Children.Add(
                 new Label
@@ -1261,7 +1232,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // VIDEO CONTENT
+    // VIDEO
     // ============================================================
 
     private void AddVideoContent(
@@ -1309,10 +1280,31 @@ public partial class GroupChatPage : ContentPage
                 TextColor =
                     Colors.Gray
             });
+
+        if (!string.IsNullOrWhiteSpace(
+                message.Text) &&
+            !string.Equals(
+                message.Text,
+                message.FileName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            stack.Children.Add(
+                new Label
+                {
+                    Text =
+                        message.Text,
+
+                    FontSize =
+                        13,
+
+                    TextColor =
+                        Colors.Black
+                });
+        }
     }
 
     // ============================================================
-    // AUDIO CONTENT
+    // AUDIO
     // ============================================================
 
     private void AddAudioContent(
@@ -1360,6 +1352,27 @@ public partial class GroupChatPage : ContentPage
                 TextColor =
                     Colors.Gray
             });
+
+        if (!string.IsNullOrWhiteSpace(
+                message.Text) &&
+            !string.Equals(
+                message.Text,
+                message.FileName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            stack.Children.Add(
+                new Label
+                {
+                    Text =
+                        message.Text,
+
+                    FontSize =
+                        13,
+
+                    TextColor =
+                        Colors.Black
+                });
+        }
     }
 
     // ============================================================
@@ -1389,27 +1402,44 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // TEXT SEND
+    // SEND BUTTON
     // ============================================================
 
     private async void OnSendClicked(
         object? sender,
         EventArgs e)
     {
-        await SendTextMessageAsync();
+        await SendComposerAsync();
     }
+
+    // ============================================================
+    // ENTER KEY
+    // ============================================================
 
     private async void OnMessageEntryCompleted(
         object? sender,
         EventArgs e)
     {
-        await SendTextMessageAsync();
+        await SendComposerAsync();
     }
 
-    private async Task SendTextMessageAsync()
+    // ============================================================
+    // SEND COMPOSER
+    // ============================================================
+
+    private async Task SendComposerAsync()
     {
         var text =
-            MessageEntry.Text?.Trim();
+            MessageEntry.Text?.Trim()
+            ?? string.Empty;
+
+        if (_pendingAttachment != null)
+        {
+            await SendPendingAttachmentAsync(
+                text);
+
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(
                 text))
@@ -1417,8 +1447,23 @@ public partial class GroupChatPage : ContentPage
             return;
         }
 
+        await SendTextMessageAsync(
+            text);
+    }
+
+    // ============================================================
+    // SEND TEXT MESSAGE
+    // ============================================================
+
+    private async Task SendTextMessageAsync(
+        string text)
+    {
         try
         {
+            SetComposerBusy(
+                true,
+                "Sending...");
+
             await FirebaseInit.Initialized;
 
             var currentUser =
@@ -1451,11 +1496,8 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            var currentUid =
-                GetCurrentUserUid();
-
             if (string.IsNullOrWhiteSpace(
-                    currentUid))
+                    GetCurrentUserUid()))
             {
                 await DisplayAlert(
                     "Not authenticated",
@@ -1495,27 +1537,34 @@ public partial class GroupChatPage : ContentPage
                         organizationalLevel:
                             OrganizationalLevel);
 
-            MessageEntry.Text =
-                string.Empty;
-
-            var uiMessage =
-                ToUiMessage(
+            await _communityService
+                .CacheCommunityMessageAsync(
                     createdMessage);
 
             AddOrReplaceMessage(
-                uiMessage);
+                ToUiMessage(
+                    createdMessage));
+
+            MessageEntry.Text =
+                string.Empty;
 
             RenderMessages();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Send failed: {ex}");
+                $"[GROUP_CHAT] Send text failed: {ex}");
 
             await DisplayAlert(
                 "Message not sent",
-                "The message could not be sent. Please try again.",
+                ex.Message,
                 "OK");
+        }
+        finally
+        {
+            SetComposerBusy(
+                false,
+                null);
         }
     }
 
@@ -1557,6 +1606,11 @@ public partial class GroupChatPage : ContentPage
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[GROUP_CHAT] Attachment menu failed: {ex}");
+
+            await DisplayAlert(
+                "Attachment",
+                "The attachment menu could not be opened.",
+                "OK");
         }
     }
 
@@ -1582,7 +1636,7 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            await UploadAndSendMediaAsync(
+            await PreparePendingAttachmentAsync(
                 file,
                 "image");
         }
@@ -1593,7 +1647,7 @@ public partial class GroupChatPage : ContentPage
 
             await DisplayAlert(
                 "Image",
-                "Unable to select or upload the image.",
+                $"The image could not be attached.\n\n{ex.Message}",
                 "OK");
         }
     }
@@ -1620,7 +1674,7 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            await UploadAndSendMediaAsync(
+            await PreparePendingAttachmentAsync(
                 file,
                 "video");
         }
@@ -1631,7 +1685,7 @@ public partial class GroupChatPage : ContentPage
 
             await DisplayAlert(
                 "Video",
-                "Unable to select or upload the video.",
+                $"The video could not be attached.\n\n{ex.Message}",
                 "OK");
         }
     }
@@ -1674,7 +1728,7 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            await UploadAndSendMediaAsync(
+            await PreparePendingAttachmentAsync(
                 file,
                 "audio");
         }
@@ -1685,64 +1739,199 @@ public partial class GroupChatPage : ContentPage
 
             await DisplayAlert(
                 "Audio",
-                "Unable to select or upload the audio.",
+                $"The audio could not be attached.\n\n{ex.Message}",
                 "OK");
         }
     }
 
     // ============================================================
-    // MEDIA UPLOAD + SEND
+    // PREPARE PENDING ATTACHMENT
     // ============================================================
 
-    private async Task UploadAndSendMediaAsync(
+    private async Task PreparePendingAttachmentAsync(
         FileResult file,
         string messageType)
     {
         try
         {
+            ClearPendingAttachment();
+
+            if (string.IsNullOrWhiteSpace(
+                    file.FileName))
+            {
+                throw new InvalidOperationException(
+                    "The selected file has no filename.");
+            }
+
+            var safeFileName =
+                Path.GetFileName(
+                    file.FileName);
+
+            var localPath =
+                Path.Combine(
+                    FileSystem.CacheDirectory,
+                    $"{Guid.NewGuid():N}_{safeFileName}");
+
+            await using var source =
+                await file.OpenReadAsync();
+
+            await using var target =
+                File.Create(
+                    localPath);
+
+            await source.CopyToAsync(
+                target);
+
+            _pendingAttachment =
+                new FileResult(
+                    localPath,
+                    file.ContentType);
+
+            _pendingAttachmentType =
+                messageType.Trim()
+                    .ToLowerInvariant();
+
+            _pendingAttachmentLocalPath =
+                localPath;
+
+            ShowPendingAttachmentPreview();
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Pending attachment ready: {localPath}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Prepare attachment failed: {ex}");
+
+            ClearPendingAttachment();
+
+            await DisplayAlert(
+                "Attachment",
+                $"The selected file could not be prepared.\n\n{ex.Message}",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // SHOW PENDING ATTACHMENT PREVIEW
+    // ============================================================
+
+    private void ShowPendingAttachmentPreview()
+    {
+        if (_pendingAttachment == null)
+        {
+            return;
+        }
+
+        AttachmentPreviewContainer.IsVisible = true;
+
+        AttachmentPreviewNameLabel.Text =
+            _pendingAttachment.FileName;
+
+        AttachmentPreviewTypeLabel.Text =
+            _pendingAttachmentType.ToUpperInvariant();
+
+        var isImage =
+            string.Equals(
+                _pendingAttachmentType,
+                "image",
+                StringComparison.OrdinalIgnoreCase);
+
+        AttachmentPreviewImage.IsVisible =
+            isImage;
+
+        if (isImage &&
+            !string.IsNullOrWhiteSpace(
+                _pendingAttachmentLocalPath))
+        {
+            AttachmentPreviewImage.Source =
+                ImageSource.FromFile(
+                    _pendingAttachmentLocalPath);
+        }
+        else
+        {
+            AttachmentPreviewImage.Source = null;
+        }
+    }
+
+    // ============================================================
+    // REMOVE PENDING ATTACHMENT
+    // ============================================================
+
+    private void OnRemoveAttachmentClicked(
+        object? sender,
+        EventArgs e)
+    {
+        ClearPendingAttachment();
+    }
+
+    private void ClearPendingAttachment()
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    _pendingAttachmentLocalPath) &&
+                File.Exists(
+                    _pendingAttachmentLocalPath))
+            {
+                File.Delete(
+                    _pendingAttachmentLocalPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Pending file cleanup failed: {ex}");
+        }
+
+        _pendingAttachment = null;
+        _pendingAttachmentType = string.Empty;
+        _pendingAttachmentLocalPath = string.Empty;
+
+        if (AttachmentPreviewContainer != null)
+        {
+            AttachmentPreviewContainer.IsVisible = false;
+        }
+
+        if (AttachmentPreviewImage != null)
+        {
+            AttachmentPreviewImage.IsVisible = false;
+            AttachmentPreviewImage.Source = null;
+        }
+
+        if (AttachmentPreviewNameLabel != null)
+        {
+            AttachmentPreviewNameLabel.Text =
+                "Attachment";
+        }
+
+        if (AttachmentPreviewTypeLabel != null)
+        {
+            AttachmentPreviewTypeLabel.Text =
+                string.Empty;
+        }
+    }
+
+    // ============================================================
+    // SEND PENDING ATTACHMENT
+    // ============================================================
+
+    private async Task SendPendingAttachmentAsync(
+        string caption)
+    {
+        if (_pendingAttachment == null)
+        {
+            return;
+        }
+
+        try
+        {
             SetComposerBusy(
                 true,
-                $"Uploading {messageType}...");
+                $"Uploading {_pendingAttachmentType}...");
 
-            CloudinaryUploadResult upload;
-
-            switch (
-                messageType
-                    .Trim()
-                    .ToLowerInvariant())
-            {
-                case "image":
-
-                    upload =
-                        await _cloudinaryService
-                            .UploadImageAsync(
-                                file);
-
-                    break;
-
-                case "video":
-
-                    upload =
-                        await _cloudinaryService
-                            .UploadVideoAsync(
-                                file);
-
-                    break;
-
-                case "audio":
-
-                    upload =
-                        await _cloudinaryService
-                            .UploadAudioAsync(
-                                file);
-
-                    break;
-
-                default:
-
-                    throw new InvalidOperationException(
-                        "Unsupported media type.");
-            }
+            await FirebaseInit.Initialized;
 
             var currentUser =
                 MauiProgram.CurrentUser
@@ -1752,8 +1941,12 @@ public partial class GroupChatPage : ContentPage
 
             if (currentUser == null)
             {
-                throw new InvalidOperationException(
-                    "You must be signed in.");
+                await DisplayAlert(
+                    "Sign in required",
+                    "Please sign in before sending an attachment.",
+                    "OK");
+
+                return;
             }
 
             var validation =
@@ -1762,9 +1955,74 @@ public partial class GroupChatPage : ContentPage
 
             if (!validation.IsAllowed)
             {
-                throw new UnauthorizedAccessException(
-                    validation.Message);
+                await DisplayAlert(
+                    "Access denied",
+                    validation.Message,
+                    "OK");
+
+                return;
             }
+
+            if (string.IsNullOrWhiteSpace(
+                    GetCurrentUserUid()))
+            {
+                await DisplayAlert(
+                    "Not authenticated",
+                    "Firebase authentication is required.",
+                    "OK");
+
+                return;
+            }
+
+            CloudinaryUploadResult upload;
+
+            switch (
+                _pendingAttachmentType)
+            {
+                case "image":
+
+                    upload =
+                        await _cloudinaryService
+                            .UploadImageAsync(
+                                _pendingAttachment);
+
+                    break;
+
+                case "video":
+
+                    upload =
+                        await _cloudinaryService
+                            .UploadVideoAsync(
+                                _pendingAttachment);
+
+                    break;
+
+                case "audio":
+
+                    upload =
+                        await _cloudinaryService
+                            .UploadAudioAsync(
+                                _pendingAttachment);
+
+                    break;
+
+                default:
+
+                    throw new InvalidOperationException(
+                        "Unsupported attachment type.");
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    upload.SecureUrl))
+            {
+                throw new InvalidOperationException(
+                    "Cloudinary did not return a valid media URL.");
+            }
+
+            var content =
+                string.IsNullOrWhiteSpace(caption)
+                    ? _pendingAttachment.FileName
+                    : caption;
 
             var createdMessage =
                 await _communityService
@@ -1773,10 +2031,10 @@ public partial class GroupChatPage : ContentPage
                             GetBackendCommunityId(),
 
                         content:
-                            file.FileName,
+                            content,
 
                         messageType:
-                            messageType,
+                            _pendingAttachmentType,
 
                         branchId:
                             _branchId > 0
@@ -1803,7 +2061,10 @@ public partial class GroupChatPage : ContentPage
                             string.Empty,
 
                         fileName:
-                            upload.OriginalFilename,
+                            string.IsNullOrWhiteSpace(
+                                upload.OriginalFilename)
+                                ? _pendingAttachment.FileName
+                                : upload.OriginalFilename,
 
                         fileSize:
                             upload.Bytes,
@@ -1811,14 +2072,23 @@ public partial class GroupChatPage : ContentPage
                         duration:
                             upload.Duration);
 
-            var uiMessage =
-                ToUiMessage(
+            await _communityService
+                .CacheCommunityMessageAsync(
                     createdMessage);
 
             AddOrReplaceMessage(
-                uiMessage);
+                ToUiMessage(
+                    createdMessage));
+
+            MessageEntry.Text =
+                string.Empty;
+
+            ClearPendingAttachment();
 
             RenderMessages();
+
+            GroupStatusLabel.Text =
+                "Message sent";
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -1830,11 +2100,26 @@ public partial class GroupChatPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Media send failed: {ex}");
+                "========== GROUP CHAT ATTACHMENT ERROR ==========");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Exception Type: {ex.GetType().FullName}");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Message: {ex.Message}");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Inner Exception: {ex.InnerException?.Message}");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Full Exception: {ex}");
+
+            System.Diagnostics.Debug.WriteLine(
+                "================================================");
 
             await DisplayAlert(
-                "Media not sent",
-                "The media could not be sent. Please try again.",
+                "Attachment not sent",
+                $"The attachment could not be sent.\n\n{ex.Message}",
                 "OK");
         }
         finally
@@ -1846,7 +2131,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // COMPOSER STATE
+    // COMPOSER BUSY STATE
     // ============================================================
 
     private void SetComposerBusy(
@@ -1875,7 +2160,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // MESSAGE INSERT / REPLACE
+    // ADD / REPLACE MESSAGE
     // ============================================================
 
     private void AddOrReplaceMessage(
@@ -2098,8 +2383,7 @@ public partial class GroupChatPage : ContentPage
             return
                 profile.DistrictId > 0 &&
                 DistrictId > 0 &&
-                profile.DistrictId ==
-                    DistrictId;
+                profile.DistrictId == DistrictId;
         }
 
         if (string.Equals(
@@ -2110,8 +2394,7 @@ public partial class GroupChatPage : ContentPage
             return
                 profile.RegionId > 0 &&
                 RegionId > 0 &&
-                profile.RegionId ==
-                    RegionId;
+                profile.RegionId == RegionId;
         }
 
         if (string.Equals(
@@ -2127,8 +2410,7 @@ public partial class GroupChatPage : ContentPage
 
             return
                 selectedBranchId > 0 &&
-                profile.BranchId ==
-                    selectedBranchId;
+                profile.BranchId == selectedBranchId;
         }
 
         if (string.Equals(
@@ -2163,7 +2445,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // MEMBERS CLICK
+    // MEMBERS TAP
     // ============================================================
 
     private async void MembersLabel_Tapped(
@@ -2398,8 +2680,7 @@ public partial class GroupChatPage : ContentPage
                     "District",
                     StringComparison.OrdinalIgnoreCase) &&
                 (!currentUser.DistrictId.HasValue ||
-                 currentUser.DistrictId.Value !=
-                    DistrictId))
+                 currentUser.DistrictId.Value != DistrictId))
             {
                 return (
                     false,
@@ -2411,8 +2692,7 @@ public partial class GroupChatPage : ContentPage
                     "Regional",
                     StringComparison.OrdinalIgnoreCase) &&
                 (!currentUser.RegionId.HasValue ||
-                 currentUser.RegionId.Value !=
-                    RegionId))
+                 currentUser.RegionId.Value != RegionId))
             {
                 return (
                     false,
@@ -2467,8 +2747,7 @@ public partial class GroupChatPage : ContentPage
                     "You are not assigned to a region.");
             }
 
-            return currentUser.RegionId.Value ==
-                   RegionId
+            return currentUser.RegionId.Value == RegionId
                 ? (
                     true,
                     "Regional group access approved.")
@@ -2489,8 +2768,7 @@ public partial class GroupChatPage : ContentPage
                     "You are not assigned to a district.");
             }
 
-            return currentUser.DistrictId.Value ==
-                   DistrictId
+            return currentUser.DistrictId.Value == DistrictId
                 ? (
                     true,
                     "District group access approved.")
@@ -2517,8 +2795,7 @@ public partial class GroupChatPage : ContentPage
                     "You are not assigned to a branch.");
             }
 
-            return currentUser.BranchId.Value ==
-                   selectedBranchId
+            return currentUser.BranchId.Value == selectedBranchId
                 ? (
                     true,
                     "Branch group access approved.")
@@ -2672,7 +2949,7 @@ public partial class GroupChatPage : ContentPage
     }
 
     // ============================================================
-    // HELPERS
+    // LEVEL HELPERS
     // ============================================================
 
     private bool IsLeaderGroup()
@@ -2741,6 +3018,10 @@ public partial class GroupChatPage : ContentPage
                 ? parsed
                 : 0;
     }
+
+    // ============================================================
+    // JSON HELPERS
+    // ============================================================
 
     private static string TryGetString(
         JsonElement element,
@@ -2875,12 +3156,6 @@ public partial class GroupChatPage : ContentPage
         };
     }
 
-    private string GetCurrentUserUid()
-    {
-        return _auth.CurrentUser?.Uid
-            ?? string.Empty;
-    }
-
     private static string GetAppwriteDocumentId(
         JsonElement element)
     {
@@ -2894,6 +3169,12 @@ public partial class GroupChatPage : ContentPage
                 element,
                 "message_id")
             : id;
+    }
+
+    private string GetCurrentUserUid()
+    {
+        return _auth.CurrentUser?.Uid
+            ?? string.Empty;
     }
 
     // ============================================================
