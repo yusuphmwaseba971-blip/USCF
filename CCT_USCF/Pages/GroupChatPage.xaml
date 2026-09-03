@@ -1,4 +1,6 @@
+
 <?xml version="1.0" encoding="utf-8" ?>
+
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -6,25 +8,63 @@
     Title="Group Chat"
     BackgroundColor="#F8FAFC">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="0">
+    <Grid
+        RowDefinitions="Auto,Auto,*,Auto"
+        Padding="0">
+
+        <!-- ====================================================== -->
+        <!-- HEADER                                                  -->
+        <!-- ====================================================== -->
+
         <Border
             Grid.Row="0"
             BackgroundColor="#EEF2FF"
             Padding="18,16"
             StrokeThickness="0">
-            <VerticalStackLayout Spacing="4">
-                <Label x:Name="GroupTitleLabel" Text="Group Chat" FontSize="22" FontAttributes="Bold" TextColor="#1E40AF" />
-                <Label x:Name="GroupStatusLabel" Text="Loading group..." FontSize="12" TextColor="#475569" />
+
+            <VerticalStackLayout
+                Spacing="4">
+
+                <Label
+                    x:Name="GroupTitleLabel"
+                    Text="Group Chat"
+                    FontSize="22"
+                    FontAttributes="Bold"
+                    TextColor="#1E40AF" />
+
+                <Label
+                    x:Name="GroupStatusLabel"
+                    Text="Loading group..."
+                    FontSize="12"
+                    TextColor="#475569" />
+
             </VerticalStackLayout>
+
         </Border>
 
-        <Grid Grid.Row="1" Margin="12,8,12,0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+
+        <!-- ====================================================== -->
+        <!-- MEMBERS                                                 -->
+        <!-- ====================================================== -->
+
+        <Grid
+            Grid.Row="1"
+            Margin="12,8,12,0"
+            ColumnDefinitions="*,Auto"
+            ColumnSpacing="8">
+
             <Border
                 Grid.Column="0"
                 BackgroundColor="White"
                 Padding="12"
                 StrokeThickness="0">
-                <Label x:Name="MembersLabel" Text="Members" FontSize="12" TextColor="#475569" />
+
+                <Label
+                    x:Name="MembersLabel"
+                    Text="Members"
+                    FontSize="12"
+                    TextColor="#475569" />
+
             </Border>
 
             <Button
@@ -35,53 +75,92 @@
                 FontSize="12"
                 BackgroundColor="#2563EB"
                 TextColor="White"
-                CornerRadius="10" />
+                CornerRadius="10"
+                VerticalOptions="Center" />
+
         </Grid>
 
-        <ScrollView Grid.Row="2" Padding="12,12,12,0">
-            <VerticalStackLayout x:Name="MessagesLayout" Spacing="10" />
-        </ScrollView>
+
+        <!-- ====================================================== -->
+        <!-- MESSAGES                                                -->
+        <!-- ====================================================== -->
+
+        <RefreshView
+            x:Name="MessagesRefreshView"
+            Grid.Row="2"
+            Refreshing="OnMessagesRefreshing">
+
+            <ScrollView
+                Padding="12,12,12,0">
+
+                <VerticalStackLayout
+                    x:Name="MessagesLayout"
+                    Spacing="10" />
+
+            </ScrollView>
+
+        </RefreshView>
+
+
+        <!-- ====================================================== -->
+        <!-- MESSAGE COMPOSER                                        -->
+        <!-- ====================================================== -->
 
         <Border
             Grid.Row="3"
             BackgroundColor="White"
             Padding="12,10"
             StrokeThickness="0">
-<Grid
-    ColumnDefinitions="Auto,*,Auto"
-    ColumnSpacing="8">
 
-    <!-- ATTACHMENT -->
-    <Button
-        x:Name="AttachmentButton"
-        Grid.Column="0"
-        Text="📎"
-        FontSize="22"
-        WidthRequest="48"
-        HeightRequest="48"
-        Padding="0"
-        BackgroundColor="Transparent"
-        TextColor="#1E40AF"
-        Clicked="OnAttachmentClicked" />
+            <Grid
+                ColumnDefinitions="Auto,*,Auto"
+                ColumnSpacing="8">
 
-    <!-- MESSAGE -->
-    <Entry
-        x:Name="MessageEntry"
-        Grid.Column="1"
-        Placeholder="Type a message..."
-        BackgroundColor="#F8FAFC"
-        TextColor="#0F172A"
-        VerticalOptions="Center" />
+                <!-- ATTACHMENT -->
 
-    <!-- SEND -->
-    <Button
-        Grid.Column="2"
-        Text="Send"
-        Clicked="OnSendClicked"
-        Padding="14,8"
-        CornerRadius="10" />
+                <Button
+                    x:Name="AttachmentButton"
+                    Grid.Column="0"
+                    Text="📎"
+                    FontSize="22"
+                    WidthRequest="48"
+                    HeightRequest="48"
+                    Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="#1E40AF"
+                    Clicked="OnAttachmentClicked"
+                    VerticalOptions="Center" />
 
-</Grid>
+                <!-- MESSAGE INPUT -->
+
+                <Entry
+                    x:Name="MessageEntry"
+                    Grid.Column="1"
+                    Placeholder="Type a message..."
+                    BackgroundColor="#F8FAFC"
+                    TextColor="#0F172A"
+                    PlaceholderColor="#64748B"
+                    VerticalOptions="Center"
+                    ReturnType="Send"
+                    Completed="OnMessageEntryCompleted" />
+
+                <!-- SEND -->
+
+                <Button
+                    x:Name="SendButton"
+                    Grid.Column="2"
+                    Text="Send"
+                    Clicked="OnSendClicked"
+                    Padding="14,8"
+                    CornerRadius="10"
+                    BackgroundColor="#2563EB"
+                    TextColor="White"
+                    VerticalOptions="Center" />
+
+            </Grid>
+
         </Border>
+
     </Grid>
+
 </ContentPage>

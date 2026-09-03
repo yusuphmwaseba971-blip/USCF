@@ -1,11 +1,14 @@
+
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using CCT_USCF.Services;
 using CCT_USCF.Services.Appwrite;
+using CCT_USCF.Services.Cloudinary;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Storage;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
 
@@ -18,6 +21,7 @@ public partial class BranchChatPage : ContentPage
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
     private readonly CommunityService _communityService;
+    private readonly CloudinaryService _cloudinaryService;
 
     private readonly List<BranchChatMessageUi> _messages = new();
 
@@ -28,47 +32,82 @@ public partial class BranchChatPage : ContentPage
     private ClientWebSocket? _appwriteRealtimeSocket;
     private CancellationTokenSource? _appwriteRealtimeCts;
 
+    // Used for long-press detection.
+    private DateTime _pointerPressedAt = DateTime.MinValue;
+    private bool _longPressTriggered;
+
+    private const int LongPressMilliseconds = 650;
+
     public BranchChatPage()
     {
         InitializeComponent();
 
-        _auth = MauiProgram.Services.GetRequiredService<IFirebaseAuth>();
-        _firestore = MauiProgram.Services.GetRequiredService<IFirebaseFirestore>();
-        _communityService = MauiProgram.Services.GetRequiredService<CommunityService>();
+        _auth =
+            MauiProgram.Services
+                .GetRequiredService<IFirebaseAuth>();
 
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += MembersLabel_Tapped;
-        MembersLabel.GestureRecognizers.Add(tap);
+        _firestore =
+            MauiProgram.Services
+                .GetRequiredService<IFirebaseFirestore>();
 
-        AddMemberButton.Clicked += AddMemberButton_Clicked;
+        _communityService =
+            MauiProgram.Services
+                .GetRequiredService<CommunityService>();
+
+        _cloudinaryService =
+            MauiProgram.Services
+                .GetRequiredService<CloudinaryService>();
+
+        var membersTap =
+            new TapGestureRecognizer();
+
+        membersTap.Tapped += MembersLabel_Tapped;
+
+        MembersLabel.GestureRecognizers.Add(
+            membersTap);
+
+        AddMemberButton.Clicked +=
+            AddMemberButton_Clicked;
     }
+
+    // ============================================================
+    // BRANCH PARAMETERS
+    // ============================================================
 
     private int _branchId;
 
     public int BranchId
     {
         get => _branchId;
+
         set
         {
             _branchId = value;
 
             if (!string.IsNullOrWhiteSpace(BranchName))
-                BranchTitleLabel.Text = BranchName;
+            {
+                BranchTitleLabel.Text =
+                    BranchName;
+            }
         }
     }
 
-    private string _branchName = "Branch Group";
+    private string _branchName =
+        "Branch Group";
 
     public string BranchName
     {
         get => _branchName;
+
         set
         {
-            _branchName = string.IsNullOrWhiteSpace(value)
-                ? "Branch Group"
-                : value;
+            _branchName =
+                string.IsNullOrWhiteSpace(value)
+                    ? "Branch Group"
+                    : value;
 
-            BranchTitleLabel.Text = _branchName;
+            BranchTitleLabel.Text =
+                _branchName;
         }
     }
 
@@ -84,30 +123,35 @@ public partial class BranchChatPage : ContentPage
         {
             _realtimeEnabled = true;
 
-            // Resolve branch first.
             if (_branchId <= 0)
             {
                 var currentUser =
                     MauiProgram.CurrentUser
-                    ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+                    ?? await MauiProgram
+                        .CreateAuthServiceForPages()
+                        .GetCurrentUserAsync();
 
-                if (currentUser?.BranchId is int branchId && branchId > 0)
+                if (currentUser?.BranchId is int branchId &&
+                    branchId > 0)
                 {
                     BranchId = branchId;
-                    BranchName = currentUser.Branch ?? "Branch Group";
+
+                    BranchName =
+                        currentUser.Branch
+                        ?? "Branch Group";
                 }
             }
 
             if (_branchId <= 0)
             {
-                BranchStatusLabel.Text = "Branch information is unavailable.";
+                BranchStatusLabel.Text =
+                    "Branch information is unavailable.";
+
                 return;
             }
 
-            // Realtime starts only after branch ID is known.
             AttachRealtimeListener();
 
-            // Load local cache / initial Appwrite data.
             await LoadBranchGroupAsync();
         }
         catch (Exception ex)
@@ -122,6 +166,7 @@ public partial class BranchChatPage : ContentPage
         base.OnDisappearing();
 
         _realtimeEnabled = false;
+
         DisposeRealtimeListener();
     }
 
@@ -145,9 +190,11 @@ public partial class BranchChatPage : ContentPage
             _appwriteRealtimeCts?.Cancel();
             _appwriteRealtimeCts?.Dispose();
 
-            _appwriteRealtimeCts = new CancellationTokenSource();
+            _appwriteRealtimeCts =
+                new CancellationTokenSource();
 
-            var cancellationToken = _appwriteRealtimeCts.Token;
+            var cancellationToken =
+                _appwriteRealtimeCts.Token;
 
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT] Appwrite realtime listener attached for branch {_branchId}");
@@ -156,17 +203,18 @@ public partial class BranchChatPage : ContentPage
             {
                 try
                 {
-                    await ListenForAppwriteMessagesAsync(cancellationToken);
+                    await ListenForAppwriteMessagesAsync(
+                        cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
                     System.Diagnostics.Debug.WriteLine(
-                        $"[BRANCH_CHAT] Appwrite realtime listener cancelled for branch {_branchId}");
+                        $"[BRANCH_CHAT] Realtime listener cancelled for branch {_branchId}");
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine(
-                        $"[BRANCH_CHAT] Appwrite realtime listener error for branch {_branchId}: {ex}");
+                        $"[BRANCH_CHAT] Realtime listener error: {ex}");
 
                     _realtimeListenerAttached = false;
                 }
@@ -175,7 +223,7 @@ public partial class BranchChatPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Appwrite realtime listener setup failed: {ex}");
+                $"[BRANCH_CHAT] Realtime setup failed: {ex}");
 
             _realtimeListenerAttached = false;
         }
@@ -204,7 +252,7 @@ public partial class BranchChatPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Appwrite realtime disconnect failed: {ex}");
+                $"[BRANCH_CHAT] Realtime disconnect failed: {ex}");
         }
 
         _appwriteRealtimeSocket = null;
@@ -213,26 +261,36 @@ public partial class BranchChatPage : ContentPage
     private async Task ListenForAppwriteMessagesAsync(
         CancellationToken cancellationToken)
     {
-        using var socket = new ClientWebSocket();
+        using var socket =
+            new ClientWebSocket();
 
         _appwriteRealtimeSocket = socket;
 
-        var uriBuilder = new UriBuilder(AppwriteService.Endpoint)
-        {
-            Scheme = Uri.UriSchemeWss,
-            Path = "/v1/realtime",
-            Query =
-                $"project={Uri.EscapeDataString(AppwriteService.ProjectId)}"
-        };
+        var uriBuilder =
+            new UriBuilder(
+                AppwriteService.Endpoint)
+            {
+                Scheme = Uri.UriSchemeWss,
+                Path = "/v1/realtime",
+                Query =
+                    $"project={Uri.EscapeDataString(
+                        AppwriteService.ProjectId)}"
+            };
 
-        // Listen only to the Community Messages collection.
-        var channel = _communityService.GetCommunityMessagesChannel();
+        var channel =
+            _communityService
+                .GetCommunityMessagesChannel();
 
-        var subscription = JsonSerializer.Serialize(new
-        {
-            type = "subscribe",
-            channels = new[] { channel }
-        });
+        var subscription =
+            JsonSerializer.Serialize(
+                new
+                {
+                    type = "subscribe",
+                    channels = new[]
+                    {
+                        channel
+                    }
+                });
 
         System.Diagnostics.Debug.WriteLine(
             $"[BRANCH_CHAT] Realtime endpoint: {uriBuilder.Uri}");
@@ -245,7 +303,8 @@ public partial class BranchChatPage : ContentPage
             cancellationToken);
 
         await socket.SendAsync(
-            Encoding.UTF8.GetBytes(subscription),
+            Encoding.UTF8.GetBytes(
+                subscription),
             WebSocketMessageType.Text,
             true,
             cancellationToken);
@@ -253,87 +312,159 @@ public partial class BranchChatPage : ContentPage
         System.Diagnostics.Debug.WriteLine(
             $"[BRANCH_CHAT] Realtime subscription sent for branch {_branchId}");
 
-        var buffer = new byte[16 * 1024];
-        var messageBuilder = new StringBuilder();
+        var buffer =
+            new byte[16 * 1024];
+
+        var messageBuilder =
+            new StringBuilder();
 
         while (
-            socket.State == WebSocketState.Open &&
+            socket.State ==
+                WebSocketState.Open &&
             !cancellationToken.IsCancellationRequested)
         {
-            var result = await socket.ReceiveAsync(
-                new ArraySegment<byte>(buffer),
-                cancellationToken);
+            var result =
+                await socket.ReceiveAsync(
+                    new ArraySegment<byte>(
+                        buffer),
+                    cancellationToken);
 
-            if (result.MessageType == WebSocketMessageType.Close)
+            if (result.MessageType ==
+                WebSocketMessageType.Close)
+            {
                 break;
+            }
 
-            var chunk = Encoding.UTF8.GetString(
-                buffer,
-                0,
-                result.Count);
+            var chunk =
+                Encoding.UTF8.GetString(
+                    buffer,
+                    0,
+                    result.Count);
 
             messageBuilder.Append(chunk);
 
             if (!result.EndOfMessage)
+            {
                 continue;
+            }
 
-            var rawMessage = messageBuilder.ToString();
+            var rawMessage =
+                messageBuilder.ToString();
+
             messageBuilder.Clear();
 
-            ProcessRealtimeMessage(rawMessage);
+            ProcessRealtimeMessage(
+                rawMessage);
         }
     }
 
-    private void ProcessRealtimeMessage(string rawMessage)
+    // ============================================================
+    // REALTIME PARSER
+    // ============================================================
+
+    private void ProcessRealtimeMessage(
+        string rawMessage)
     {
         if (string.IsNullOrWhiteSpace(rawMessage))
+        {
             return;
+        }
 
         try
         {
-            using var document = JsonDocument.Parse(rawMessage);
+            using var document =
+                JsonDocument.Parse(rawMessage);
 
-            var root = document.RootElement;
+            var root =
+                document.RootElement;
 
-            if (!root.TryGetProperty("type", out var typeElement))
+            if (!root.TryGetProperty(
+                    "type",
+                    out var typeElement))
+            {
                 return;
+            }
 
-            var eventType = typeElement.ToString();
+            var rootType =
+                typeElement.ToString();
 
             if (!string.Equals(
-                    eventType,
+                    rootType,
                     "event",
                     StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            JsonElement payload;
+            var isCreate = false;
+            var isUpdate = false;
+            var isDelete = false;
 
-            if (!root.TryGetProperty("payload", out payload))
+            // --------------------------------------------------------
+            // Appwrite provides event names such as:
+            //
+            // databases....documents.create
+            // databases....documents.update
+            // databases....documents.delete
+            //
+            // --------------------------------------------------------
+
+            if (root.TryGetProperty(
+                    "events",
+                    out var eventsElement) &&
+                eventsElement.ValueKind ==
+                    JsonValueKind.Array)
             {
-                if (!root.TryGetProperty("data", out payload))
-                    return;
+                foreach (var eventElement in eventsElement.EnumerateArray())
+                {
+                    var eventName =
+                        eventElement.ToString();
+
+                    if (eventName.EndsWith(
+                            ".create",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        isCreate = true;
+                    }
+
+                    if (eventName.EndsWith(
+                            ".update",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        isUpdate = true;
+                    }
+
+                    if (eventName.EndsWith(
+                            ".delete",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        isDelete = true;
+                    }
+                }
             }
 
-            if (payload.ValueKind != JsonValueKind.Object)
+            if (!root.TryGetProperty(
+                    "payload",
+                    out var payload))
+            {
+                if (!root.TryGetProperty(
+                        "data",
+                        out payload))
+                {
+                    return;
+                }
+            }
+
+            if (payload.ValueKind !=
+                JsonValueKind.Object)
+            {
                 return;
+            }
 
-            // ====================================================
-            // NEW COMMUNITY MESSAGE SCHEMA
-            //
-            // message_id
-            // sender_uid
-            // sender_name
-            // content
-            // community_id
-            // message_type
-            // created_at
-            // ====================================================
-
-            var communityId = TryGetString(
-                payload,
-                "community_id");
+            var communityId =
+                TryGetString(
+                    payload,
+                    "community_id");
 
             if (!string.Equals(
                     communityId,
@@ -343,90 +474,206 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            var messageId = GetAppwriteDocumentId(payload);
+            var messageId =
+                GetAppwriteDocumentId(
+                    payload);
 
             if (string.IsNullOrWhiteSpace(messageId))
-                return;
-
-            var senderUid = TryGetString(
-                payload,
-                "sender_uid");
-
-            var senderName = TryGetString(
-                payload,
-                "sender_name");
-
-            if (string.IsNullOrWhiteSpace(senderName))
-                senderName = "Member";
-
-            var content = TryGetString(
-                payload,
-                "content");
-
-            if (string.IsNullOrWhiteSpace(content))
-                return;
-
-            var createdAtText = TryGetString(
-                payload,
-                "created_at");
-
-            var createdAt = DateTime.TryParse(
-                createdAtText,
-                null,
-                System.Globalization.DateTimeStyles.RoundtripKind,
-                out var parsedCreatedAt)
-                    ? parsedCreatedAt.ToUniversalTime()
-                    : DateTime.UtcNow;
-
-            var message = new BranchChatMessageUi
             {
-                MessageId = messageId,
-                BranchId = _branchId,
-                SenderUid = senderUid,
-                SenderName = senderName,
-                Text = content,
-                CreatedAt = createdAt
-            };
+                return;
+            }
+
+            // --------------------------------------------------------
+            // DELETE EVENT
+            // --------------------------------------------------------
+
+            if (isDelete)
+            {
+                _ = HandleRealtimeDeleteAsync(
+                    messageId);
+
+                return;
+            }
+
+            // --------------------------------------------------------
+            // CREATE / UPDATE EVENT
+            // --------------------------------------------------------
+
+            var senderUid =
+                TryGetString(
+                    payload,
+                    "sender_uid");
+
+            var senderName =
+                TryGetString(
+                    payload,
+                    "sender_name");
+
+            if (string.IsNullOrWhiteSpace(
+                    senderName))
+            {
+                senderName = "Member";
+            }
+
+            var content =
+                TryGetString(
+                    payload,
+                    "content");
+
+            var messageType =
+                TryGetString(
+                    payload,
+                    "message_type");
+
+            if (string.IsNullOrWhiteSpace(
+                    messageType))
+            {
+                messageType = "text";
+            }
+
+            var mediaUrl =
+                TryGetString(
+                    payload,
+                    "media_url");
+
+            var thumbnailUrl =
+                TryGetString(
+                    payload,
+                    "thumbnail_url");
+
+            var fileName =
+                TryGetString(
+                    payload,
+                    "file_name");
+
+            var fileSize =
+                TryGetLong(
+                    payload,
+                    "file_size");
+
+            var duration =
+                TryGetDouble(
+                    payload,
+                    "duration");
+
+            var createdAtText =
+                TryGetString(
+                    payload,
+                    "created_at");
+
+            var createdAt =
+                ParseUtcDateTime(
+                    createdAtText);
+
+            var updatedAtText =
+                TryGetString(
+                    payload,
+                    "updated_at");
+
+DateTime? updatedAt =
+    string.IsNullOrWhiteSpace(updatedAtText)
+        ? null
+        : ParseUtcDateTime(updatedAtText);
+            var message =
+                new BranchChatMessageUi
+                {
+                    MessageId =
+                        messageId,
+
+                    BranchId =
+                        _branchId,
+
+                    SenderUid =
+                        senderUid,
+
+                    SenderName =
+                        senderName,
+
+                    Text =
+                        content,
+
+                    MessageType =
+                        messageType,
+
+                    MediaUrl =
+                        mediaUrl,
+
+                    ThumbnailUrl =
+                        thumbnailUrl,
+
+                    FileName =
+                        fileName,
+
+                    FileSize =
+                        fileSize,
+
+                    Duration =
+                        duration,
+
+                    CreatedAt =
+                        createdAt,
+
+                    UpdatedAt =
+                        updatedAt
+                };
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_REALTIME] New message received: " +
+                $"[BRANCH_CHAT_REALTIME] " +
                 $"message_id={message.MessageId}, " +
-                $"community_id={communityId}, " +
-                $"sender_uid={message.SenderUid}");
+                $"type={message.MessageType}, " +
+                $"eventCreate={isCreate}, " +
+                $"eventUpdate={isUpdate}");
 
-            _ = HandleRealtimeMessageAsync(message);
+            _ =
+                HandleRealtimeMessageAsync(
+                    message,
+                    isUpdate);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Appwrite realtime payload parse failed: {ex}");
+                $"[BRANCH_CHAT] Realtime payload parse failed: {ex}");
         }
     }
 
+    // ============================================================
+    // REALTIME CREATE / UPDATE
+    // ============================================================
+
     private async Task HandleRealtimeMessageAsync(
-        BranchChatMessageUi message)
+        BranchChatMessageUi message,
+        bool isUpdate)
     {
         try
         {
-            // Save realtime message into SQLite cache.
-            await CacheUiMessageAsync(message);
+            await CacheUiMessageAsync(
+                message);
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (_messages.Any(existing =>
-                    string.Equals(
-                        existing.MessageId,
-                        message.MessageId,
-                        StringComparison.Ordinal)))
-                {
-                    return;
-                }
+                var existingIndex =
+                    _messages.FindIndex(
+                        existing =>
+                            string.Equals(
+                                existing.MessageId,
+                                message.MessageId,
+                                StringComparison.Ordinal));
 
-                _messages.Add(message);
+                if (existingIndex >= 0)
+                {
+                    _messages[existingIndex] =
+                        message;
+                }
+                else
+                {
+                    _messages.Add(
+                        message);
+                }
 
                 _messages.Sort(
                     (left, right) =>
-                        left.CreatedAt.CompareTo(right.CreatedAt));
+                        left.CreatedAt.CompareTo(
+                            right.CreatedAt));
 
                 RenderMessages();
             });
@@ -434,17 +681,61 @@ public partial class BranchChatPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_REALTIME] Failed to cache/display realtime message: {ex}");
+                $"[BRANCH_CHAT_REALTIME] Cache/display failed: {ex}");
         }
     }
+
+    // ============================================================
+    // REALTIME DELETE
+    // ============================================================
+
+    private async Task HandleRealtimeDeleteAsync(
+        string messageId)
+    {
+        try
+        {
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                _messages.RemoveAll(
+                    message =>
+                        string.Equals(
+                            message.MessageId,
+                            messageId,
+                            StringComparison.Ordinal));
+
+                RenderMessages();
+            });
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT_REALTIME] Message removed from UI: {messageId}");
+
+            // The remote document is already gone.
+            // Local-cache deletion can be added through
+            // CommunityService when we finalize cache synchronization.
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT_REALTIME] Delete handling failed: {ex}");
+        }
+    }
+
+    // ============================================================
+    // REALTIME HELPERS
+    // ============================================================
 
     private static string GetAppwriteDocumentId(
         JsonElement element)
     {
-        var id = TryGetString(element, "$id");
+        var id =
+            TryGetString(
+                element,
+                "$id");
 
         if (!string.IsNullOrWhiteSpace(id))
+        {
             return id;
+        }
 
         return TryGetString(
             element,
@@ -462,13 +753,109 @@ public partial class BranchChatPage : ContentPage
             return string.Empty;
         }
 
-        if (value.ValueKind == JsonValueKind.Null ||
-            value.ValueKind == JsonValueKind.Undefined)
+        if (value.ValueKind ==
+                JsonValueKind.Null ||
+            value.ValueKind ==
+                JsonValueKind.Undefined)
         {
             return string.Empty;
         }
 
         return value.ToString();
+    }
+
+    private static long TryGetLong(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out var value))
+        {
+            return 0;
+        }
+
+        try
+        {
+            if (value.ValueKind ==
+                JsonValueKind.Number)
+            {
+                if (value.TryGetInt64(
+                        out var integerValue))
+                {
+                    return integerValue;
+                }
+
+                if (value.TryGetDouble(
+                        out var doubleValue))
+                {
+                    return Convert.ToInt64(
+                        doubleValue);
+                }
+            }
+
+            if (long.TryParse(
+                    value.ToString(),
+                    out var parsed))
+            {
+                return parsed;
+            }
+        }
+        catch
+        {
+        }
+
+        return 0;
+    }
+
+    private static double TryGetDouble(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out var value))
+        {
+            return 0;
+        }
+
+        try
+        {
+            if (value.ValueKind ==
+                JsonValueKind.Number &&
+                value.TryGetDouble(
+                    out var doubleValue))
+            {
+                return doubleValue;
+            }
+
+            if (double.TryParse(
+                    value.ToString(),
+                    out var parsed))
+            {
+                return parsed;
+            }
+        }
+        catch
+        {
+        }
+
+        return 0;
+    }
+
+    private static DateTime ParseUtcDateTime(
+        string value)
+    {
+        if (DateTime.TryParse(
+                value,
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out var parsed))
+        {
+            return parsed.ToUniversalTime();
+        }
+
+        return DateTime.UtcNow;
     }
 
     // ============================================================
@@ -477,7 +864,8 @@ public partial class BranchChatPage : ContentPage
 
     private async Task LoadBranchGroupAsync()
     {
-        BranchStatusLabel.Text = "Loading Branch Group...";
+        BranchStatusLabel.Text =
+            "Loading Branch Group...";
 
         try
         {
@@ -493,7 +881,8 @@ public partial class BranchChatPage : ContentPage
 
             var currentUser =
                 MauiProgram.CurrentUser
-                ?? await MauiProgram.CreateAuthServiceForPages()
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
                     .GetCurrentUserAsync();
 
             if (currentUser == null)
@@ -513,13 +902,14 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            var members = await LoadBranchMembersAsync();
+            var members =
+                await LoadBranchMembersAsync();
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Current Firebase UID={GetCurrentUserUid()} " +
-                $"Current Branch ID={_branchId} " +
-                $"Branch name={BranchName} " +
-                $"Member query count={members.Count}");
+                $"[BRANCH_CHAT] " +
+                $"UID={GetCurrentUserUid()} " +
+                $"Branch={_branchId} " +
+                $"Members={members.Count}");
 
             BranchStatusLabel.Text =
                 members.Count == 1
@@ -531,24 +921,12 @@ public partial class BranchChatPage : ContentPage
                     ? "Members (1)"
                     : $"Members ({members.Count})";
 
-            // ====================================================
-            // CACHE-FIRST MESSAGE LOAD
-            //
-            // If SQLite contains messages:
-            //     use SQLite only.
-            //
-            // If SQLite is empty:
-            //     fetch latest 100 from Appwrite,
-            //     save them to SQLite,
-            //     display them.
-            // ====================================================
-
             await LoadMessagesFromCacheFirstAsync();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH CHAT] Load failed: {ex}");
+                $"[BRANCH_CHAT] Load failed: {ex}");
 
             BranchStatusLabel.Text =
                 "Unable to load the Church Group right now.";
@@ -558,37 +936,44 @@ public partial class BranchChatPage : ContentPage
     private async Task LoadMessagesFromCacheFirstAsync()
     {
         if (_branchId <= 0)
+        {
             return;
+        }
 
         try
         {
-            BranchStatusLabel.Text = "Loading messages...";
+            BranchStatusLabel.Text =
+                "Loading messages...";
 
             var messages =
-                await _communityService.LoadGroupMessagesWithCacheAsync(
-                    _branchId.ToString(),
-                    100);
-
-            var uiMessages = messages
-                .Where(message =>
-                    string.Equals(
-                        message.CommunityId,
+                await _communityService
+                    .LoadGroupMessagesWithCacheAsync(
                         _branchId.ToString(),
-                        StringComparison.Ordinal))
-                .Select(ToUiMessage)
-                .OrderBy(message => message.CreatedAt)
-                .ToList();
+                        100);
+
+            var uiMessages =
+                messages
+                    .Where(message =>
+                        string.Equals(
+                            message.CommunityId,
+                            _branchId.ToString(),
+                            StringComparison.Ordinal))
+                    .Select(ToUiMessage)
+                    .OrderBy(message =>
+                        message.CreatedAt)
+                    .ToList();
 
             _messages.Clear();
 
-            foreach (var message in uiMessages)
-                _messages.Add(message);
+            _messages.AddRange(
+                uiMessages);
 
             RenderMessages();
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Cache-first load complete. " +
-                $"Messages displayed={_messages.Count}");
+                $"[BRANCH_CHAT] " +
+                $"Cache-first load complete. " +
+                $"Messages={_messages.Count}");
         }
         catch (Exception ex)
         {
@@ -603,29 +988,59 @@ public partial class BranchChatPage : ContentPage
         return new BranchChatMessageUi
         {
             MessageId =
-                string.IsNullOrWhiteSpace(message.MessageId)
+                string.IsNullOrWhiteSpace(
+                    message.MessageId)
                     ? message.Id
                     : message.MessageId,
 
-            BranchId = int.TryParse(
-                message.CommunityId,
-                out var branchId)
+            BranchId =
+                int.TryParse(
+                    message.CommunityId,
+                    out var branchId)
                     ? branchId
                     : 0,
 
-            SenderUid = message.SenderUid,
+            SenderUid =
+                message.SenderUid,
 
             SenderName =
-                string.IsNullOrWhiteSpace(message.SenderName)
+                string.IsNullOrWhiteSpace(
+                    message.SenderName)
                     ? "Member"
                     : message.SenderName,
 
-            Text = message.Content,
+            Text =
+                message.Content,
+
+            MessageType =
+                string.IsNullOrWhiteSpace(
+                    message.MessageType)
+                    ? "text"
+                    : message.MessageType,
+
+            MediaUrl =
+                message.MediaUrl ?? string.Empty,
+
+            ThumbnailUrl =
+                message.ThumbnailUrl ?? string.Empty,
+
+            FileName =
+                message.FileName ?? string.Empty,
+
+            FileSize =
+                message.FileSize,
+
+            Duration =
+                message.Duration,
 
             CreatedAt =
-                message.CreatedAt.Kind == DateTimeKind.Utc
+                message.CreatedAt.Kind ==
+                    DateTimeKind.Utc
                     ? message.CreatedAt
-                    : message.CreatedAt.ToUniversalTime()
+                    : message.CreatedAt.ToUniversalTime(),
+
+            UpdatedAt =
+                message.UpdatedAt
         };
     }
 
@@ -635,63 +1050,67 @@ public partial class BranchChatPage : ContentPage
 
     private async Task RefreshMessagesAsync()
     {
-        if (_isLoading || _branchId <= 0)
+        if (_isLoading ||
+            _branchId <= 0)
+        {
             return;
+        }
 
         _isLoading = true;
 
         try
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_REFRESH] Checking for messages newer than local cache...");
-
-            // IMPORTANT:
-            // This does NOT download all 100 messages again.
-            //
-            // CommunityService reads the newest cached created_at
-            // and asks Appwrite only for newer messages.
             var newMessages =
-                await _communityService.SyncNewerGroupMessagesAsync(
-                    _branchId.ToString(),
-                    100);
+                await _communityService
+                    .SyncNewerGroupMessagesAsync(
+                        _branchId.ToString(),
+                        100);
 
             if (newMessages.Count == 0)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    "[BRANCH_CHAT_REFRESH] No new messages.");
-
                 return;
             }
 
             foreach (var message in newMessages)
             {
-                var uiMessage = ToUiMessage(message);
+                var uiMessage =
+                    ToUiMessage(message);
 
-                if (_messages.Any(existing =>
-                    string.Equals(
-                        existing.MessageId,
-                        uiMessage.MessageId,
-                        StringComparison.Ordinal)))
+                var existingIndex =
+                    _messages.FindIndex(
+                        existing =>
+                            string.Equals(
+                                existing.MessageId,
+                                uiMessage.MessageId,
+                                StringComparison.Ordinal));
+
+                if (existingIndex >= 0)
                 {
-                    continue;
+                    _messages[existingIndex] =
+                        uiMessage;
                 }
-
-                _messages.Add(uiMessage);
+                else
+                {
+                    _messages.Add(
+                        uiMessage);
+                }
             }
 
             _messages.Sort(
                 (left, right) =>
-                    left.CreatedAt.CompareTo(right.CreatedAt));
+                    left.CreatedAt.CompareTo(
+                        right.CreatedAt));
 
             RenderMessages();
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_REFRESH] Added {newMessages.Count} new messages.");
+                $"[BRANCH_CHAT_REFRESH] " +
+                $"Processed {newMessages.Count} messages.");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH CHAT] Incremental refresh failed: {ex}");
+                $"[BRANCH_CHAT_REFRESH] Failed: {ex}");
         }
         finally
         {
@@ -700,7 +1119,7 @@ public partial class BranchChatPage : ContentPage
     }
 
     // ============================================================
-    // SQLITE CACHE FOR REALTIME/SEND
+    // SQLITE CACHE
     // ============================================================
 
     private async Task CacheUiMessageAsync(
@@ -711,98 +1130,62 @@ public partial class BranchChatPage : ContentPage
             var communityMessage =
                 new Models.CommunityMessage
                 {
-                    Id = message.MessageId,
-                    MessageId = message.MessageId,
-                    SenderUid = message.SenderUid,
-                    SenderName = message.SenderName,
-                    Content = message.Text,
-                    CommunityId = message.BranchId.ToString(),
-                    MessageType = "text",
-                    CreatedAt = message.CreatedAt
+                    Id =
+                        message.MessageId,
+
+                    MessageId =
+                        message.MessageId,
+
+                    SenderUid =
+                        message.SenderUid,
+
+                    SenderName =
+                        message.SenderName,
+
+                    Content =
+                        message.Text,
+
+                    CommunityId =
+                        message.BranchId.ToString(),
+
+                    MessageType =
+                        message.MessageType,
+
+                    MediaUrl =
+                        message.MediaUrl,
+
+                    ThumbnailUrl =
+                        message.ThumbnailUrl,
+
+                    FileName =
+                        message.FileName,
+
+                    FileSize =
+                        message.FileSize,
+
+                    Duration =
+                        message.Duration,
+
+                    CreatedAt =
+                        message.CreatedAt,
+
+                    UpdatedAt =
+                        message.UpdatedAt
                 };
 
-            await _communityService.CacheCommunityMessageAsync(
-                communityMessage);
+            await _communityService
+                .CacheCommunityMessageAsync(
+                    communityMessage);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] SQLite cache write failed: {ex}");
+                $"[BRANCH_CHAT] Cache write failed: {ex}");
         }
     }
 
     // ============================================================
-    // FIRESTORE MEMBERS
-    // ============================================================
-
-    private async Task<List<BranchMemberUi>> LoadBranchMembersAsync()
-    {
-        try
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Member query start: branchId={_branchId}");
-
-            var snapshot = await _firestore
-                .GetCollection("users")
-                .GetDocumentsAsync<FirestoreUserProfileDocument>(
-                    Source.Default);
-
-            if (snapshot == null)
-                return new List<BranchMemberUi>();
-
-            var members = snapshot.Documents
-                .Select(document => document.Data)
-                .Where(profile =>
-                    profile != null &&
-                    profile.BranchId == _branchId)
-                .Select(profile => new BranchMemberUi
-                {
-                    Uid =
-                        string.IsNullOrWhiteSpace(profile!.Uid)
-                            ? profile.DocumentId
-                            : profile.Uid,
-
-                    DisplayName =
-                        !string.IsNullOrWhiteSpace(profile.FullName)
-                            ? profile.FullName
-                            : !string.IsNullOrWhiteSpace(profile.Username)
-                                ? profile.Username
-                                : "Member",
-
-                    Role =
-                        string.IsNullOrWhiteSpace(profile.Role)
-                            ? "Member"
-                            : profile.Role,
-
-                    IsCurrentUser =
-                        string.Equals(
-                            GetCurrentUserUid(),
-                            string.IsNullOrWhiteSpace(profile.Uid)
-                                ? profile.DocumentId
-                                : profile.Uid,
-                            StringComparison.Ordinal)
-                })
-                .OrderBy(
-                    member => member.DisplayName,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Member count for branch {_branchId}: {members.Count}");
-
-            return members;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Load members failed: {ex}");
-
-            return new List<BranchMemberUi>();
-        }
-    }
-
-    // ============================================================
-    // RENDER
+    // RENDER ALL MESSAGES
     // ============================================================
 
     private void RenderMessages()
@@ -817,9 +1200,16 @@ public partial class BranchChatPage : ContentPage
                     Text =
                         "No messages yet. Start the conversation.",
 
-                    TextColor = Colors.Gray,
-                    FontSize = 15,
-                    Margin = new Thickness(8, 16)
+                    TextColor =
+                        Colors.Gray,
+
+                    FontSize =
+                        15,
+
+                    Margin =
+                        new Thickness(
+                            8,
+                            16)
                 });
 
             return;
@@ -838,21 +1228,45 @@ public partial class BranchChatPage : ContentPage
                     ? "You"
                     : message.SenderName;
 
-            var container = new Border
+            var container =
+                CreateMessageContainer(
+                    message,
+                    isCurrentUser,
+                    senderText);
+
+            MessagesLayout.Children.Add(
+                container);
+        }
+
+        _ = ScrollMessagesToBottomAsync();
+    }
+
+    private Border CreateMessageContainer(
+        BranchChatMessageUi message,
+        bool isCurrentUser,
+        string senderText)
+    {
+        var container =
+            new Border
             {
-                Padding = new Thickness(12, 10),
+                Padding =
+                    new Thickness(
+                        12,
+                        10),
 
                 BackgroundColor =
                     isCurrentUser
                         ? Color.FromArgb("#DBEAFE")
                         : Colors.White,
 
-                StrokeThickness = 0,
+                StrokeThickness =
+                    0,
 
                 StrokeShape =
                     new RoundRectangle
                     {
-                        CornerRadius = 12
+                        CornerRadius =
+                            12
                     },
 
                 Margin =
@@ -862,7 +1276,8 @@ public partial class BranchChatPage : ContentPage
                         isCurrentUser ? 0 : 24,
                         8),
 
-                WidthRequest = 290,
+                WidthRequest =
+                    290,
 
                 HorizontalOptions =
                     isCurrentUser
@@ -870,73 +1285,1083 @@ public partial class BranchChatPage : ContentPage
                         : LayoutOptions.Start
             };
 
-            var stack =
-                new VerticalStackLayout
-                {
-                    Spacing = 4
-                };
+        var stack =
+            new VerticalStackLayout
+            {
+                Spacing = 6
+            };
 
-            stack.Children.Add(
-                new Label
-                {
-                    Text = senderText,
-                    FontAttributes = FontAttributes.Bold,
-                    FontSize = 12,
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    senderText,
 
-                    TextColor =
-                        isCurrentUser
-                            ? Color.FromArgb("#1D4ED8")
-                            : Colors.DarkSlateBlue
-                });
+                FontAttributes =
+                    FontAttributes.Bold,
 
-            stack.Children.Add(
-                new Label
-                {
-                    Text = message.Text,
-                    FontSize = 15,
-                    TextColor = Colors.Black,
-                    LineBreakMode = LineBreakMode.WordWrap
-                });
+                FontSize =
+                    12,
 
+                TextColor =
+                    isCurrentUser
+                        ? Color.FromArgb("#1D4ED8")
+                        : Colors.DarkSlateBlue
+            });
+
+        AddMessageContent(
+            stack,
+            message);
+
+        var timestampText =
+            message.CreatedAt
+                .ToLocalTime()
+                .ToString("HH:mm");
+
+        if (message.UpdatedAt.HasValue)
+        {
+            timestampText +=
+                " · edited";
+        }
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    timestampText,
+
+                FontSize =
+                    11,
+
+                TextColor =
+                    Colors.Gray,
+
+                HorizontalOptions =
+                    LayoutOptions.End
+            });
+
+        container.Content =
+            stack;
+
+        if (isCurrentUser)
+        {
+            AttachLongPressGesture(
+                container,
+                message);
+        }
+
+        return container;
+    }
+
+    // ============================================================
+    // MESSAGE CONTENT
+    // ============================================================
+
+    private void AddMessageContent(
+        VerticalStackLayout stack,
+        BranchChatMessageUi message)
+    {
+        var messageType =
+            string.IsNullOrWhiteSpace(
+                message.MessageType)
+                ? "text"
+                : message.MessageType
+                    .Trim()
+                    .ToLowerInvariant();
+
+        switch (messageType)
+        {
+            case "image":
+                AddImageMessage(
+                    stack,
+                    message);
+                break;
+
+            case "video":
+                AddVideoMessage(
+                    stack,
+                    message);
+                break;
+
+            case "audio":
+                AddAudioMessage(
+                    stack,
+                    message);
+                break;
+
+            default:
+                AddTextMessage(
+                    stack,
+                    message);
+                break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                message.Text) &&
+            messageType != "text")
+        {
             stack.Children.Add(
                 new Label
                 {
                     Text =
-                        message.CreatedAt
-                            .ToLocalTime()
-                            .ToString("HH:mm"),
+                        message.Text,
 
-                    FontSize = 11,
-                    TextColor = Colors.Gray,
-                    HorizontalOptions = LayoutOptions.End
+                    FontSize =
+                        14,
+
+                    TextColor =
+                        Colors.Black
                 });
+        }
+    }
 
-            container.Content = stack;
+    private void AddTextMessage(
+        VerticalStackLayout stack,
+        BranchChatMessageUi message)
+    {
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    message.Text,
 
-            MessagesLayout.Children.Add(container);
+                FontSize =
+                    15,
+
+                TextColor =
+                    Colors.Black,
+
+                LineBreakMode =
+                    LineBreakMode.WordWrap
+            });
+    }
+
+    private void AddImageMessage(
+        VerticalStackLayout stack,
+        BranchChatMessageUi message)
+    {
+        if (string.IsNullOrWhiteSpace(
+                message.MediaUrl))
+        {
+            AddUnavailableMediaLabel(
+                stack,
+                "Image unavailable.");
+
+            return;
         }
 
-        if (MessagesLayout.Parent is ScrollView scrollView)
+        var image =
+            new Image
+            {
+                Source =
+                    ImageSource.FromUri(
+                        new Uri(
+                            message.MediaUrl)),
+
+                HeightRequest =
+                    190,
+
+                WidthRequest =
+                    255,
+
+                Aspect =
+                    Aspect.AspectFill
+            };
+
+        var tap =
+            new TapGestureRecognizer();
+
+        tap.Tapped += async (_, _) =>
         {
-            _ = MainThread.InvokeOnMainThreadAsync(
-                () => scrollView.ScrollToAsync(
-                    0,
-                    double.MaxValue,
-                    false));
+            await OpenMediaAsync(
+                message.MediaUrl);
+        };
+
+        image.GestureRecognizers.Add(
+            tap);
+
+        stack.Children.Add(
+            image);
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    string.IsNullOrWhiteSpace(
+                        message.FileName)
+                        ? "Image"
+                        : message.FileName,
+
+                FontSize =
+                    12,
+
+                TextColor =
+                    Colors.Gray
+            });
+    }
+
+    private void AddVideoMessage(
+        VerticalStackLayout stack,
+        BranchChatMessageUi message)
+    {
+        var button =
+            new Button
+            {
+                Text =
+                    "▶  Play video",
+
+                FontSize =
+                    14,
+
+                BackgroundColor =
+                    Color.FromArgb("#1E40AF"),
+
+                TextColor =
+                    Colors.White,
+
+                CornerRadius =
+                    10
+            };
+
+        button.Clicked += async (_, _) =>
+        {
+            await OpenMediaAsync(
+                message.MediaUrl);
+        };
+
+        stack.Children.Add(
+            button);
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    string.IsNullOrWhiteSpace(
+                        message.FileName)
+                        ? "Video"
+                        : message.FileName,
+
+                FontSize =
+                    12,
+
+                TextColor =
+                    Colors.Gray
+            });
+    }
+
+    private void AddAudioMessage(
+        VerticalStackLayout stack,
+        BranchChatMessageUi message)
+    {
+        var button =
+            new Button
+            {
+                Text =
+                    "▶  Play audio",
+
+                FontSize =
+                    14,
+
+                BackgroundColor =
+                    Color.FromArgb("#0F766E"),
+
+                TextColor =
+                    Colors.White,
+
+                CornerRadius =
+                    10
+            };
+
+        button.Clicked += async (_, _) =>
+        {
+            await OpenMediaAsync(
+                message.MediaUrl);
+        };
+
+        stack.Children.Add(
+            button);
+
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    string.IsNullOrWhiteSpace(
+                        message.FileName)
+                        ? "Audio"
+                        : message.FileName,
+
+                FontSize =
+                    12,
+
+                TextColor =
+                    Colors.Gray
+            });
+    }
+
+    private static void AddUnavailableMediaLabel(
+        VerticalStackLayout stack,
+        string text)
+    {
+        stack.Children.Add(
+            new Label
+            {
+                Text =
+                    text,
+
+                FontSize =
+                    14,
+
+                TextColor =
+                    Colors.Gray
+            });
+    }
+
+    private static async Task OpenMediaAsync(
+        string? mediaUrl)
+    {
+        if (string.IsNullOrWhiteSpace(
+                mediaUrl))
+        {
+            return;
+        }
+
+        try
+        {
+            await Launcher.Default.OpenAsync(
+                new Uri(mediaUrl));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Open media failed: {ex}");
         }
     }
 
     // ============================================================
-    // SEND MESSAGE
+    // LONG PRESS
+    // ============================================================
+
+    private void AttachLongPressGesture(
+        Border container,
+        BranchChatMessageUi message)
+    {
+        var pointer =
+            new PointerGestureRecognizer();
+
+        pointer.PointerPressed += (_, _) =>
+        {
+            _pointerPressedAt =
+                DateTime.UtcNow;
+
+            _longPressTriggered = false;
+        };
+
+        pointer.PointerReleased += async (_, _) =>
+        {
+            var elapsed =
+                DateTime.UtcNow -
+                _pointerPressedAt;
+
+            if (elapsed.TotalMilliseconds >=
+                    LongPressMilliseconds &&
+                !_longPressTriggered)
+            {
+                _longPressTriggered = true;
+
+                await ShowOwnMessageActionsAsync(
+                    message);
+            }
+
+            _pointerPressedAt =
+                DateTime.MinValue;
+        };
+
+
+
+        container.GestureRecognizers.Add(
+            pointer);
+    }
+
+    private async Task ShowOwnMessageActionsAsync(
+        BranchChatMessageUi message)
+    {
+        try
+        {
+            var choice =
+                await DisplayActionSheet(
+                    "Message options",
+                    "Cancel",
+                    null,
+                    "Edit",
+                    "Delete");
+
+            switch (choice)
+            {
+                case "Edit":
+                    await EditMessageAsync(
+                        message);
+                    break;
+
+                case "Delete":
+                    await DeleteMessageAsync(
+                        message);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Message actions failed: {ex}");
+        }
+    }
+
+    // ============================================================
+    // EDIT MESSAGE
+    // ============================================================
+
+    private async Task EditMessageAsync(
+        BranchChatMessageUi message)
+    {
+        if (!string.Equals(
+                message.MessageType,
+                "text",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            await DisplayAlert(
+                "Edit message",
+                "Only text messages can currently be edited.",
+                "OK");
+
+            return;
+        }
+
+        var newText =
+            await DisplayPromptAsync(
+                "Edit message",
+                "Change your message:",
+                "Save",
+                "Cancel",
+                "Message",
+                maxLength: 4000,
+                keyboard: Keyboard.Default,
+                initialValue: message.Text);
+
+        if (newText == null)
+        {
+            return;
+        }
+
+        newText =
+            newText.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                newText))
+        {
+            await DisplayAlert(
+                "Edit message",
+                "The message cannot be empty.",
+                "OK");
+
+            return;
+        }
+
+        try
+        {
+            var updated =
+                await _communityService
+                    .UpdateCommunityMessageAsync(
+                        message.MessageId,
+                        newText);
+
+            var uiMessage =
+                ToUiMessage(updated);
+
+            var index =
+                _messages.FindIndex(
+                    existing =>
+                        string.Equals(
+                            existing.MessageId,
+                            uiMessage.MessageId,
+                            StringComparison.Ordinal));
+
+            if (index >= 0)
+            {
+                _messages[index] =
+                    uiMessage;
+            }
+            else
+            {
+                _messages.Add(
+                    uiMessage);
+            }
+
+            _messages.Sort(
+                (left, right) =>
+                    left.CreatedAt.CompareTo(
+                        right.CreatedAt));
+
+            RenderMessages();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await DisplayAlert(
+                "Access denied",
+                "You can only edit your own message.",
+                "OK");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Edit failed: {ex}");
+
+            await DisplayAlert(
+                "Edit failed",
+                "The message could not be edited.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // DELETE MESSAGE
+    // ============================================================
+
+    private async Task DeleteMessageAsync(
+        BranchChatMessageUi message)
+    {
+        var confirmed =
+            await DisplayAlert(
+                "Delete message",
+                "Delete this message permanently?",
+                "Delete",
+                "Cancel");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            var deleted =
+                await _communityService
+                    .DeleteCommunityMessageAsync(
+                        message.MessageId);
+
+            if (!deleted)
+            {
+                return;
+            }
+
+            _messages.RemoveAll(
+                existing =>
+                    string.Equals(
+                        existing.MessageId,
+                        message.MessageId,
+                        StringComparison.Ordinal));
+
+            RenderMessages();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await DisplayAlert(
+                "Access denied",
+                "You can only delete your own message.",
+                "OK");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Delete failed: {ex}");
+
+            await DisplayAlert(
+                "Delete failed",
+                "The message could not be deleted.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // ATTACHMENT MENU
+    // ============================================================
+
+    private async void OnAttachmentClicked(
+        object? sender,
+        EventArgs e)
+    {
+        try
+        {
+            var choice =
+                await DisplayActionSheet(
+                    "Attach",
+                    "Cancel",
+                    null,
+                    "🖼️ Image",
+                    "🎥 Video",
+                    "🎵 Audio");
+
+            switch (choice)
+            {
+                case "🖼️ Image":
+                    await PickImageAsync();
+                    break;
+
+                case "🎥 Video":
+                    await PickVideoAsync();
+                    break;
+
+                case "🎵 Audio":
+                    await PickAudioAsync();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Attachment picker failed: {ex}");
+
+            await DisplayAlert(
+                "Attachment",
+                "Unable to open the attachment picker.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // PICK IMAGE
+    // ============================================================
+
+    private async Task PickImageAsync()
+    {
+        try
+        {
+            var result =
+                await MediaPicker.Default
+                    .PickPhotoAsync(
+                        new MediaPickerOptions
+                        {
+                            Title =
+                                "Select an image"
+                        });
+
+            if (result == null)
+            {
+                return;
+            }
+
+            await UploadAndSendImageAsync(
+                result);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Image picker/upload failed: {ex}");
+
+            await DisplayAlert(
+                "Image",
+                "Unable to select or upload the image.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // PICK VIDEO
+    // ============================================================
+
+    private async Task PickVideoAsync()
+    {
+        try
+        {
+            var result =
+                await MediaPicker.Default
+                    .PickVideoAsync(
+                        new MediaPickerOptions
+                        {
+                            Title =
+                                "Select a video"
+                        });
+
+            if (result == null)
+            {
+                return;
+            }
+
+            await UploadAndSendVideoAsync(
+                result);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Video picker/upload failed: {ex}");
+
+            await DisplayAlert(
+                "Video",
+                "Unable to select or upload the video.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // PICK AUDIO
+    // ============================================================
+
+    private async Task PickAudioAsync()
+    {
+        try
+        {
+            var fileType =
+                new FilePickerFileType(
+                    new Dictionary<DevicePlatform,
+                        IEnumerable<string>>
+                    {
+                        [DevicePlatform.Android] =
+                            new[]
+                            {
+                                "audio/*"
+                            },
+
+                        [DevicePlatform.WinUI] =
+                            new[]
+                            {
+                                ".mp3",
+                                ".wav",
+                                ".m4a",
+                                ".aac",
+                                ".ogg"
+                            }
+                    });
+
+            var result =
+                await FilePicker.Default
+                    .PickAsync(
+                        new PickOptions
+                        {
+                            PickerTitle =
+                                "Select audio",
+
+                            FileTypes =
+                                fileType
+                        });
+
+            if (result == null)
+            {
+                return;
+            }
+
+            await UploadAndSendAudioAsync(
+                result);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Audio picker/upload failed: {ex}");
+
+            await DisplayAlert(
+                "Audio",
+                "Unable to select or upload the audio.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // UPLOAD IMAGE
+    // ============================================================
+
+    private async Task UploadAndSendImageAsync(
+        FileResult file)
+    {
+        var busyMessage =
+            await ShowUploadStartedAsync(
+                "Uploading image...");
+
+        try
+        {
+            var result =
+                await _cloudinaryService
+                    .UploadImageAsync(
+                        file);
+
+            await SendMediaMessageAsync(
+                messageType: "image",
+                uploadResult: result,
+                displayText:
+                    string.IsNullOrWhiteSpace(
+                        file.FileName)
+                        ? "Image"
+                        : file.FileName);
+        }
+        finally
+        {
+            await CloseUploadBusyAsync(
+                busyMessage);
+        }
+    }
+
+    // ============================================================
+    // UPLOAD VIDEO
+    // ============================================================
+
+    private async Task UploadAndSendVideoAsync(
+        FileResult file)
+    {
+        var busyMessage =
+            await ShowUploadStartedAsync(
+                "Uploading video...");
+
+        try
+        {
+            var result =
+                await _cloudinaryService
+                    .UploadVideoAsync(
+                        file);
+
+            await SendMediaMessageAsync(
+                messageType: "video",
+                uploadResult: result,
+                displayText:
+                    string.IsNullOrWhiteSpace(
+                        file.FileName)
+                        ? "Video"
+                        : file.FileName);
+        }
+        finally
+        {
+            await CloseUploadBusyAsync(
+                busyMessage);
+        }
+    }
+
+    // ============================================================
+    // UPLOAD AUDIO
+    // ============================================================
+
+    private async Task UploadAndSendAudioAsync(
+        FileResult file)
+    {
+        var busyMessage =
+            await ShowUploadStartedAsync(
+                "Uploading audio...");
+
+        try
+        {
+            var result =
+                await _cloudinaryService
+                    .UploadAudioAsync(
+                        file);
+
+            await SendMediaMessageAsync(
+                messageType: "audio",
+                uploadResult: result,
+                displayText:
+                    string.IsNullOrWhiteSpace(
+                        file.FileName)
+                        ? "Audio"
+                        : file.FileName);
+        }
+        finally
+        {
+            await CloseUploadBusyAsync(
+                busyMessage);
+        }
+    }
+
+    // ============================================================
+    // SEND MEDIA MESSAGE
+    // ============================================================
+
+    private async Task SendMediaMessageAsync(
+        string messageType,
+        CloudinaryUploadResult uploadResult,
+        string displayText)
+    {
+        if (_branchId <= 0)
+        {
+            await DisplayAlert(
+                "Branch unavailable",
+                "The current Branch Group could not be identified.",
+                "OK");
+
+            return;
+        }
+
+        try
+        {
+            await FirebaseInit.Initialized;
+
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
+                    .GetCurrentUserAsync();
+
+            if (currentUser == null)
+            {
+                await DisplayAlert(
+                    "Not authenticated",
+                    "Please sign in to send media.",
+                    "OK");
+
+                return;
+            }
+
+            var currentUid =
+                _auth.CurrentUser?.Uid
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(
+                    currentUid))
+            {
+                await DisplayAlert(
+                    "Not authenticated",
+                    "Firebase authentication is required.",
+                    "OK");
+
+                return;
+            }
+
+            if (currentUser.BranchId != _branchId)
+            {
+                await DisplayAlert(
+                    "Access denied",
+                    "You can only send media in your own Branch Group.",
+                    "OK");
+
+                return;
+            }
+
+            var createdMessage =
+                await _communityService
+                    .CreateCommunityMessageAsync(
+                        communityId:
+                            _branchId.ToString(),
+
+                        content:
+                            displayText,
+
+                        messageType:
+                            messageType,
+
+                        branchId:
+                            _branchId.ToString(),
+
+                        organizationalLevel:
+                            "Branch",
+
+                        mediaUrl:
+                            uploadResult.SecureUrl,
+
+                        thumbnailUrl:
+                            string.Empty,
+
+                        fileName:
+                            uploadResult.OriginalFilename,
+
+                        fileSize:
+                            uploadResult.Bytes,
+
+                        duration:
+                            uploadResult.Duration);
+
+            await _communityService
+                .CacheCommunityMessageAsync(
+                    createdMessage);
+
+            var uiMessage =
+                ToUiMessage(
+                    createdMessage);
+
+            var existingIndex =
+                _messages.FindIndex(
+                    existing =>
+                        string.Equals(
+                            existing.MessageId,
+                            uiMessage.MessageId,
+                            StringComparison.Ordinal));
+
+            if (existingIndex >= 0)
+            {
+                _messages[existingIndex] =
+                    uiMessage;
+            }
+            else
+            {
+                _messages.Add(
+                    uiMessage);
+            }
+
+            _messages.Sort(
+                (left, right) =>
+                    left.CreatedAt.CompareTo(
+                        right.CreatedAt));
+
+            RenderMessages();
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT_MEDIA] " +
+                $"Media message sent. " +
+                $"type={messageType}, " +
+                $"message_id={createdMessage.MessageId}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT_MEDIA] Send failed: {ex}");
+
+            await DisplayAlert(
+                "Media message failed",
+                "The media was uploaded, but the message could not be saved.",
+                "OK");
+        }
+    }
+
+    // ============================================================
+    // UPLOAD INDICATOR
+    // ============================================================
+
+    private async Task<string>
+        ShowUploadStartedAsync(
+            string message)
+    {
+        await MainThread.InvokeOnMainThreadAsync(
+            async () =>
+            {
+                BranchStatusLabel.Text =
+                    message;
+
+                await Task.CompletedTask;
+            });
+
+        return message;
+    }
+
+    private Task
+        CloseUploadBusyAsync(
+            string message)
+    {
+        return MainThread.InvokeOnMainThreadAsync(
+            () =>
+            {
+                BranchStatusLabel.Text =
+                    _messages.Count == 0
+                        ? $"{MembersLabel.Text}"
+                        : "Connected";
+
+                return Task.CompletedTask;
+            });
+    }
+
+    // ============================================================
+    // TEXT MESSAGE SEND
     // ============================================================
 
     private async void OnSendClicked(
         object sender,
         EventArgs e)
     {
-        var text = MessageEntry.Text?.Trim();
+        var text =
+            MessageEntry.Text?.Trim();
 
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(
+                text))
         {
             await DisplayAlert(
                 "Message required",
@@ -952,7 +2377,8 @@ public partial class BranchChatPage : ContentPage
 
             var currentUser =
                 MauiProgram.CurrentUser
-                ?? await MauiProgram.CreateAuthServiceForPages()
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
                     .GetCurrentUserAsync();
 
             if (currentUser == null)
@@ -966,9 +2392,11 @@ public partial class BranchChatPage : ContentPage
             }
 
             var currentUid =
-                _auth.CurrentUser?.Uid ?? string.Empty;
+                _auth.CurrentUser?.Uid
+                ?? string.Empty;
 
-            if (string.IsNullOrWhiteSpace(currentUid))
+            if (string.IsNullOrWhiteSpace(
+                    currentUid))
             {
                 await DisplayAlert(
                     "Not authenticated",
@@ -978,7 +2406,8 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            if (currentUser.BranchId != _branchId)
+            if (currentUser.BranchId !=
+                _branchId)
             {
                 await DisplayAlert(
                     "Access denied",
@@ -988,17 +2417,23 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_SEND] Sending message. " +
-                $"branch={_branchId}, uid={currentUid}");
-
             var createdMessage =
-                await _communityService.CreateCommunityMessageAsync(
-                    communityId: _branchId.ToString(),
-                    content: text,
-                    messageType: "text",
-                    branchId: _branchId.ToString(),
-                    organizationalLevel: "Branch");
+                await _communityService
+                    .CreateCommunityMessageAsync(
+                        communityId:
+                            _branchId.ToString(),
+
+                        content:
+                            text,
+
+                        messageType:
+                            "text",
+
+                        branchId:
+                            _branchId.ToString(),
+
+                        organizationalLevel:
+                            "Branch");
 
             if (createdMessage == null ||
                 string.IsNullOrWhiteSpace(
@@ -1012,37 +2447,46 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            // ====================================================
-            // APPWRITE HAS NOW PERSISTED THE MESSAGE.
-            //
-            // Save the same message locally.
-            // ====================================================
-
-            await _communityService.CacheCommunityMessageAsync(
-                createdMessage);
+            await _communityService
+                .CacheCommunityMessageAsync(
+                    createdMessage);
 
             var uiMessage =
-                ToUiMessage(createdMessage);
+                ToUiMessage(
+                    createdMessage);
 
-            if (!_messages.Any(existing =>
-                string.Equals(
-                    existing.MessageId,
-                    uiMessage.MessageId,
-                    StringComparison.Ordinal)))
+            var existingIndex =
+                _messages.FindIndex(
+                    existing =>
+                        string.Equals(
+                            existing.MessageId,
+                            uiMessage.MessageId,
+                            StringComparison.Ordinal));
+
+            if (existingIndex >= 0)
             {
-                _messages.Add(uiMessage);
-
-                _messages.Sort(
-                    (left, right) =>
-                        left.CreatedAt.CompareTo(right.CreatedAt));
-
-                RenderMessages();
+                _messages[existingIndex] =
+                    uiMessage;
+            }
+            else
+            {
+                _messages.Add(
+                    uiMessage);
             }
 
-            MessageEntry.Text = string.Empty;
+            _messages.Sort(
+                (left, right) =>
+                    left.CreatedAt.CompareTo(
+                        right.CreatedAt));
+
+            RenderMessages();
+
+            MessageEntry.Text =
+                string.Empty;
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_SEND] Message successfully persisted and cached. " +
+                $"[BRANCH_CHAT_SEND] " +
+                $"Message persisted. " +
                 $"message_id={createdMessage.MessageId}");
         }
         catch (Exception ex)
@@ -1065,25 +2509,91 @@ public partial class BranchChatPage : ContentPage
             System.Diagnostics.Debug.WriteLine(
                 "============================================");
 
-            var errorDetails =
-                $"Type: {ex.GetType().Name}\n\n" +
-                $"Message: {ex.Message}";
-
-            if (ex.InnerException != null)
-            {
-                errorDetails +=
-                    $"\n\nInner error: {ex.InnerException.Message}";
-            }
-
             await DisplayAlert(
-                "APPWRITE SEND ERROR",
-                errorDetails,
+                "Unable to send",
+                ex.Message,
                 "OK");
         }
     }
 
     // ============================================================
     // MEMBERS
+    // ============================================================
+
+    private async Task<List<BranchMemberUi>>
+        LoadBranchMembersAsync()
+    {
+        try
+        {
+            var snapshot =
+                await _firestore
+                    .GetCollection("users")
+                    .GetDocumentsAsync<
+                        FirestoreUserProfileDocument>(
+                        Source.Default);
+
+            if (snapshot == null)
+            {
+                return new List<BranchMemberUi>();
+            }
+
+            return snapshot.Documents
+                .Select(document =>
+                    document.Data)
+                .Where(profile =>
+                    profile != null &&
+                    profile.BranchId ==
+                        _branchId)
+                .Select(profile =>
+                    new BranchMemberUi
+                    {
+                        Uid =
+                            string.IsNullOrWhiteSpace(
+                                profile!.Uid)
+                                ? profile.DocumentId
+                                : profile.Uid,
+
+                        DisplayName =
+                            !string.IsNullOrWhiteSpace(
+                                profile.FullName)
+                                ? profile.FullName
+                                : !string.IsNullOrWhiteSpace(
+                                    profile.Username)
+                                    ? profile.Username
+                                    : "Member",
+
+                        Role =
+                            string.IsNullOrWhiteSpace(
+                                profile.Role)
+                                ? "Member"
+                                : profile.Role,
+
+                        IsCurrentUser =
+                            string.Equals(
+                                GetCurrentUserUid(),
+                                string.IsNullOrWhiteSpace(
+                                    profile.Uid)
+                                    ? profile.DocumentId
+                                    : profile.Uid,
+                                StringComparison.Ordinal)
+                    })
+                .OrderBy(
+                    member =>
+                        member.DisplayName,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Load members failed: {ex}");
+
+            return new List<BranchMemberUi>();
+        }
+    }
+
+    // ============================================================
+    // MEMBERS TAP
     // ============================================================
 
     private async void MembersLabel_Tapped(
@@ -1109,11 +2619,11 @@ public partial class BranchChatPage : ContentPage
                 string.Join(
                     Environment.NewLine,
                     members.Select(
-                        m =>
-                            $"• {m.DisplayName}" +
-                            (m.IsCurrentUser
+                        member =>
+                            $"• {member.DisplayName}" +
+                            (member.IsCurrentUser
                                 ? " - You"
-                                : $" - {m.Role}")));
+                                : $" - {member.Role}")));
 
             await DisplayAlert(
                 $"Branch Members ({members.Count})",
@@ -1123,7 +2633,7 @@ public partial class BranchChatPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH CHAT] Members label failed: {ex}");
+                $"[BRANCH_CHAT] Members failed: {ex}");
 
             await DisplayAlert(
                 "Branch Members",
@@ -1133,7 +2643,7 @@ public partial class BranchChatPage : ContentPage
     }
 
     // ============================================================
-    // INVITATION
+    // ADD MEMBER
     // ============================================================
 
     private async void AddMemberButton_Clicked(
@@ -1144,7 +2654,8 @@ public partial class BranchChatPage : ContentPage
         {
             var currentUser =
                 MauiProgram.CurrentUser
-                ?? await MauiProgram.CreateAuthServiceForPages()
+                ?? await MauiProgram
+                    .CreateAuthServiceForPages()
                     .GetCurrentUserAsync();
 
             if (currentUser == null)
@@ -1174,18 +2685,31 @@ public partial class BranchChatPage : ContentPage
             var invitation =
                 new BranchInvitationRecord
                 {
-                    InvitationId = invitationId,
-                    BranchId = _branchId,
-                    BranchName = BranchName,
-                    CreatedByUid = GetCurrentUserUid(),
-                    CreatedAt = DateTime.UtcNow,
-                    Status = "active"
+                    InvitationId =
+                        invitationId,
+
+                    BranchId =
+                        _branchId,
+
+                    BranchName =
+                        BranchName,
+
+                    CreatedByUid =
+                        GetCurrentUserUid(),
+
+                    CreatedAt =
+                        DateTime.UtcNow,
+
+                    Status =
+                        "active"
                 };
 
             var invitationRef =
                 _firestore
-                    .GetCollection("branchInvitations")
-                    .GetDocument(invitationId);
+                    .GetCollection(
+                        "branchInvitations")
+                    .GetDocument(
+                        invitationId);
 
             await invitationRef.SetDataAsync(
                 invitation);
@@ -1193,12 +2717,6 @@ public partial class BranchChatPage : ContentPage
             var deepLink =
                 $"cctuscf://invite?branchId={_branchId}" +
                 $"&invitationId={invitationId}";
-
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Invitation created: " +
-                $"invitationId={invitationId} " +
-                $"branchId={_branchId} " +
-                $"createdByUid={GetCurrentUserUid()}");
 
             await Share.Default.RequestAsync(
                 new ShareTextRequest
@@ -1212,14 +2730,15 @@ public partial class BranchChatPage : ContentPage
                 });
 
             await DisplayAlert(
-                "Invite people to " + BranchName,
+                "Invite people to " +
+                    BranchName,
                 "The branch invitation link was created and shared.",
                 "OK");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH CHAT] Invitation creation failed: {ex}");
+                $"[BRANCH_CHAT] Invitation creation failed: {ex}");
 
             await DisplayAlert(
                 "Invitation could not be created",
@@ -1229,7 +2748,7 @@ public partial class BranchChatPage : ContentPage
     }
 
     // ============================================================
-    // PULL TO REFRESH EVENT
+    // REFRESH EVENT
     // ============================================================
 
     private async void OnMessagesRefreshing(
@@ -1247,56 +2766,107 @@ public partial class BranchChatPage : ContentPage
         }
         finally
         {
-            MessagesRefreshView.IsRefreshing = false;
+            MessagesRefreshView.IsRefreshing =
+                false;
         }
     }
 
     // ============================================================
-    // HELPERS / MODELS
+    // SCROLL
+    // ============================================================
+
+    private async Task ScrollMessagesToBottomAsync()
+    {
+        try
+        {
+            await MainThread.InvokeOnMainThreadAsync(
+                async () =>
+                {
+                    if (MessagesLayout.Parent
+                        is ScrollView scrollView)
+                    {
+                        await scrollView
+                            .ScrollToAsync(
+                                0,
+                                double.MaxValue,
+                                false);
+                    }
+                });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Scroll failed: {ex}");
+        }
+    }
+
+    // ============================================================
+    // CURRENT USER
     // ============================================================
 
     private string GetCurrentUserUid()
     {
-        return _auth.CurrentUser?.Uid ?? string.Empty;
+        return _auth.CurrentUser?.Uid
+            ?? string.Empty;
     }
 
-    private sealed class BranchInvitationRecord : IFirestoreObject
+    // ============================================================
+    // INVITATION MODEL
+    // ============================================================
+
+    private sealed class BranchInvitationRecord
+        : IFirestoreObject
     {
         [FirestoreDocumentId]
-        public string InvitationId { get; set; } = string.Empty;
+        public string InvitationId { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("branchId")]
         public int BranchId { get; set; }
 
         [FirestoreProperty("branchName")]
-        public string BranchName { get; set; } = string.Empty;
+        public string BranchName { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("createdByUid")]
-        public string CreatedByUid { get; set; } = string.Empty;
+        public string CreatedByUid { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("createdAt")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
 
         [FirestoreProperty("status")]
-        public string Status { get; set; } = "active";
+        public string Status { get; set; } =
+            "active";
     }
 
-    private sealed class FirestoreUserProfileDocument : IFirestoreObject
+    // ============================================================
+    // FIRESTORE USER PROFILE
+    // ============================================================
+
+    private sealed class FirestoreUserProfileDocument
+        : IFirestoreObject
     {
         [FirestoreDocumentId]
-        public string DocumentId { get; set; } = string.Empty;
+        public string DocumentId { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("uid")]
-        public string Uid { get; set; } = string.Empty;
+        public string Uid { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("fullName")]
-        public string FullName { get; set; } = string.Empty;
+        public string FullName { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("username")]
-        public string Username { get; set; } = string.Empty;
+        public string Username { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("role")]
-        public string Role { get; set; } = string.Empty;
+        public string Role { get; set; } =
+            string.Empty;
 
         [FirestoreProperty("branchId")]
         public int BranchId { get; set; }
@@ -1308,123 +2878,64 @@ public partial class BranchChatPage : ContentPage
         public int DistrictId { get; set; }
     }
 
-    private sealed class BranchChatMessageUi
-    {
-        public string MessageId { get; set; } = string.Empty;
-        public int BranchId { get; set; }
-        public string SenderUid { get; set; } = string.Empty;
-        public string SenderName { get; set; } = string.Empty;
-        public string Text { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    }
+    // ============================================================
+    // BRANCH MEMBER UI MODEL
+    // ============================================================
 
-    private async void OnAttachmentClicked(
-    object? sender,
-    EventArgs e)
-{
-    try
-    {
-        var choice = await DisplayActionSheet(
-            "Attach",
-            "Cancel",
-            null,
-            "🖼️ Image",
-            "🎥 Video",
-            "🎵 Audio");
-
-        switch (choice)
-        {
-            case "🖼️ Image":
-                await PickImageAsync();
-                break;
-
-            case "🎥 Video":
-                await PickVideoAsync();
-                break;
-
-            case "🎵 Audio":
-                await PickAudioAsync();
-                break;
-        }
-    }
-    catch (Exception ex)
-    {
-        System.Diagnostics.Debug.WriteLine(
-            $"[BRANCH_CHAT] Attachment picker failed: {ex}");
-    }
-}
-private async Task PickImageAsync()
-{
-    try
-    {
-        var result = await MediaPicker.Default.PickPhotoAsync(
-            new MediaPickerOptions
-            {
-                Title = "Select an image"
-            });
-
-        if (result == null)
-            return;
-
-        System.Diagnostics.Debug.WriteLine(
-            $"[BRANCH_CHAT] Image selected: {result.FileName}");
-
-        // Cloudinary upload will be connected here.
-        await DisplayAlert(
-            "Image selected",
-            result.FileName,
-            "OK");
-    }
-    catch (Exception ex)
-    {
-        System.Diagnostics.Debug.WriteLine(
-            $"[BRANCH_CHAT] Image picker failed: {ex}");
-
-        await DisplayAlert(
-            "Image",
-            "Unable to select the image.",
-            "OK");
-    }
-}
-
-private async Task PickVideoAsync()
-{
-    try
-    {
-        var result = await MediaPicker.Default.PickVideoAsync(
-            new MediaPickerOptions
-            {
-                Title = "Select a video"
-            });
-
-        if (result == null)
-            return;
-
-        System.Diagnostics.Debug.WriteLine(
-            $"[BRANCH_CHAT] Video selected: {result.FileName}");
-
-        // Cloudinary upload will be connected here.
-        await DisplayAlert(
-            "Video selected",
-            result.FileName,
-            "OK");
-    }
-    catch (Exception ex)
-    {
-        System.Diagnostics.Debug.WriteLine(
-            $"[BRANCH_CHAT] Video picker failed: {ex}");
-
-        await DisplayAlert(
-            "Video",
-            "Unable to select the video.",
-            "OK");
-    }
-}
     private sealed class BranchMemberUi
     {
-        public string Uid { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
-        public string Role { get; set; } = "Member";
+        public string Uid { get; set; } =
+            string.Empty;
+
+        public string DisplayName { get; set; } =
+            string.Empty;
+
+        public string Role { get; set; } =
+            "Member";
+
         public bool IsCurrentUser { get; set; }
     }
+
+    // ============================================================
+    // CHAT MESSAGE UI MODEL
+    // ============================================================
+
+    private sealed class BranchChatMessageUi
+    {
+        public string MessageId { get; set; } =
+            string.Empty;
+
+        public int BranchId { get; set; }
+
+        public string SenderUid { get; set; } =
+            string.Empty;
+
+        public string SenderName { get; set; } =
+            string.Empty;
+
+        public string Text { get; set; } =
+            string.Empty;
+
+        public string MessageType { get; set; } =
+            "text";
+
+        public string MediaUrl { get; set; } =
+            string.Empty;
+
+        public string ThumbnailUrl { get; set; } =
+            string.Empty;
+
+        public string FileName { get; set; } =
+            string.Empty;
+
+        public long FileSize { get; set; }
+
+        public double Duration { get; set; }
+
+        public DateTime CreatedAt { get; set; } =
+            DateTime.UtcNow;
+
+        public DateTime? UpdatedAt { get; set; }
+    }
 }
+

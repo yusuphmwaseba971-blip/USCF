@@ -6,16 +6,22 @@
     Title="Branch Group"
     BackgroundColor="#F8FAFC">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="0">
+    <Grid
+        RowDefinitions="Auto,Auto,*,Auto"
+        Padding="0">
 
-        <!-- HEADER -->
+        <!-- ====================================================== -->
+        <!-- HEADER                                                  -->
+        <!-- ====================================================== -->
+
         <Border
             Grid.Row="0"
             BackgroundColor="#EEF2FF"
             Padding="18,16"
             StrokeThickness="0">
 
-            <VerticalStackLayout Spacing="4">
+            <VerticalStackLayout
+                Spacing="4">
 
                 <Label
                     x:Name="BranchTitleLabel"
@@ -35,7 +41,10 @@
         </Border>
 
 
-        <!-- MEMBERS -->
+        <!-- ====================================================== -->
+        <!-- MEMBERS                                                 -->
+        <!-- ====================================================== -->
+
         <Grid
             Grid.Row="1"
             Margin="12,8,12,0"
@@ -69,7 +78,10 @@
         </Grid>
 
 
-        <!-- MESSAGES + PULL TO REFRESH -->
+        <!-- ====================================================== -->
+        <!-- MESSAGES + PULL TO REFRESH                              -->
+        <!-- ====================================================== -->
+
         <RefreshView
             x:Name="MessagesRefreshView"
             Grid.Row="2"
@@ -87,7 +99,10 @@
         </RefreshView>
 
 
-        <!-- MESSAGE COMPOSER -->
+        <!-- ====================================================== -->
+        <!-- MESSAGE COMPOSER                                        -->
+        <!-- ====================================================== -->
+
         <Border
             Grid.Row="3"
             BackgroundColor="White"
@@ -95,19 +110,43 @@
             StrokeThickness="0">
 
             <Grid
-                ColumnDefinitions="*,Auto"
+                ColumnDefinitions="Auto,*,Auto"
                 ColumnSpacing="8">
+
+                <!-- ATTACHMENT BUTTON -->
+
+                <Button
+                    x:Name="AttachmentButton"
+                    Grid.Column="0"
+                    Text="📎"
+                    FontSize="22"
+                    WidthRequest="48"
+                    HeightRequest="48"
+                    Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="#1E40AF"
+                    Clicked="OnAttachmentClicked"
+                    VerticalOptions="Center" />
+
+                <!-- MESSAGE ENTRY -->
 
                 <Entry
                     x:Name="MessageEntry"
+                    Grid.Column="1"
                     Placeholder="Type a message..."
                     BackgroundColor="#F8FAFC"
-                    TextColor="#0F172A" />
+                    TextColor="#0F172A"
+                    VerticalOptions="Center" />
+
+                <!-- SEND BUTTON -->
 
                 <Button
-                    Grid.Column="1"
+                    Grid.Column="2"
                     Text="Send"
-                    Clicked="OnSendClicked" />
+                    Clicked="OnSendClicked"
+                    Padding="14,8"
+                    CornerRadius="10"
+                    VerticalOptions="Center" />
 
             </Grid>
 
