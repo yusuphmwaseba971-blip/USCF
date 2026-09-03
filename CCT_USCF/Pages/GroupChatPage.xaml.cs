@@ -1023,15 +1023,28 @@ public partial class GroupChatPage : ContentPage
         public string Status { get; set; } = "pending";
     }
 
-    private class GroupChatMessageUi
-    {
-        public string MessageId { get; set; } = string.Empty;
-        public string GroupId { get; set; } = string.Empty;
-        public string SenderUid { get; set; } = string.Empty;
-        public string SenderName { get; set; } = string.Empty;
-        public string Text { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    }
+    private sealed class BranchChatMessageUi
+{
+    public string MessageId { get; set; } = string.Empty;
+    public int BranchId { get; set; }
+
+    public string SenderUid { get; set; } = string.Empty;
+    public string SenderName { get; set; } = string.Empty;
+
+    public string Text { get; set; } = string.Empty;
+
+    public string MessageType { get; set; } = "text";
+
+    public string MediaUrl { get; set; } = string.Empty;
+
+    public string ThumbnailUrl { get; set; } = string.Empty;
+
+    public string FileName { get; set; } = string.Empty;
+
+    public long FileSize { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
 
     private class GroupMemberUi
     {
