@@ -41,7 +41,7 @@
                     <Picker x:Name="BackgroundPicker" Title="Choose background" />
                     <Label Text="Preview" FontAttributes="Bold" />
                     <Border x:Name="BackgroundPreview" HeightRequest="70" Stroke="#CBD5E1" StrokeThickness="1">
-                        <Label Text="USCCF" HorizontalOptions="Center" VerticalOptions="Center" FontAttributes="Bold" />
+                        <Label Text="USCF" HorizontalOptions="Center" VerticalOptions="Center" FontAttributes="Bold" />
                     </Border>
                     <Entry x:Name="CustomColorEntry" Placeholder="Custom color (#RRGGBB)" />
                     <Button Text="Apply appearance" Clicked="OnAppearanceClicked" />

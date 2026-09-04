@@ -30,7 +30,7 @@
                     <VerticalStackLayout Grid.Column="1" Spacing="2">
 
                         <Label
-                            Text="USCCF"
+                            Text="USCF"
                             FontSize="23"
                             FontAttributes="Bold"
                             TextColor="#123B73" />
@@ -293,6 +293,9 @@
             Grid.Row="1"
             VerticalScrollBarVisibility="Never">
 
+            <Grid>
+            <Image Source="uscf_logo.png" Opacity="0.045" Aspect="AspectFit"
+                   HorizontalOptions="End" VerticalOptions="Start" WidthRequest="260" />
             <VerticalStackLayout
                 Padding="14,8,14,30"
                 Spacing="18">
@@ -312,7 +315,7 @@
                     <VerticalStackLayout Spacing="6">
 
                         <Label
-                            Text="Welcome to USCCF 👋"
+                            Text="Welcome to USCF 👋"
                             FontSize="24"
                             FontAttributes="Bold"
                             TextColor="White" />
@@ -769,6 +772,7 @@
                 </Grid>
 
             </VerticalStackLayout>
+            </Grid>
 
         </ScrollView>
 
