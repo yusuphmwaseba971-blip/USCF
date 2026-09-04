@@ -1,81 +1,86 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage
-    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    x:Class="CCT_USCF.Pages.BiblePage"
-    Title="Bible">
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.BiblePage"
+             Title="Bible"
+             BackgroundColor="#F4F8F5">
+    <Grid x:Name="RootGrid" RowDefinitions="Auto,*">
+        <ScrollView Grid.Row="0" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout Padding="16,12,16,4" Spacing="8">
+                <Button Text="🇹🇿 Kiswahili — Neno" Clicked="OnSwahiliClicked" AutomationProperties.Name="Select Kiswahili Neno Bible" />
+                <Button Text="🇬🇧 English — KJV" Clicked="OnEnglishClicked" AutomationProperties.Name="Select English KJV Bible" />
+                <Button Text="Search" Clicked="OnSearchClicked" />
+                <Button Text="Bookmarks" Clicked="OnBookmarksClicked" />
+                <Button Text="Notebook" Clicked="OnNotebookClicked" />
+                <Button Text="Appearance" Clicked="OnAppearanceClicked" />
+            </HorizontalStackLayout>
+        </ScrollView>
 
-    <ContentPage.Background>
-        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#CFE7FF" Offset="0"/>
-            <GradientStop Color="#F8FAFC" Offset="1"/>
-        </LinearGradientBrush>
-    </ContentPage.Background>
-
-    <Grid>
-        <Border x:Name="BackgroundPanel"
-                StrokeThickness="0"
-                Background="Transparent">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#CFE7FF" Offset="0"/>
-                    <GradientStop Color="#F8FAFC" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
-        </Border>
-
-        <ScrollView>
-            <VerticalStackLayout Padding="20" Spacing="16">
-                <Frame BackgroundColor="#FFFFFFAA" CornerRadius="20" Padding="16" HasShadow="False">
-                    <VerticalStackLayout Spacing="10">
-                        <Label x:Name="LeaderStatusLabel" Text="Leader publishing status" FontSize="16" FontAttributes="Bold" TextColor="#0F172A" />
-                        <Label x:Name="LeaderQuotaLabel" Text="Images today: 0 / 5    Videos today: 0 / 3" FontSize="14" TextColor="#475569" />
-                        <Label Text="Bible Reading" FontSize="24" FontAttributes="Bold" TextColor="#0F172A" />
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <Picker x:Name="BookPicker" Title="Book" SelectedIndexChanged="OnBookChanged" />
-                            <Picker x:Name="ChapterPicker" Title="Chapter" SelectedIndexChanged="OnChapterChanged" Grid.Column="1" />
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <Picker x:Name="VersePicker" Title="Verse" SelectedIndexChanged="OnVerseChanged" />
-                            <Picker x:Name="FontStylePicker" Title="Font style" SelectedIndexChanged="OnFontStyleChanged" Grid.Column="1" />
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                            <Label Text="Text size" VerticalOptions="Center" TextColor="#334155" />
-                            <Button x:Name="DecreaseFontButton" Text="A-" Grid.Column="1" Clicked="DecreaseFontClicked" />
-                            <Button x:Name="IncreaseFontButton" Text="A+" Grid.Column="2" Clicked="IncreaseFontClicked" />
-                            <CheckBox x:Name="MotionToggle" Grid.Column="3" CheckedChanged="OnMotionToggled" />
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <Picker x:Name="BackgroundPicker" Title="Background" SelectedIndexChanged="OnBackgroundChanged" />
-                            <Picker x:Name="BackgroundColorPicker" Title="Background color" SelectedIndexChanged="OnBackgroundColorChanged" Grid.Column="1" />
-                        </Grid>
-                    </VerticalStackLayout>
-                </Frame>
-
-                <Border BackgroundColor="#FFFFFFCC" StrokeThickness="0" Padding="20" StrokeShape="RoundRectangle 24">
-                    <VerticalStackLayout Spacing="14">
-                        <Label x:Name="VerseHeading" Text="JOHN 3:16" FontAttributes="Bold" FontSize="22" TextColor="#0F172A" />
-                        <Label x:Name="VerseText" Text="For God so loved the world..." FontSize="28" LineHeight="1.4" TextColor="#111827" />
-
-                        <HorizontalStackLayout Spacing="12" HorizontalOptions="Center">
-                            <Button x:Name="PlayButton" Text="▶ Play" Clicked="OnPlayPauseClicked" />
-                            <Button x:Name="StopButton" Text="Stop" Clicked="OnStopAudioClicked" />
-                        </HorizontalStackLayout>
-
-                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                            <Label x:Name="AudioTimeLabel" Text="0:00" VerticalOptions="Center" TextColor="#475569" />
-                            <Slider x:Name="AudioProgress" Grid.Column="1" Minimum="0" Maximum="30" ValueChanged="OnAudioProgressChanged" />
-                            <Label x:Name="AudioDurationLabel" Text="0:30" VerticalOptions="Center" TextColor="#475569" />
-                        </Grid>
-                        <HorizontalStackLayout HorizontalOptions="Center" Spacing="12">
-                            <Button Text="📖 Post Bible Reading" Clicked="OnPostBibleClicked" />
-                        </HorizontalStackLayout>
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,8,16,24" Spacing="14">
+                <Border BackgroundColor="#167A4A" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="BIBLE" FontSize="13" CharacterSpacing="2" TextColor="#D8F3E4" />
+                        <Label x:Name="TranslationLabel" Text="King James Version" FontSize="24" FontAttributes="Bold" TextColor="White" />
+                        <Label x:Name="TranslationAttribution" IsVisible="False"
+                               Text="Biblica® Toleo Wazi Neno: Bibilia Takatifu™&#10;© 1984, 1989, 2009, 2015 Biblica, Inc.&#10;Licensed under CC BY-SA 4.0. Source: eBible.org / Biblica"
+                               FontSize="12" TextColor="#E7FFF0" />
+                        <Label x:Name="ContinueLabel" Text="Continue reading" TextColor="#E7FFF0" />
                     </VerticalStackLayout>
                 </Border>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Picker x:Name="TestamentPicker" Title="Testament" SelectedIndexChanged="OnTestamentChanged" />
+                    <Picker x:Name="BookPicker" Grid.Column="1" Title="Book" SelectedIndexChanged="OnBookChanged" />
+                </Grid>
+                <Picker x:Name="ChapterPicker" Title="Chapter" SelectedIndexChanged="OnChapterChanged" />
+                <SearchBar x:Name="SearchBox" Placeholder="Search this translation offline" SearchButtonPressed="OnSearchPressed" />
+                <CollectionView x:Name="SearchResults" IsVisible="False" SelectionChanged="OnSearchResultSelected" MaximumHeightRequest="220">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Padding="8,6" ColumnDefinitions="Auto,*">
+                                <Label Text="{Binding Reference}" FontAttributes="Bold" TextColor="#167A4A" />
+                                <Label Grid.Column="1" Text="{Binding Text}" LineBreakMode="TailTruncation" Margin="10,0,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <Border BackgroundColor="#FFFFFF" Stroke="#D5E5DA" Padding="16" StrokeShape="RoundRectangle 20">
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold" TextColor="#123B2A" />
+                            <Label x:Name="StatusLabel" Grid.Column="1" Text="Offline" TextColor="#4F6F5C" VerticalOptions="Center" />
+                        </Grid>
+                        <CollectionView x:Name="VerseList" SelectionMode="None">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="10" Margin="0,3" StrokeThickness="0" BackgroundColor="{Binding Background}">
+                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                            <Label Text="{Binding Number}" FontAttributes="Bold" TextColor="#167A4A" FontSize="16" />
+                                            <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}" TextColor="#17251D" LineHeight="1.35" Margin="10,0,0,0" />
+                                            <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,6,0,0">
+                                                <Button Text="Copy" FontSize="12" Padding="8,4" Clicked="OnCopyVerseClicked" CommandParameter="{Binding .}" />
+                                                <Button Text="Note" FontSize="12" Padding="8,4" Clicked="OnNoteVerseClicked" CommandParameter="{Binding .}" />
+                                                <Button Text="★" FontSize="12" Padding="8,4" Clicked="OnBookmarkVerseClicked" CommandParameter="{Binding .}" />
+                                                <Button Text="Highlight" FontSize="12" Padding="8,4" Clicked="OnHighlightVerseClicked" CommandParameter="{Binding .}" />
+                                                <Button Text="Share" FontSize="12" Padding="8,4" Clicked="OnShareVerseClicked" CommandParameter="{Binding .}" />
+                                            </HorizontalStackLayout>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </Border>
+
+                <HorizontalStackLayout HorizontalOptions="Center" Spacing="10">
+                    <Button x:Name="SpeechButton" Text="▶ Read aloud" Clicked="OnSpeechClicked" />
+                    <Button Text="Stop" Clicked="OnStopSpeechClicked" />
+                    <Button Text="Post reading" Clicked="OnPostBibleClicked" />
+                </HorizontalStackLayout>
+                <Label x:Name="LeaderStatusLabel" IsVisible="False" />
+                <Label x:Name="LeaderQuotaLabel" IsVisible="False" />
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

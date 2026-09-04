@@ -5,6 +5,7 @@ public class CommunityMessage
     public string Id { get; set; } = string.Empty;
 
     public string MessageId { get; set; } = string.Empty;
+    public string ClientMessageId { get; set; } = string.Empty;
 
     public string SenderUid { get; set; } = string.Empty;
     public string? OrganizationalLevel { get; set; }

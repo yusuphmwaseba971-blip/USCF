@@ -5,6 +5,7 @@ public sealed class AppwriteGroupMessageRecord
     public string Id { get; set; } = string.Empty;
 
     public string MessageId { get; set; } = string.Empty;
+    public string ClientMessageId { get; set; } = string.Empty;
 
     public string SenderAppwriteUserId { get; set; } = string.Empty;
 
@@ -24,7 +25,19 @@ public sealed class AppwriteGroupMessageRecord
 
     public string MessageType { get; set; } = "text";
 
+    public string MediaUrl { get; set; } = string.Empty;
+
+    public string ThumbnailUrl { get; set; } = string.Empty;
+
+    public string FileName { get; set; } = string.Empty;
+
+    public long FileSize { get; set; }
+
+    public double Duration { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAtUtc { get; set; }
 
     public IReadOnlyList<string> Permissions { get; set; } = [];
 }

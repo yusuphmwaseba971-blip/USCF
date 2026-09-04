@@ -14,6 +14,7 @@ public sealed class CommunityController : ControllerBase
     private readonly AppwriteTeamResolverService _teamResolver;
     private readonly AppwriteMembershipSynchronizationService _membershipSynchronization;
     private readonly GroupMessageService _groupMessageService;
+    private readonly BranchInvitationService _branchInvitationService;
     private readonly ILogger<CommunityController> _logger;
 
     public CommunityController(
@@ -22,6 +23,7 @@ public sealed class CommunityController : ControllerBase
         AppwriteTeamResolverService teamResolver,
         AppwriteMembershipSynchronizationService membershipSynchronization,
         GroupMessageService groupMessageService,
+        BranchInvitationService branchInvitationService,
         ILogger<CommunityController> logger)
     {
         _identityService = identityService;
@@ -29,6 +31,7 @@ public sealed class CommunityController : ControllerBase
         _teamResolver = teamResolver;
         _membershipSynchronization = membershipSynchronization;
         _groupMessageService = groupMessageService;
+        _branchInvitationService = branchInvitationService;
         _logger = logger;
     }
 
@@ -104,6 +107,35 @@ public sealed class CommunityController : ControllerBase
         {
             return ToAuthorizationResult(ex);
         }
+    }
+
+    [HttpPost("branch-invitations")]
+    public async Task<IActionResult> CreateBranchInvitation(
+        [FromBody] CreateBranchInvitationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var user = await RequireCommunityUserAsync(cancellationToken);
+            return Ok(await _branchInvitationService.CreateAsync(user, request.BranchId, cancellationToken));
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (Exception ex) when (IsClientAuthorizationError(ex)) { return ToAuthorizationResult(ex); }
+    }
+
+    [HttpPost("branch-invitations/accept")]
+    public async Task<IActionResult> AcceptBranchInvitation(
+        [FromBody] AcceptBranchInvitationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var user = await RequireCommunityUserAsync(cancellationToken);
+            await _branchInvitationService.AcceptAsync(user, request.Token, cancellationToken);
+            return Ok(new { message = "Invitation accepted." });
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (Exception ex) when (IsClientAuthorizationError(ex)) { return ToAuthorizationResult(ex); }
     }
 
     [HttpGet("messages/group")]

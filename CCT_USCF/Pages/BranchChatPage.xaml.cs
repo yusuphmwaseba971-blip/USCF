@@ -28,6 +28,7 @@ public partial class BranchChatPage : ContentPage
     private bool _isLoading;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
+    private PendingAttachment? _pendingAttachment;
 
     private ClientWebSocket? _appwriteRealtimeSocket;
     private CancellationTokenSource? _appwriteRealtimeCts;
@@ -68,6 +69,63 @@ public partial class BranchChatPage : ContentPage
 
         AddMemberButton.Clicked +=
             AddMemberButton_Clicked;
+    }
+
+    private async Task PersistMediaMessageAsync(BranchChatMessageUi localMessage)
+    {
+        try
+        {
+            if (localMessage.PendingFile == null)
+                throw new InvalidOperationException("The selected attachment is no longer available.");
+
+            var uploadResult = localMessage.MessageType switch
+            {
+                "image" => await _cloudinaryService.UploadImageAsync(localMessage.PendingFile),
+                "video" => await _cloudinaryService.UploadVideoAsync(localMessage.PendingFile),
+                "audio" => await _cloudinaryService.UploadAudioAsync(localMessage.PendingFile),
+                _ => throw new InvalidOperationException($"Unsupported attachment type: {localMessage.MessageType}")
+            };
+
+            var createdMessage = await _communityService.CreateCommunityMessageAsync(
+                communityId: _branchId.ToString(),
+                content: localMessage.Text,
+                messageType: localMessage.MessageType,
+                branchId: _branchId.ToString(),
+                organizationalLevel: "Branch",
+                mediaUrl: uploadResult.SecureUrl,
+                fileName: uploadResult.OriginalFilename,
+                fileSize: uploadResult.Bytes,
+                duration: uploadResult.Duration,
+                clientMessageId: localMessage.ClientMessageId);
+
+            await _communityService.CacheCommunityMessageAsync(createdMessage);
+            var uiMessage = ToUiMessage(createdMessage);
+            uiMessage.Status = "sent";
+            uiMessage.LocalPreviewBytes = null;
+            var existingIndex = _messages.FindIndex(existing => IsSameMessage(existing, uiMessage));
+            if (existingIndex >= 0)
+                _messages[existingIndex] = uiMessage;
+            else
+                _messages.Add(uiMessage);
+
+            _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+        }
+        catch (Exception ex)
+        {
+            localMessage.Status = "failed";
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT_MEDIA] {ex}");
+        }
+    }
+
+    private Task RetryMessageAsync(BranchChatMessageUi message)
+    {
+        message.Status = "sending";
+        RenderMessages();
+        return message.MessageType.Equals("text", StringComparison.OrdinalIgnoreCase)
+            ? PersistTextMessageAsync(message)
+            : PersistMediaMessageAsync(message);
     }
 
     // ============================================================
@@ -580,6 +638,9 @@ DateTime? updatedAt =
                     MessageId =
                         messageId,
 
+                    ClientMessageId =
+                        TryGetString(payload, "client_message_id"),
+
                     BranchId =
                         _branchId,
 
@@ -654,13 +715,11 @@ DateTime? updatedAt =
                 var existingIndex =
                     _messages.FindIndex(
                         existing =>
-                            string.Equals(
-                                existing.MessageId,
-                                message.MessageId,
-                                StringComparison.Ordinal));
+                            IsSameMessage(existing, message));
 
                 if (existingIndex >= 0)
                 {
+                    message.Status = "sent";
                     _messages[existingIndex] =
                         message;
                 }
@@ -993,6 +1052,9 @@ DateTime? updatedAt =
                     ? message.Id
                     : message.MessageId,
 
+            ClientMessageId = message.ClientMessageId,
+            Status = message.Status,
+
             BranchId =
                 int.TryParse(
                     message.CommunityId,
@@ -1079,10 +1141,7 @@ DateTime? updatedAt =
                 var existingIndex =
                     _messages.FindIndex(
                         existing =>
-                            string.Equals(
-                                existing.MessageId,
-                                uiMessage.MessageId,
-                                StringComparison.Ordinal));
+                            IsSameMessage(existing, uiMessage));
 
                 if (existingIndex >= 0)
                 {
@@ -1324,6 +1383,17 @@ DateTime? updatedAt =
                 " · edited";
         }
 
+        if (isCurrentUser &&
+            !string.Equals(message.Status, "sent", StringComparison.OrdinalIgnoreCase))
+        {
+            timestampText += message.Status switch
+            {
+                "failed" => " · Failed - tap to retry",
+                "sending" => " · Sending...",
+                _ => string.Empty
+            };
+        }
+
         stack.Children.Add(
             new Label
             {
@@ -1348,6 +1418,21 @@ DateTime? updatedAt =
             AttachLongPressGesture(
                 container,
                 message);
+
+            if (string.Equals(message.Status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                var retry = new Button
+                {
+                    Text = "Retry",
+                    FontSize = 12,
+                    Padding = new Thickness(8, 2),
+                    BackgroundColor = Colors.Transparent,
+                    TextColor = Color.FromArgb("#B91C1C"),
+                    HorizontalOptions = LayoutOptions.End
+                };
+                retry.Clicked += async (_, _) => await RetryMessageAsync(message);
+                stack.Children.Add(retry);
+            }
         }
 
         return container;
@@ -1415,6 +1500,18 @@ DateTime? updatedAt =
         }
     }
 
+    private static bool IsSameMessage(
+        BranchChatMessageUi left,
+        BranchChatMessageUi right)
+    {
+        if (!string.IsNullOrWhiteSpace(left.ClientMessageId) &&
+            !string.IsNullOrWhiteSpace(right.ClientMessageId) &&
+            string.Equals(left.ClientMessageId, right.ClientMessageId, StringComparison.Ordinal))
+            return true;
+
+        return string.Equals(left.MessageId, right.MessageId, StringComparison.Ordinal);
+    }
+
     private void AddTextMessage(
         VerticalStackLayout stack,
         BranchChatMessageUi message)
@@ -1440,7 +1537,17 @@ DateTime? updatedAt =
         VerticalStackLayout stack,
         BranchChatMessageUi message)
     {
-        if (string.IsNullOrWhiteSpace(
+        if (message.LocalPreviewBytes is { Length: > 0 } previewBytes)
+        {
+            stack.Children.Add(new Image
+            {
+                Source = ImageSource.FromStream(() => new MemoryStream(previewBytes)),
+                HeightRequest = 190,
+                WidthRequest = 255,
+                Aspect = Aspect.AspectFill
+            });
+        }
+        else if (string.IsNullOrWhiteSpace(
                 message.MediaUrl))
         {
             AddUnavailableMediaLabel(
@@ -1948,8 +2055,15 @@ DateTime? updatedAt =
                 return;
             }
 
-            await UploadAndSendImageAsync(
-                result);
+            byte[]? previewBytes = null;
+            await using (var stream = await result.OpenReadAsync())
+            {
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory);
+                previewBytes = memory.ToArray();
+            }
+
+            SetPendingAttachment(result, "image", previewBytes);
         }
         catch (Exception ex)
         {
@@ -1985,8 +2099,7 @@ DateTime? updatedAt =
                 return;
             }
 
-            await UploadAndSendVideoAsync(
-                result);
+            SetPendingAttachment(result, "video");
         }
         catch (Exception ex)
         {
@@ -2047,10 +2160,10 @@ DateTime? updatedAt =
                 return;
             }
 
-            await UploadAndSendAudioAsync(
-                result);
+            SetPendingAttachment(result, "audio");
         }
-        catch (Exception ex)
+
+            catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT] Audio picker/upload failed: {ex}");
@@ -2060,6 +2173,38 @@ DateTime? updatedAt =
                 "Unable to select or upload the audio.",
                 "OK");
         }
+    }
+
+    private void SetPendingAttachment(
+        FileResult file,
+        string attachmentType,
+        byte[]? previewBytes = null)
+    {
+        _pendingAttachment = new PendingAttachment
+        {
+            File = file,
+            Type = attachmentType,
+            PreviewBytes = previewBytes
+        };
+
+        PendingAttachmentLabel.Text =
+            $"{attachmentType.ToUpperInvariant()}: {file.FileName}";
+        PendingAttachmentImage.Source =
+            previewBytes == null
+                ? null
+                : ImageSource.FromStream(
+                    () => new MemoryStream(previewBytes));
+        PendingAttachmentLayout.IsVisible = true;
+    }
+
+    private void OnRemoveAttachmentClicked(
+        object? sender,
+        EventArgs e)
+    {
+        _pendingAttachment = null;
+        PendingAttachmentImage.Source = null;
+        PendingAttachmentLabel.Text = string.Empty;
+        PendingAttachmentLayout.IsVisible = false;
     }
 
     // ============================================================
@@ -2168,7 +2313,7 @@ DateTime? updatedAt =
     // SEND MEDIA MESSAGE
     // ============================================================
 
-    private async Task SendMediaMessageAsync(
+    private async Task<bool> SendMediaMessageAsync(
         string messageType,
         CloudinaryUploadResult uploadResult,
         string displayText)
@@ -2180,7 +2325,7 @@ DateTime? updatedAt =
                 "The current Branch Group could not be identified.",
                 "OK");
 
-            return;
+            return false;
         }
 
         try
@@ -2200,7 +2345,7 @@ DateTime? updatedAt =
                     "Please sign in to send media.",
                     "OK");
 
-                return;
+                return false;
             }
 
             var currentUid =
@@ -2215,7 +2360,7 @@ DateTime? updatedAt =
                     "Firebase authentication is required.",
                     "OK");
 
-                return;
+                return false;
             }
 
             if (currentUser.BranchId != _branchId)
@@ -2225,7 +2370,7 @@ DateTime? updatedAt =
                     "You can only send media in your own Branch Group.",
                     "OK");
 
-                return;
+                return false;
             }
 
             var createdMessage =
@@ -2300,6 +2445,7 @@ DateTime? updatedAt =
                 $"Media message sent. " +
                 $"type={messageType}, " +
                 $"message_id={createdMessage.MessageId}");
+            return true;
         }
         catch (Exception ex)
         {
@@ -2310,6 +2456,7 @@ DateTime? updatedAt =
                 "Media message failed",
                 "The media was uploaded, but the message could not be saved.",
                 "OK");
+            return false;
         }
     }
 
@@ -2359,6 +2506,36 @@ DateTime? updatedAt =
     {
         var text =
             MessageEntry.Text?.Trim();
+
+        if (_pendingAttachment != null)
+        {
+            var pending = _pendingAttachment;
+            var caption = string.IsNullOrWhiteSpace(text)
+                ? pending.File.FileName
+                : text;
+            var localMessage = new BranchChatMessageUi
+            {
+                MessageId = Guid.NewGuid().ToString("N"),
+                ClientMessageId = Guid.NewGuid().ToString("N"),
+                BranchId = _branchId,
+                SenderUid = GetCurrentUserUid(),
+                SenderName = "You",
+                Text = caption,
+                MessageType = pending.Type,
+                FileName = pending.File.FileName,
+                LocalPreviewBytes = pending.PreviewBytes,
+                CreatedAt = DateTime.UtcNow,
+                Status = "sending",
+                PendingFile = pending.File
+            };
+            _messages.Add(localMessage);
+            OnRemoveAttachmentClicked(null, EventArgs.Empty);
+            MessageEntry.Text = string.Empty;
+            RenderMessages();
+            _ = PersistMediaMessageAsync(localMessage);
+
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(
                 text))
@@ -2417,6 +2594,39 @@ DateTime? updatedAt =
                 return;
             }
 
+            var clientMessageId = Guid.NewGuid().ToString("N");
+            var localMessage = new BranchChatMessageUi
+            {
+                MessageId = clientMessageId,
+                ClientMessageId = clientMessageId,
+                BranchId = _branchId,
+                SenderUid = currentUid,
+                SenderName = "You",
+                Text = text,
+                MessageType = "text",
+                CreatedAt = DateTime.UtcNow,
+                Status = "sending"
+            };
+
+            _messages.Add(localMessage);
+            MessageEntry.Text = string.Empty;
+            RenderMessages();
+
+            _ = PersistTextMessageAsync(localMessage);
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert(
+                "Unable to send",
+                ex.Message,
+                "OK");
+        }
+    }
+
+    private async Task PersistTextMessageAsync(BranchChatMessageUi localMessage)
+    {
+        try
+        {
             var createdMessage =
                 await _communityService
                     .CreateCommunityMessageAsync(
@@ -2424,10 +2634,12 @@ DateTime? updatedAt =
                             _branchId.ToString(),
 
                         content:
-                            text,
+                            localMessage.Text,
 
                         messageType:
                             "text",
+                        clientMessageId:
+                            localMessage.ClientMessageId,
 
                         branchId:
                             _branchId.ToString(),
@@ -2439,12 +2651,7 @@ DateTime? updatedAt =
                 string.IsNullOrWhiteSpace(
                     createdMessage.MessageId))
             {
-                await DisplayAlert(
-                    "Unable to send message",
-                    "The message was not accepted by the server. Please try again.",
-                    "OK");
-
-                return;
+                throw new InvalidOperationException("The message was not accepted by the server.");
             }
 
             await _communityService
@@ -2452,16 +2659,11 @@ DateTime? updatedAt =
                     createdMessage);
 
             var uiMessage =
-                ToUiMessage(
-                    createdMessage);
-
+                ToUiMessage(createdMessage);
+            uiMessage.Status = "sent";
             var existingIndex =
                 _messages.FindIndex(
-                    existing =>
-                        string.Equals(
-                            existing.MessageId,
-                            uiMessage.MessageId,
-                            StringComparison.Ordinal));
+                    existing => IsSameMessage(existing, uiMessage));
 
             if (existingIndex >= 0)
             {
@@ -2481,9 +2683,6 @@ DateTime? updatedAt =
 
             RenderMessages();
 
-            MessageEntry.Text =
-                string.Empty;
-
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT_SEND] " +
                 $"Message persisted. " +
@@ -2491,28 +2690,9 @@ DateTime? updatedAt =
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine(
-                "========== BRANCH CHAT SEND ERROR ==========");
-
-            System.Diagnostics.Debug.WriteLine(
-                $"Exception Type: {ex.GetType().FullName}");
-
-            System.Diagnostics.Debug.WriteLine(
-                $"Message: {ex.Message}");
-
-            System.Diagnostics.Debug.WriteLine(
-                $"Inner Exception: {ex.InnerException?.Message}");
-
-            System.Diagnostics.Debug.WriteLine(
-                $"Full Exception: {ex}");
-
-            System.Diagnostics.Debug.WriteLine(
-                "============================================");
-
-            await DisplayAlert(
-                "Unable to send",
-                ex.Message,
-                "OK");
+            localMessage.Status = "failed";
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT_SEND] {ex}");
         }
     }
 
@@ -2679,44 +2859,9 @@ DateTime? updatedAt =
                 return;
             }
 
-            var invitationId =
-                Guid.NewGuid().ToString("N");
-
-            var invitation =
-                new BranchInvitationRecord
-                {
-                    InvitationId =
-                        invitationId,
-
-                    BranchId =
-                        _branchId,
-
-                    BranchName =
-                        BranchName,
-
-                    CreatedByUid =
-                        GetCurrentUserUid(),
-
-                    CreatedAt =
-                        DateTime.UtcNow,
-
-                    Status =
-                        "active"
-                };
-
-            var invitationRef =
-                _firestore
-                    .GetCollection(
-                        "branchInvitations")
-                    .GetDocument(
-                        invitationId);
-
-            await invitationRef.SetDataAsync(
-                invitation);
-
-            var deepLink =
-                $"cctuscf://invite?branchId={_branchId}" +
-                $"&invitationId={invitationId}";
+            var invitation = await _communityService.CreateBranchInvitationAsync(_branchId);
+            if (string.IsNullOrWhiteSpace(invitation.Url))
+                throw new InvalidOperationException("The invitation service returned no invitation URL.");
 
             await Share.Default.RequestAsync(
                 new ShareTextRequest
@@ -2725,14 +2870,15 @@ DateTime? updatedAt =
                         $"Invite people to {BranchName}",
 
                     Text =
-                        $"Join CCT-USCF and connect with the {BranchName}." +
-                        $"\n\n{deepLink}"
+                        $"Join CCT-USCF and connect with the {invitation.BranchName}." +
+                        $"\n\n{invitation.Url}" +
+                        $"\n\nThis invitation expires {invitation.ExpiresAtUtc.ToLocalTime():g}."
                 });
 
             await DisplayAlert(
                 "Invite people to " +
                     BranchName,
-                "The branch invitation link was created and shared.",
+                $"The secure invitation link was created and shared. It expires {invitation.ExpiresAtUtc.ToLocalTime():g}.",
                 "OK");
         }
         catch (Exception ex)
@@ -2742,7 +2888,7 @@ DateTime? updatedAt =
 
             await DisplayAlert(
                 "Invitation could not be created",
-                "Please check your connection and try again.",
+                ex.Message,
                 "OK");
         }
     }
@@ -2905,6 +3051,9 @@ DateTime? updatedAt =
         public string MessageId { get; set; } =
             string.Empty;
 
+        public string ClientMessageId { get; set; } =
+            string.Empty;
+
         public int BranchId { get; set; }
 
         public string SenderUid { get; set; } =
@@ -2936,6 +3085,16 @@ DateTime? updatedAt =
             DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
+
+        public string Status { get; set; } = "sent";
+        public byte[]? LocalPreviewBytes { get; set; }
+        public FileResult? PendingFile { get; set; }
+    }
+
+    private sealed class PendingAttachment
+    {
+        public FileResult File { get; init; } = null!;
+        public string Type { get; init; } = string.Empty;
+        public byte[]? PreviewBytes { get; init; }
     }
 }
-

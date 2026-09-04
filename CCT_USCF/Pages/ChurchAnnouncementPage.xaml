@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.ChurchAnnouncementPage"
+             Title="Church Announcement" BackgroundColor="#F8FAFC">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+            <Label Text="Church Announcement" FontSize="28" FontAttributes="Bold" TextColor="#123B73" />
+            <Label x:Name="LeadershipLabel" FontSize="16" />
+            <Label x:Name="OrganizationLabel" FontSize="14" TextColor="#64748B" />
+            <Picker x:Name="AudiencePicker" Title="Audience" ItemDisplayBinding="{Binding .}" />
+            <Entry x:Name="TitleEntry" Placeholder="Announcement title" />
+            <Editor x:Name="MessageEditor" Placeholder="Announcement message" AutoSize="TextChanges" MinimumHeightRequest="140" />
+            <Button x:Name="SendButton" Text="Send announcement" Clicked="OnSendClicked" />
+            <Label x:Name="StatusLabel" TextColor="#B45309" />
+            <Button Text="Announcement activity" Clicked="OnActivityClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

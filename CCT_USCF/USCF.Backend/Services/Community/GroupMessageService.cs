@@ -25,8 +25,13 @@ public sealed class GroupMessageService
         CancellationToken cancellationToken = default)
     {
         var content = request.Content?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(content))
+        var messageType = string.IsNullOrWhiteSpace(request.MessageType)
+            ? "text"
+            : request.MessageType.Trim().ToLowerInvariant();
+        if (messageType == "text" && string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Message content is required.", nameof(request));
+        if (messageType != "text" && string.IsNullOrWhiteSpace(request.MediaUrl))
+            throw new ArgumentException("Media URL is required for media messages.", nameof(request));
 
         var resolveRequest = new ResolveTeamRequest
         {
@@ -40,10 +45,12 @@ public sealed class GroupMessageService
         var context = await _authorization.ResolveAuthorizedContextAsync(user.User, resolveRequest, cancellationToken);
         var mapping = await _membershipSynchronization.EnsureMembershipForContextAsync(user, context, cancellationToken);
 
+        var clientMessageId = NormalizeClientMessageId(request.ClientMessageId);
         var message = new AppwriteGroupMessageRecord
         {
             Id = string.Empty,
-            MessageId = Guid.NewGuid().ToString("N"),
+            MessageId = clientMessageId,
+            ClientMessageId = clientMessageId,
             SenderAppwriteUserId = user.AppwriteMapping.AppwriteUserId,
             SenderFirebaseUid = user.FirebaseIdentity.FirebaseUid,
             SenderName = string.IsNullOrWhiteSpace(user.User.FullName) ? user.User.Username : user.User.FullName,
@@ -52,7 +59,12 @@ public sealed class GroupMessageService
             CommunityId = mapping.OrganizationId.ToString(),
             AppwriteTeamId = mapping.AppwriteTeamId,
             Content = content,
-            MessageType = string.IsNullOrWhiteSpace(request.MessageType) ? "text" : request.MessageType.Trim(),
+            MessageType = messageType,
+            MediaUrl = request.MediaUrl?.Trim() ?? string.Empty,
+            ThumbnailUrl = request.ThumbnailUrl?.Trim() ?? string.Empty,
+            FileName = request.FileName?.Trim() ?? string.Empty,
+            FileSize = Math.Max(0, request.FileSize),
+            Duration = Math.Max(0, request.Duration),
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -83,6 +95,7 @@ public sealed class GroupMessageService
         {
             Id = string.IsNullOrWhiteSpace(message.Id) ? message.MessageId : message.Id,
             MessageId = message.MessageId,
+            ClientMessageId = message.ClientMessageId,
             SenderUid = message.SenderFirebaseUid,
             SenderName = message.SenderName,
             Content = message.Content,
@@ -98,7 +111,28 @@ public sealed class GroupMessageService
                 : null,
             AppwriteTeamId = message.AppwriteTeamId,
             MessageType = message.MessageType,
+            MediaUrl = message.MediaUrl,
+            ThumbnailUrl = message.ThumbnailUrl,
+            FileName = message.FileName,
+            FileSize = message.FileSize,
+            Duration = message.Duration,
             CreatedAt = message.CreatedAtUtc
         };
+    }
+
+    private static string NormalizeClientMessageId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Guid.NewGuid().ToString("N");
+
+        var normalized = value.Trim();
+        if (normalized.Length > 100 ||
+            normalized.Any(character => !char.IsLetterOrDigit(character) &&
+                                        character is not '-' and not '_'))
+        {
+            throw new ArgumentException("Client message id is invalid.", nameof(value));
+        }
+
+        return normalized;
     }
 }

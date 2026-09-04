@@ -109,9 +109,41 @@
             Padding="12,10"
             StrokeThickness="0">
 
-            <Grid
-                ColumnDefinitions="Auto,*,Auto"
-                ColumnSpacing="8">
+            <VerticalStackLayout Spacing="8">
+
+                <Grid
+                    x:Name="PendingAttachmentLayout"
+                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="8"
+                    IsVisible="False">
+
+                    <Image
+                        x:Name="PendingAttachmentImage"
+                        Grid.Column="0"
+                        WidthRequest="52"
+                        HeightRequest="52"
+                        Aspect="AspectFill" />
+
+                    <Label
+                        x:Name="PendingAttachmentLabel"
+                        Grid.Column="1"
+                        VerticalOptions="Center"
+                        TextColor="#1E40AF"
+                        LineBreakMode="TailTruncation" />
+
+                    <Button
+                        Grid.Column="2"
+                        Text="Remove"
+                        Clicked="OnRemoveAttachmentClicked"
+                        Padding="8,4"
+                        FontSize="12"
+                        BackgroundColor="Transparent"
+                        TextColor="#B91C1C" />
+                </Grid>
+
+                <Grid
+                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="8">
 
                 <!-- ATTACHMENT BUTTON -->
 
@@ -148,7 +180,8 @@
                     CornerRadius="10"
                     VerticalOptions="Center" />
 
-            </Grid>
+                </Grid>
+            </VerticalStackLayout>
 
         </Border>
 

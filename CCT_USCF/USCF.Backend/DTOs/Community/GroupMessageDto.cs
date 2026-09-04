@@ -5,6 +5,7 @@ public sealed class GroupMessageDto
     public string Id { get; set; } = string.Empty;
 
     public string MessageId { get; set; } = string.Empty;
+    public string ClientMessageId { get; set; } = string.Empty;
 
     public string SenderUid { get; set; } = string.Empty;
 
@@ -24,5 +25,17 @@ public sealed class GroupMessageDto
 
     public string MessageType { get; set; } = "text";
 
+    public string? MediaUrl { get; set; }
+
+    public string? ThumbnailUrl { get; set; }
+
+    public string? FileName { get; set; }
+
+    public long FileSize { get; set; }
+
+    public double Duration { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
 }

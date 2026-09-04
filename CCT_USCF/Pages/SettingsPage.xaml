@@ -32,6 +32,22 @@
 
             <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
 
+            <Label Text="Language &amp; Appearance" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Frame BackgroundColor="White" Padding="12">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="🌐 App Language" FontAttributes="Bold" />
+                    <Picker x:Name="LanguagePicker" Title="Choose language" />
+                    <Label Text="🎨 App Background" FontAttributes="Bold" />
+                    <Picker x:Name="BackgroundPicker" Title="Choose background" />
+                    <Label Text="Preview" FontAttributes="Bold" />
+                    <Border x:Name="BackgroundPreview" HeightRequest="70" Stroke="#CBD5E1" StrokeThickness="1">
+                        <Label Text="USCCF" HorizontalOptions="Center" VerticalOptions="Center" FontAttributes="Bold" />
+                    </Border>
+                    <Entry x:Name="CustomColorEntry" Placeholder="Custom color (#RRGGBB)" />
+                    <Button Text="Apply appearance" Clicked="OnAppearanceClicked" />
+                </VerticalStackLayout>
+            </Frame>
+
         </VerticalStackLayout>
     </ScrollView>
 
