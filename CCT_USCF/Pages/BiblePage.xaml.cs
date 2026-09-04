@@ -1,388 +1,208 @@
 using System.Collections.ObjectModel;
+using CCT_USCF.Models;
+using CCT_USCF.Services;
 
 namespace CCT_USCF.Pages;
 
 public partial class BiblePage : ContentPage
 {
-    private readonly Dictionary<string, string> _backgroundStyles = new()
-    {
-        ["Nature"] = "#dff6e8,#d7f0ff",
-        ["Sunrise"] = "#f9d7a7,#f59e0b",
-        ["Mountain"] = "#dbeafe,#475569",
-        ["Sky"] = "#dbeafe,#93c5fd",
-        ["Water"] = "#e0f2fe,#2dd4bf",
-        ["Dark"] = "#0f172a,#1e293b",
-        ["Sepia"] = "#f5e7c6,#b78a5d",
-        ["Neutral"] = "#f1f5f9,#cbd5e1"
-    };
-
-    private readonly List<string> _books = new() { "John", "Romans", "Psalm", "Matthew", "Philippians" };
-    private readonly Dictionary<string, int> _chapterCounts = new() { ["John"] = 21, ["Romans"] = 16, ["Psalm"] = 150, ["Matthew"] = 28, ["Philippians"] = 4 };
-    private readonly Dictionary<string, Dictionary<int, string[]>> _verses = new()
-    {
-        ["John"] = new() { [3] = ["For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life."] },
-        ["Romans"] = new() { [8] = ["For I am convinced that neither death nor life, nor angels, nor rulers, nor things present, nor things to come, nor powers,"] },
-        ["Psalm"] = new() { [23] = ["The Lord is my shepherd; I shall not want."] },
-        ["Matthew"] = new() { [5] = ["Blessed are the pure in heart, for they shall see God."] },
-        ["Philippians"] = new() { [4] = ["Rejoice in the Lord always; again I will say, rejoice."] }
-    };
-
-    private bool _motionEnabled = true;
-    private double _fontSize = 28;
-    private string _selectedBackground = "Nature";
-    private string _selectedColor = "#F8FAFC";
-    private string _selectedFontStyle = "Default";
+    private readonly BibleService _bible;
+    private readonly ObservableCollection<VerseRow> _verses = new();
+    private readonly ObservableCollection<SearchRow> _results = new();
+    private CancellationTokenSource? _speechCancellation;
+    private string _language = BibleService.KjvId;
+    private string _testament = "New Testament";
+    private string _book = "John";
+    private int _chapter = 3;
+    private double _fontSize = 22;
+    private string _background = "CCT-USCF";
 
     public BiblePage()
     {
         InitializeComponent();
-        InitializeSelections();
-        LoadPreferences();
-        _ = LoadLeaderStatusAsync();
-        UpdatePresentation();
-
-        // Load Bible data from local resource
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
-                await bs.InitializeAsync();
-                var books = await bs.GetBooksAsync();
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    BookPicker.ItemsSource = books;
-                    if (books.Count > 0) BookPicker.SelectedIndex = 0;
-                });
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Bible load failed: {ex.Message}");
-            }
-        });
+        _bible = MauiProgram.Services.GetRequiredService<BibleService>();
+        VerseList.ItemsSource = _verses;
+        SearchResults.ItemsSource = _results;
+        Loaded += async (_, _) => await LoadAsync();
     }
 
-    private void InitializeSelections()
+    private async Task LoadAsync()
     {
-        var defaultFontStyles = new[] { "Default", "Serif", "Sans Serif", "Reading", "Classic" };
-        FontStylePicker.ItemsSource = defaultFontStyles;
-        FontStylePicker.SelectedItem = "Default";
-
-        BackgroundPicker.ItemsSource = _backgroundStyles.Keys.ToList();
-        BackgroundPicker.SelectedItem = _selectedBackground;
-
-        BackgroundColorPicker.ItemsSource = new[] { "White", "Light", "Dark", "Sepia", "Blue", "Neutral" };
-        BackgroundColorPicker.SelectedItem = "Light";
+        await _bible.InitializeAsync();
+        _language = _bible.Language;
+        _book = _bible.Book;
+        _chapter = _bible.Chapter;
+        _fontSize = _bible.FontSize;
+        _background = _bible.Background;
+        _testament = (await _bible.GetBooksAsync(_language)).FirstOrDefault(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))?.Testament ?? _testament;
+        TranslationLabel.Text = _language == BibleService.KjvId ? "King James Version" : "Kiswahili — Neno";
+        TranslationAttribution.IsVisible = _language == BibleService.NenoId;
+        ApplyBackground();
+        TestamentPicker.ItemsSource = new[] { "Old Testament", "New Testament" };
+        TestamentPicker.SelectedItem = _testament;
+        await RefreshBooksAsync();
+        await RefreshChapterAsync();
     }
 
-    private void LoadPreferences()
+    private async Task RefreshBooksAsync()
     {
-        _motionEnabled = Preferences.Default.Get("BibleMotionEnabled", true);
-        _fontSize = Preferences.Default.Get("BibleFontSize", 28d);
-        _selectedBackground = Preferences.Default.Get("BibleBackground", "Nature");
-        _selectedColor = Preferences.Default.Get("BibleBackgroundColor", "#F8FAFC");
-        _selectedFontStyle = Preferences.Default.Get("BibleFontStyle", "Default");
-
-        MotionToggle.IsChecked = _motionEnabled;
-        BackgroundPicker.SelectedItem = _selectedBackground;
-        BackgroundColorPicker.SelectedItem = MapColorName(_selectedColor);
-        FontStylePicker.SelectedItem = _selectedFontStyle;
-    }
-
-    private void UpdatePresentation()
-    {
-        var fontStyle = _selectedFontStyle switch
+        var books = (await _bible.GetBooksAsync(_language)).Where(b => b.Testament == _testament).ToArray();
+        BookPicker.ItemsSource = books.Select(b => b.Name).ToArray();
+        if (!books.Any())
         {
-            "Serif" => "Times New Roman",
-            "Sans Serif" => "Arial",
-            "Reading" => "OpenSansRegular",
-            "Classic" => "Georgia",
-            _ => null
-        };
-
-        VerseText.FontSize = _fontSize;
-        VerseText.FontFamily = fontStyle;
-        VerseHeading.FontSize = Math.Max(16, _fontSize * 0.85);
-
-        var colors = _backgroundStyles.ContainsKey(_selectedBackground) ? _backgroundStyles[_selectedBackground].Split(',') : new[] { "#dff6e8", "#f8fafc" };
-        if (BackgroundPanel.Background is LinearGradientBrush brush)
-        {
-            brush.GradientStops[0].Color = Color.FromArgb(colors[0]);
-            brush.GradientStops[1].Color = Color.FromArgb(colors[1]);
+            BookPicker.SelectedItem = null;
+            _verses.Clear();
+            StatusLabel.Text = "No licensed text installed";
+            return;
         }
+        if (!books.Any(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))) _book = books[0].Name;
+        BookPicker.SelectedItem = _book;
+    }
 
-        var ctxColor = _selectedColor switch
+    private async Task RefreshChapterAsync()
+    {
+        var chapters = await _bible.GetChaptersAsync(_book, _language);
+        ChapterPicker.ItemsSource = chapters.ToArray();
+        ChapterPicker.SelectedItem = chapters.Contains(_chapter) ? _chapter : chapters.FirstOrDefault();
+        if (ChapterPicker.SelectedItem is int chapter) { _chapter = chapter; await RefreshVersesAsync(); }
+    }
+
+    private async Task RefreshVersesAsync()
+    {
+        _verses.Clear();
+        var verses = await _bible.GetVersesAsync(_book, _chapter, _language);
+        foreach (var verse in verses)
+            _verses.Add(new VerseRow(verse.Number, verse.Text, _fontSize, _bible.GetHighlight(Key(verse.Number))));
+        VerseHeading.Text = $"{_book.ToUpperInvariant()} {_chapter}";
+        ContinueLabel.Text = $"Continue reading • {_book} {_chapter}";
+        StatusLabel.Text = verses.Count == 0 ? "No translation text available" : "Available offline";
+        await _bible.SetPositionAsync(_language, _book, _chapter, _bible.Verse);
+    }
+
+    private string Key(int verse) => $"{_language}|{_book}|{_chapter}:{verse}";
+    private async void OnTestamentChanged(object? s, EventArgs e) { _testament = TestamentPicker.SelectedItem?.ToString() ?? _testament; await RefreshBooksAsync(); await RefreshChapterAsync(); }
+    private async void OnBookChanged(object? s, EventArgs e) { if (BookPicker.SelectedItem is string book) { _book = book; _chapter = 1; await RefreshChapterAsync(); } }
+    private async void OnChapterChanged(object? s, EventArgs e) { if (ChapterPicker.SelectedItem is int chapter) { _chapter = chapter; await RefreshVersesAsync(); } }
+    private async void OnSwahiliClicked(object? s, EventArgs e) { _language = BibleService.NenoId; TranslationLabel.Text = "Kiswahili — Neno"; TranslationAttribution.IsVisible = true; await RefreshBooksAsync(); await RefreshChapterAsync(); }
+    private async void OnEnglishClicked(object? s, EventArgs e) { _language = BibleService.KjvId; TranslationLabel.Text = "King James Version"; TranslationAttribution.IsVisible = false; await RefreshBooksAsync(); await RefreshChapterAsync(); }
+
+    private async void OnSearchPressed(object? s, EventArgs e)
+    {
+        _results.Clear();
+        foreach (var result in await _bible.SearchAsync(SearchBox.Text ?? string.Empty, _language))
+            _results.Add(new SearchRow(result));
+        SearchResults.IsVisible = _results.Count > 0;
+    }
+    private async void OnSearchClicked(object? s, EventArgs e) { SearchBox.Focus(); }
+    private async void OnSearchResultSelected(object? s, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is SearchRow row)
+        {
+            _book = row.Book; _chapter = row.Chapter;
+            SearchResults.IsVisible = false;
+            await RefreshChapterAsync();
+        }
+        SearchResults.SelectedItem = null;
+    }
+
+    private async void OnCopyVerseClicked(object? s, EventArgs e)
+    {
+        if (s is Button { CommandParameter: VerseRow verse })
+            await Clipboard.Default.SetTextAsync($"{_book} {_chapter}:{verse.Number}\n{verse.Text}");
+    }
+    private async void OnShareVerseClicked(object? s, EventArgs e)
+    {
+        if (s is Button { CommandParameter: VerseRow verse })
+            await Share.Default.RequestAsync(new ShareTextRequest
+            {
+                Title = $"{_book} {_chapter}:{verse.Number}",
+                Text = $"{_book} {_chapter}:{verse.Number}\n{verse.Text}\n\nCCT-USCF"
+            });
+    }
+    private async void OnNoteVerseClicked(object? s, EventArgs e)
+    {
+        if (s is not Button { CommandParameter: VerseRow verse }) return;
+        var text = await DisplayPromptAsync("Bible note", $"{_book} {_chapter}:{verse.Number}");
+        if (!string.IsNullOrWhiteSpace(text))
+            await _bible.SaveNoteAsync(new BibleNote(Guid.NewGuid().ToString("N"), _language, _book, _chapter, verse.Number, text, DateTime.UtcNow, DateTime.UtcNow));
+    }
+    private async void OnBookmarkVerseClicked(object? s, EventArgs e)
+    {
+        if (s is Button { CommandParameter: VerseRow verse }) await _bible.ToggleBookmarkAsync(Key(verse.Number));
+    }
+    private async void OnHighlightVerseClicked(object? s, EventArgs e)
+    {
+        if (s is not Button { CommandParameter: VerseRow verse }) return;
+        var color = await DisplayActionSheet("Highlight", "Cancel", null, "Yellow", "Green", "Blue", "Remove");
+        await _bible.SetHighlightAsync(Key(verse.Number), color == "Remove" || color == "Cancel" ? null : color);
+        await RefreshVersesAsync();
+    }
+
+    private async void OnAppearanceClicked(object? s, EventArgs e)
+    {
+        var choice = await DisplayActionSheet("Reading background", "Cancel", null, "CCT-USCF", "Minimal", "Nature", "Sunrise", "Dark");
+        if (choice is not null and not "Cancel") { _background = choice; ApplyBackground(); await _bible.SetAppearanceAsync(_fontSize, _background); }
+        var size = await DisplayActionSheet("Text size", "Cancel", null, "Small", "Comfortable", "Large");
+        if (size == "Small") _fontSize = 18; else if (size == "Large") _fontSize = 28; else if (size == "Comfortable") _fontSize = 22;
+        if (size is not null and not "Cancel") { await _bible.SetAppearanceAsync(_fontSize, _background); await RefreshVersesAsync(); }
+    }
+    private async void OnBookmarksClicked(object? s, EventArgs e)
+    {
+        var bookmarks = _bible.GetBookmarksForDisplay();
+        await DisplayAlert("Bookmarks", bookmarks.Count == 0 ? "No bookmarks yet." : string.Join("\n", bookmarks), "OK");
+    }
+    private async void OnNotebookClicked(object? s, EventArgs e)
+    {
+        var notes = _bible.GetNotes();
+        await DisplayAlert("Notebook", notes.Count == 0 ? "No notes yet." : string.Join("\n", notes.Select(n => $"{n.Book} {n.Chapter}:{n.Verse} — {n.Language}: {n.Text}")), "OK");
+    }
+    private async void OnSpeechClicked(object? s, EventArgs e)
+    {
+        _speechCancellation?.Cancel(); _speechCancellation = new CancellationTokenSource();
+        try
+        {
+            var text = string.Join(" ", _verses.Select(v => v.Text));
+            var languageCode = _language == BibleService.NenoId ? "sw" : "en";
+            var locale = (await TextToSpeech.Default.GetLocalesAsync())
+                .FirstOrDefault(item => item.Language.StartsWith(languageCode, StringComparison.OrdinalIgnoreCase));
+            if (locale is null) throw new InvalidOperationException($"No {languageCode} voice is installed.");
+            await TextToSpeech.Default.SpeakAsync(text, new SpeechOptions { Locale = locale }, _speechCancellation.Token);
+        }
+        catch (Exception ex) { await DisplayAlert("Reading aloud", $"The selected offline voice is unavailable: {ex.Message}", "OK"); }
+    }
+    private void OnStopSpeechClicked(object? s, EventArgs e) { _speechCancellation?.Cancel(); }
+
+    private void ApplyBackground()
+    {
+        RootGrid.BackgroundColor = _background switch
         {
             "Dark" => Color.FromArgb("#0F172A"),
-            "Sepia" => Color.FromArgb("#4B2E2B"),
-            "Blue" => Color.FromArgb("#083344"),
-            "Neutral" => Color.FromArgb("#1F2937"),
-            _ => Color.FromArgb("#111827")
+            "Sunrise" => Color.FromArgb("#FFF1D6"),
+            "Nature" => Color.FromArgb("#E4F2E8"),
+            "Minimal" => Color.FromArgb("#F8FAFC"),
+            _ => Color.FromArgb("#E8F5EC")
         };
-
-        VerseText.TextColor = ctxColor;
-        VerseHeading.TextColor = ctxColor;
-
-        ApplyMotion();
-        SavePreferences();
-    }
-
-    private void ApplyMotion()
-    {
-        if (!_motionEnabled)
-        {
-            this.AbortAnimation("bibleMotion");
-            BackgroundPanel.TranslationY = 0;
-            BackgroundPanel.Scale = 1;
-            return;
-        }
-
-        this.AbortAnimation("bibleMotion");
-        var animation = new Animation(v =>
-        {
-            BackgroundPanel.Scale = 1 + (v * 0.04d);
-            BackgroundPanel.TranslationY = (float)(Math.Sin(v * Math.PI) * 4);
-        }, 0, 1, Easing.CubicInOut);
-        animation.Commit(this, "bibleMotion", length: 9000, repeat: () => true, finished: (d, b) => { });
-    }
-
-    private async Task LoadLeaderStatusAsync()
-    {
-        try
-        {
-            var auth = MauiProgram.CreateAuthServiceForPages();
-            var user = MauiProgram.CurrentUser ?? await auth.GetCurrentUserAsync();
-            var isLeader = user != null && user.Role.Contains("Leader", StringComparison.OrdinalIgnoreCase);
-            if (!isLeader)
-            {
-                LeaderStatusLabel.IsVisible = false;
-                LeaderQuotaLabel.IsVisible = false;
-                return;
-            }
-
-            LeaderStatusLabel.Text = "Verified leader publishing status";
-            LeaderQuotaLabel.Text = "Images today: 0 / 5    Videos today: 0 / 3";
-        }
-        catch
-        {
-            LeaderStatusLabel.IsVisible = false;
-            LeaderQuotaLabel.IsVisible = false;
-        }
-    }
-
-    private void SavePreferences()
-    {
-        Preferences.Default.Set("BibleMotionEnabled", _motionEnabled);
-        Preferences.Default.Set("BibleFontSize", _fontSize);
-        Preferences.Default.Set("BibleBackground", _selectedBackground);
-        Preferences.Default.Set("BibleBackgroundColor", _selectedColor);
-        Preferences.Default.Set("BibleFontStyle", _selectedFontStyle);
-    }
-
-    private static string MapColorName(string color)
-    {
-        return color switch
-        {
-            "#0F172A" => "Dark",
-            "#4B2E2B" => "Sepia",
-            "#083344" => "Blue",
-            "#1F2937" => "Neutral",
-            _ => "Light"
-        };
-    }
-
-    private async void OnBookChanged(object? sender, EventArgs e)
-    {
-        var selectedBook = BookPicker.SelectedItem as string;
-        if (string.IsNullOrWhiteSpace(selectedBook)) return;
-
-        try
-        {
-            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
-            var chapters = await bs.GetChaptersAsync(selectedBook);
-            ChapterPicker.ItemsSource = chapters;
-            if (chapters.Count > 0) ChapterPicker.SelectedItem = chapters[0];
-            else ChapterPicker.SelectedItem = 1;
-            UpdateVerseSelection();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"OnBookChanged error: {ex.Message}");
-        }
-    }
-
-    private void OnChapterChanged(object? sender, EventArgs e)
-    {
-        _ = Task.Run(async () => await MainThread.InvokeOnMainThreadAsync(UpdateVerseSelection));
-    }
-
-    private void OnVerseChanged(object? sender, EventArgs e)
-    {
-        _ = Task.Run(async () => await MainThread.InvokeOnMainThreadAsync(UpdateVerseText));
-    }
-
-    private async Task UpdateVerseSelection()
-    {
-        var selectedBook = BookPicker.SelectedItem as string;
-        var selectedChapter = (int?)ChapterPicker.SelectedItem ?? 1;
-
-        if (string.IsNullOrWhiteSpace(selectedBook)) return;
-
-        try
-        {
-            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
-            var verses = await bs.GetVersesAsync(selectedBook, selectedChapter);
-            var verseNumbers = Enumerable.Range(1, Math.Max(1, verses.Count)).ToArray();
-            VersePicker.ItemsSource = verseNumbers;
-            VersePicker.SelectedItem = 1;
-            await UpdateVerseText();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"UpdateVerseSelection error: {ex.Message}");
-        }
-    }
-
-    private async Task UpdateVerseText()
-    {
-        var selectedBook = BookPicker.SelectedItem as string;
-        var selectedChapter = (int?)ChapterPicker.SelectedItem ?? 1;
-        var selectedVerse = (int?)VersePicker.SelectedItem ?? 1;
-
-        if (string.IsNullOrWhiteSpace(selectedBook)) return;
-
-        try
-        {
-            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
-            var verseText = await bs.GetVerseAsync(selectedBook, selectedChapter, selectedVerse);
-            if (string.IsNullOrWhiteSpace(verseText)) verseText = "(Verse not found)";
-            VerseHeading.Text = $"{selectedBook.ToUpperInvariant()} {selectedChapter}:{selectedVerse}";
-            VerseText.Text = verseText;
-            AudioDurationLabel.Text = "0:30";
-            AudioProgress.Maximum = 30;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"UpdateVerseText error: {ex.Message}");
-        }
-    }
-
-    private void IncreaseFontClicked(object? sender, EventArgs e)
-    {
-        _fontSize = Math.Min(42, _fontSize + 2);
-        UpdatePresentation();
-    }
-
-    private void DecreaseFontClicked(object? sender, EventArgs e)
-    {
-        _fontSize = Math.Max(18, _fontSize - 2);
-        UpdatePresentation();
-    }
-
-    private void OnFontStyleChanged(object? sender, EventArgs e)
-    {
-        _selectedFontStyle = FontStylePicker.SelectedItem?.ToString() ?? "Default";
-        UpdatePresentation();
-    }
-
-    private void OnBackgroundChanged(object? sender, EventArgs e)
-    {
-        _selectedBackground = BackgroundPicker.SelectedItem?.ToString() ?? "Nature";
-        UpdatePresentation();
-    }
-
-    private void OnBackgroundColorChanged(object? sender, EventArgs e)
-    {
-        _selectedColor = BackgroundColorPicker.SelectedItem?.ToString() switch
-        {
-            "Dark" => "#0F172A",
-            "Sepia" => "#4B2E2B",
-            "Blue" => "#083344",
-            "Neutral" => "#1F2937",
-            _ => "#F8FAFC"
-        };
-        UpdatePresentation();
-    }
-
-    private void OnMotionToggled(object? sender, CheckedChangedEventArgs e)
-    {
-        _motionEnabled = e.Value;
-        UpdatePresentation();
-    }
-
-    private void OnPlayPauseClicked(object? sender, EventArgs e)
-    {
-        if (PlayButton.Text.Contains("Pause"))
-        {
-            PlayButton.Text = "▶ Play";
-            return;
-        }
-
-        PlayButton.Text = "⏸ Pause";
-        AudioTimeLabel.Text = "0:18";
-        AudioProgress.Value = 18;
-    }
-
-    private void OnStopAudioClicked(object? sender, EventArgs e)
-    {
-        PlayButton.Text = "▶ Play";
-        AudioProgress.Value = 0;
-        AudioTimeLabel.Text = "0:00";
     }
 
     private async void OnPostBibleClicked(object? sender, EventArgs e)
     {
-        var btn = sender as Button;
+        if (_verses.Count == 0) return;
         try
         {
-            btn.IsEnabled = false;
-            var selectedBook = BookPicker.SelectedItem as string;
-            var chapter = (int?)ChapterPicker.SelectedItem ?? 1;
-            var verse = (int?)VersePicker.SelectedItem ?? 1;
-            if (string.IsNullOrWhiteSpace(selectedBook))
-            {
-                await DisplayAlert("Error", "Please select a book.", "OK");
-                return;
-            }
-            var bs = (CCT_USCF.Services.BibleService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.BibleService))!;
-            var abbrev = bs.GetAbbreviationForBook(selectedBook);
-            if (string.IsNullOrWhiteSpace(abbrev))
-            {
-                await DisplayAlert("Error", "Unable to determine book code.", "OK");
-                return;
-            }
-
-            var passageText = await bs.GetVerseAsync(selectedBook, chapter, verse);
-            var confirm = await DisplayAlert("Confirm Post", $"Post {selectedBook} {chapter}:{verse}\n\n{passageText}", "Post", "Cancel");
-            if (!confirm) return;
-
-            var community = (CCT_USCF.Services.CommunityService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.CommunityService))!;
-            var dto = new CCT_USCF.Models.BiblePostCreateDto { BookId = abbrev, ChapterNumber = chapter, VerseStart = verse, VerseEnd = verse };
-            var created = await community.CreateBiblePostAsync(dto);
-            if (created != null)
-            {
-                await DisplayAlert("Success", "Bible reading posted.", "OK");
-            }
-            else
-            {
-                await DisplayAlert("Error", "Failed to post bible reading.", "OK");
-            }
+            var community = MauiProgram.Services.GetRequiredService<CommunityService>();
+            var created = await community.CreateBiblePostAsync(new Models.BiblePostCreateDto { BookId = _bible.GetAbbreviationForBook(_book, _language), ChapterNumber = _chapter, VerseStart = _bible.Verse, VerseEnd = _bible.Verse });
+            if (created is not null) await DisplayAlert("Success", "Bible reading posted.", "OK");
         }
-        catch (Exception ex)
-        {
-            await DisplayAlert("Error", ex.Message, "OK");
-        }
-        finally
-        {
-            if (btn != null) btn.IsEnabled = true;
-        }
+        catch (Exception ex) { await DisplayAlert("Error", ex.Message, "OK"); }
     }
 
-    private void OnAudioProgressChanged(object? sender, ValueChangedEventArgs e)
+    public sealed record VerseRow(int Number, string Text, double FontSize, string? Highlight)
     {
-        var totalSeconds = (int)AudioProgress.Maximum;
-        var currentSeconds = (int)e.NewValue;
-        AudioTimeLabel.Text = TimeSpan.FromSeconds(currentSeconds).ToString(@"m\:ss");
-        AudioDurationLabel.Text = TimeSpan.FromSeconds(totalSeconds).ToString(@"m\:ss");
+        public Color Background => Highlight switch { "Yellow" => Color.FromArgb("#FFF4B8"), "Green" => Color.FromArgb("#DDF4E5"), "Blue" => Color.FromArgb("#DDEBFF"), _ => Colors.Transparent };
+    }
+    public sealed record SearchRow(BibleSearchResult Result)
+    {
+        public string Book => Result.Book; public int Chapter => Result.Chapter; public string Text => Result.Text;
+        public string Reference => $"{Result.Book} {Result.Chapter}:{Result.Verse}";
     }
 }

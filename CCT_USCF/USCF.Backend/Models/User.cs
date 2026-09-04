@@ -36,6 +36,9 @@ public class User
     public int? RegionId { get; set; }
     public int? DistrictId { get; set; }
     public int? BranchId { get; set; }
+    public string? LeadershipLevel { get; set; }
+    public string? LeadershipDuty { get; set; }
+    public string? FcmToken { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.FullCommunityPage" Title="Full Community" BackgroundColor="#F8FAFC">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+            <Label Text="🌍 Full Community" FontSize="28" FontAttributes="Bold" TextColor="#167A4A" />
+            <Label Text="One national feed for the whole CCT community." TextColor="#64748B" />
+            <Border BackgroundColor="White" Padding="14" StrokeShape="RoundRectangle 16">
+                <VerticalStackLayout Spacing="8">
+                    <Entry x:Name="TitleEntry" Placeholder="Title (optional)" />
+                    <Editor x:Name="ContentEditor" Placeholder="Share encouragement, testimony, or an update..." HeightRequest="110" />
+                    <Entry x:Name="LinkEntry" Placeholder="Link (optional)" Keyboard="Url" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Image" Clicked="OnImageClicked" />
+                        <Button Text="Video" Clicked="OnVideoClicked" />
+                        <Button Text="Audio" Clicked="OnAudioClicked" />
+                    </HorizontalStackLayout>
+                    <Label x:Name="AttachmentLabel" Text="No media selected" TextColor="#64748B" />
+                    <Entry x:Name="AudioDurationEntry" Placeholder="Audio duration in seconds (required for audio)" Keyboard="Numeric" IsVisible="False" />
+                    <Button x:Name="PostButton" Text="POST NATIONALLY" Clicked="OnPostClicked" />
+                </VerticalStackLayout>
+            </Border>
+            <Label Text="Latest national posts" FontSize="22" FontAttributes="Bold" TextColor="#123B2A" />
+            <VerticalStackLayout x:Name="FeedStack" Spacing="10" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

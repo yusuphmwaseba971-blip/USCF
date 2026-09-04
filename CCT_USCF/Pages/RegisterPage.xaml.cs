@@ -185,86 +185,11 @@ public partial class RegisterPage : ContentPage
         System.Diagnostics.Debug.WriteLine(
             $"[REGISTER] LocationSection.IsVisible={LocationSection.IsVisible}, hasLevelSelected={hasLevelSelected}");
 
-        // Keep the USCF location controls visible for Leader and Pastor whenever the
-        // selected leadership level actually needs a location. The parent section stays
-        // visible while the child pickers are toggled based on the current hierarchy.
-        switch (LevelPicker.SelectedIndex)
-        {
-            // -------------------------------------------------
-            // NATIONAL
-            // -------------------------------------------------
-
-            case 0:
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"[REGISTER] National level: hiding Region/District/Branch");
-
-                RegionPicker.IsVisible = false;
-                DistrictPicker.IsVisible = false;
-                BranchPicker.IsVisible = false;
-
-                break;
-
-            // -------------------------------------------------
-            // REGIONAL
-            // -------------------------------------------------
-
-            case 1:
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"[REGISTER] Regional level: showing Region only");
-
-                RegionPicker.IsVisible = true;
-                DistrictPicker.IsVisible = false;
-                BranchPicker.IsVisible = false;
-
-                break;
-
-            // -------------------------------------------------
-            // DISTRICT
-            // -------------------------------------------------
-
-            case 2:
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"[REGISTER] District level: showing Region, District conditional on region selection");
-
-                RegionPicker.IsVisible = true;
-                DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
-                BranchPicker.IsVisible = false;
-
-                break;
-
-            // -------------------------------------------------
-            // BRANCH / LOCAL
-            // -------------------------------------------------
-
-            case 3:
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"[REGISTER] Branch/Local level: showing Region, District, Branch conditional on selections");
-
-                RegionPicker.IsVisible = true;
-                DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
-                BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
-
-                break;
-
-            // -------------------------------------------------
-            // NO LEVEL SELECTED
-            // -------------------------------------------------
-
-            default:
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"[REGISTER] No level selected (default case): showing Region, District/Branch conditional");
-
-                RegionPicker.IsVisible = true;
-                DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
-                BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
-
-                break;
-        }
+        // Every scoped account uses the same authoritative hierarchy. Leadership
+        // metadata changes authorization, not how locations are selected.
+        RegionPicker.IsVisible = true;
+        DistrictPicker.IsVisible = RegionPicker.SelectedItem != null;
+        BranchPicker.IsVisible = DistrictPicker.SelectedItem != null;
 
         System.Diagnostics.Debug.WriteLine(
             $"[REGISTER] UpdateLocationFields end: LocationSection.IsVisible={LocationSection.IsVisible}, RegionPicker.IsVisible={RegionPicker.IsVisible}, DistrictPicker.IsVisible={DistrictPicker.IsVisible}, BranchPicker.IsVisible={BranchPicker.IsVisible}");
@@ -445,7 +370,7 @@ public partial class RegisterPage : ContentPage
         // -----------------------------------------------------
 
         if (RolePicker.SelectedIndex != 0 &&
-            LevelPicker.SelectedIndex <= 1)
+            LevelPicker.SelectedIndex == 0)
         {
             DistrictPicker.IsVisible = false;
             BranchPicker.IsVisible = false;
@@ -562,45 +487,9 @@ public partial class RegisterPage : ContentPage
 
         _branches.Clear();
 
-        // -----------------------------------------------------
-        // MEMBER
-        //
-        // Members need branch/local fellowship.
-        // -----------------------------------------------------
-
-        if (RolePicker.SelectedIndex == 0)
-        {
-            await LoadBranchesAsync(
-                selectedDistrict.Id);
-
-            return;
-        }
-
-        // -----------------------------------------------------
-        // DISTRICT LEADER
-        //
-        // District level does not require branch.
-        // -----------------------------------------------------
-
-        if (LevelPicker.SelectedIndex == 2)
-        {
-            BranchPicker.IsVisible = false;
-            return;
-        }
-
-        // -----------------------------------------------------
-        // BRANCH LEADER
-        // -----------------------------------------------------
-
-        if (LevelPicker.SelectedIndex == 3)
-        {
-            await LoadBranchesAsync(
-                selectedDistrict.Id);
-
-            return;
-        }
-
-        BranchPicker.IsVisible = false;
+        // Members and all location-scoped leadership levels use the same branch
+        // list for the selected district.
+        await LoadBranchesAsync(selectedDistrict.Id);
     }
 
     // =========================================================
@@ -852,8 +741,7 @@ public partial class RegisterPage : ContentPage
                 return;
             }
 
-            if (LevelPicker.SelectedIndex >= 2 &&
-                DistrictPicker.SelectedItem is not AuthLocation)
+            if (DistrictPicker.SelectedItem is not AuthLocation)
             {
                 ShowError(
                     "Please select your USCF Location before continuing.");
@@ -861,8 +749,7 @@ public partial class RegisterPage : ContentPage
                 return;
             }
 
-            if (LevelPicker.SelectedIndex == 3 &&
-                BranchPicker.SelectedItem is not AuthLocation)
+            if (BranchPicker.SelectedItem is not AuthLocation)
             {
                 ShowError(
                     "Please select your USCF Location before continuing.");

@@ -55,6 +55,7 @@ namespace CCT_USCF.Services
         {
             [PrimaryKey]
             public string MessageId { get; set; } = string.Empty;
+            public string ClientMessageId { get; set; } = string.Empty;
 
             [Indexed]
 public string CommunityId { get; set; } = string.Empty;
@@ -242,7 +243,11 @@ var migrations = new Dictionary<string, string>
 
     ["DistrictId"] =
         "ALTER TABLE community_message_cache " +
-        "ADD COLUMN DistrictId TEXT NOT NULL DEFAULT '';"
+        "ADD COLUMN DistrictId TEXT NOT NULL DEFAULT '';",
+
+    ["ClientMessageId"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN ClientMessageId TEXT NOT NULL DEFAULT '';"
 };
 
                 foreach (var migration in migrations)
@@ -288,6 +293,8 @@ var migrations = new Dictionary<string, string>
 
                 MessageId =
                     cached.MessageId,
+
+                ClientMessageId = cached.ClientMessageId,
 
                 SenderUid =
                     cached.SenderUid,
@@ -392,6 +399,10 @@ MessageType =
             {
                 MessageId =
                     messageId?.Trim()
+                    ?? string.Empty,
+
+                ClientMessageId =
+                    message.ClientMessageId?.Trim()
                     ?? string.Empty,
 CommunityId =
     communityId,
@@ -1070,7 +1081,8 @@ SenderUid =
                 string? thumbnailUrl = null,
                 string? fileName = null,
                 long fileSize = 0,
-                double duration = 0)
+                double duration = 0,
+                string? clientMessageId = null)
         {
             if (string.IsNullOrWhiteSpace(communityId))
             {
@@ -1170,68 +1182,6 @@ SenderUid =
             var createdAt =
                 DateTime.UtcNow;
 
-            var payload =
-                new Dictionary<string, object?>
-                {
-                    ["message_id"] =
-                        messageId,
-
-                    ["sender_uid"] =
-                        firebaseUid,
-
-                    ["sender_name"] =
-                        senderName,
-
-                    ["content"] =
-                        trimmed,
-
-                    ["community_id"] =
-                        normalizedCommunityId,
-
-                    ["message_type"] =
-                        normalizedMessageType,
-
-                    ["media_url"] =
-                        mediaUrl?.Trim()
-                        ?? string.Empty,
-
-                    ["thumbnail_url"] =
-                        thumbnailUrl?.Trim()
-                        ?? string.Empty,
-
-                    ["file_name"] =
-                        fileName?.Trim()
-                        ?? string.Empty,
-
-                    ["file_size"] =
-                        Math.Max(
-                            0,
-                            fileSize),
-                    ["organizational_level"] =
-    organizationalLevel?.Trim()
-    ?? string.Empty,
-
-["branch_id"] =
-    branchId?.Trim()
-    ?? string.Empty,
-
-["region_id"] =
-    regionId?.Trim()
-    ?? string.Empty,
-
-["district_id"] =
-    districtId?.Trim()
-    ?? string.Empty,
-
-                    ["duration"] =
-                        Math.Max(
-                            0,
-                            duration),
-
-                    ["created_at"] =
-                        createdAt.ToString("O")
-                };
-
             try
             {
                 System.Diagnostics.Debug.WriteLine(
@@ -1279,27 +1229,38 @@ SenderUid =
                 System.Diagnostics.Debug.WriteLine(
                     "================================================");
 
-                var document =
-                    await _appwriteService.Databases.CreateDocument(
-                        databaseId:
-                            AppwriteService.DatabaseId,
-
-                        collectionId:
-                            CommunityMessagesCollectionId,
-
-                        documentId:
-                            messageId,
-
-                        data:
-                            payload,
-
-                        permissions:
-                            null);
+                var createdMessage =
+                    await SendAuthorizedCommunityApiAsync<CommunityMessage>(
+                        HttpMethod.Post,
+                        "api/community/messages/group",
+                        new
+                        {
+                            communityId = normalizedCommunityId,
+                            clientMessageId = clientMessageId?.Trim(),
+                            organizationalLevel = organizationalLevel ?? "Branch",
+                            branchId = ParseOptionalInt(branchId),
+                            regionId = ParseOptionalInt(regionId),
+                            districtId = ParseOptionalInt(districtId),
+                            content = trimmed,
+                            messageType = normalizedMessageType,
+                            mediaUrl = mediaUrl?.Trim(),
+                            thumbnailUrl = thumbnailUrl?.Trim(),
+                            fileName = fileName?.Trim(),
+                            fileSize = Math.Max(0, fileSize),
+                            duration = Math.Max(0, duration)
+                        });
 
                 System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_COMMUNITY_MESSAGE] CREATE SUCCESS");
 
-                return MapCommunityDocument(document);
+                if (createdMessage == null ||
+                    string.IsNullOrWhiteSpace(createdMessage.MessageId))
+                {
+                    throw new InvalidOperationException(
+                        "Community API returned an invalid created message.");
+                }
+
+                return createdMessage;
             }
             catch (Exception ex)
             {
@@ -1324,13 +1285,26 @@ SenderUid =
                 System.Diagnostics.Debug.WriteLine(
                     "================================================");
 
-                throw new InvalidOperationException(
-                    "Unable to send message.",
-                    ex);
+                throw;
             }
         }
 
         // ============================================================
+        public Task<BranchInvitationResponse> CreateBranchInvitationAsync(int branchId)
+        {
+            return SendAuthorizedCommunityApiAsync<BranchInvitationResponse>(
+                HttpMethod.Post,
+                "api/community/branch-invitations",
+                new { branchId });
+        }
+
+        public sealed class BranchInvitationResponse
+        {
+            public string Url { get; set; } = string.Empty;
+            public string BranchName { get; set; } = string.Empty;
+            public DateTime ExpiresAtUtc { get; set; }
+        }
+
         // UPDATE COMMUNITY MESSAGE
         //
         // IMPORTANT:
@@ -1640,60 +1614,22 @@ SenderUid =
                 System.Diagnostics.Debug.WriteLine(
                     $"newerThan={newerThan:O}");
 
-                var queries =
-                    new List<string>
-                    {
-                        global::Appwrite.Query.Equal(
-                            "community_id",
-                            normalizedCommunityId)
-                    };
-
-                // ----------------------------------------------------
-                // INCREMENTAL LOAD
-                // ----------------------------------------------------
-
-                if (newerThan.HasValue)
-                {
-                    var normalizedTimestamp =
-                        EnsureUtc(newerThan.Value)
-                            .ToString("O");
-
-                    queries.Add(
-                        global::Appwrite.Query.GreaterThan(
-                            "created_at",
-                            normalizedTimestamp));
-
-                    queries.Add(
-                        global::Appwrite.Query.OrderAsc(
-                            "created_at"));
-                }
-                else
-                {
-                    // ------------------------------------------------
-                    // INITIAL LOAD
-                    // ------------------------------------------------
-
-                    queries.Add(
-                        global::Appwrite.Query.OrderDesc(
-                            "created_at"));
-                }
-
-                queries.Add(
-                    global::Appwrite.Query.Limit(
-                        safeLimit));
-
-                var result =
-                    await _appwriteService.Databases.ListDocuments(
-                        AppwriteService.DatabaseId,
-                        CommunityMessagesCollectionId,
-                        queries,
-                        null,
-                        null,
-                        safeLimit);
+                var requestUri =
+                    "api/community/messages/group" +
+                    $"?communityId={Uri.EscapeDataString(normalizedCommunityId)}" +
+                    $"&organizationalLevel={Uri.EscapeDataString(organizationalLevel ?? "Branch")}" +
+                    BuildOptionalQuery("branchId", branchId) +
+                    BuildOptionalQuery("regionId", regionId) +
+                    BuildOptionalQuery("districtId", districtId) +
+                    $"&limit={safeLimit}";
 
                 var messages =
-                    result.Documents
-                        .Select(MapCommunityDocument)
+                    await SendAuthorizedCommunityApiAsync<List<CommunityMessage>>(
+                        HttpMethod.Get,
+                        requestUri);
+
+                messages =
+                    messages
                         .Where(message =>
                             string.Equals(
                                 message.CommunityId,
@@ -1737,9 +1673,7 @@ SenderUid =
                 System.Diagnostics.Debug.WriteLine(
                     "================================================");
 
-                throw new InvalidOperationException(
-                    "Unable to load community messages.",
-                    ex);
+                throw;
             }
         }
 
@@ -1780,6 +1714,10 @@ SenderUid =
                 response.StatusCode ==
                     System.Net.HttpStatusCode.Forbidden)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[APPWRITE_COMMUNITY] API authorization failed: " +
+                    $"status={(int)response.StatusCode}, uri={requestUri}");
+
                 throw new UnauthorizedAccessException(
                     "You are not authorized for this community group.");
             }
@@ -1788,6 +1726,11 @@ SenderUid =
             {
                 var details =
                     await response.Content.ReadAsStringAsync();
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[APPWRITE_COMMUNITY] API request failed: " +
+                    $"status={(int)response.StatusCode}, uri={requestUri}, " +
+                    $"response={details}");
 
                 throw new InvalidOperationException(
                     $"Community API request failed with status " +
@@ -1838,6 +1781,20 @@ SenderUid =
             return result
                 ?? throw new InvalidOperationException(
                     "Community API returned an empty response.");
+        }
+
+        private static int? ParseOptionalInt(string? value)
+        {
+            return int.TryParse(value, out var parsed) && parsed > 0
+                ? parsed
+                : null;
+        }
+
+        private static string BuildOptionalQuery(string name, string? value)
+        {
+            return int.TryParse(value, out var parsed) && parsed > 0
+                ? $"&{name}={parsed}"
+                : string.Empty;
         }
 
         // ============================================================
@@ -3514,6 +3471,77 @@ ConversationId =
             public int VerseStart { get; set; }
 
             public int VerseEnd { get; set; }
+        }
+
+        public async Task<List<NationalCommunityPost>> GetNationalPostsAsync(int limit = 20)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/community/national?limit={Math.Clamp(limit, 1, 50)}");
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<NationalCommunityPost>>() ?? new();
+        }
+
+        public async Task<NationalCommunityPost> CreateNationalPostAsync(NationalCommunityCreateRequest requestDto)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/community/national")
+            {
+                Content = JsonContent.Create(requestDto)
+            };
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(body);
+            return JsonSerializer.Deserialize<NationalCommunityPost>(body) ?? throw new InvalidOperationException("The server returned no post.");
+        }
+
+        public async Task<(bool Liked, int Count)> ToggleNationalLikeAsync(Guid postId, bool liked)
+        {
+            using var request = new HttpRequestMessage(liked ? HttpMethod.Delete : HttpMethod.Post, $"api/community/national/{postId}/like");
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var result = await response.Content.ReadFromJsonAsync<LikeResponse>() ?? new LikeResponse();
+            return (result.Liked, result.Count);
+        }
+
+        public async Task<List<NationalCommunityComment>> GetNationalCommentsAsync(Guid postId)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/community/national/{postId}/comments");
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<NationalCommunityComment>>() ?? new();
+        }
+
+        public async Task AddNationalCommentAsync(Guid postId, string content)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/community/national/{postId}/comments")
+            { Content = JsonContent.Create(new { content }) };
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task<List<NationalCommunityEvent>> GetNationalEventsAsync()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/community/national/events");
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<NationalCommunityEvent>>() ?? new();
+        }
+
+        private async Task AddFirebaseAuthorizationAsync(HttpRequestMessage request)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _authService.GetCurrentFirebaseIdTokenAsync());
+        }
+
+        private sealed class LikeResponse
+        {
+            public bool Liked { get; set; }
+            public int Count { get; set; }
         }
     }
 }

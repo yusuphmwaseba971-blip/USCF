@@ -62,7 +62,8 @@
                 Text="🙏 Prayer Requests" />
 
             <Button
-                Text="📢 Church Announcements" />
+                Text="📢 Church Announcements"
+                Clicked="OnChurchAnnouncementsClicked" />
 
             <Button
                 Text="👥 Church Groups"

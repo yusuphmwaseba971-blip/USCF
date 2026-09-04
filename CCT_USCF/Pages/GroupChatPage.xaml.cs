@@ -1764,11 +1764,11 @@ public partial class GroupChatPage : ContentPage
             }
 
             var safeFileName =
-                Path.GetFileName(
+                System.IO.Path.GetFileName(
                     file.FileName);
 
             var localPath =
-                Path.Combine(
+                System.IO.Path.Combine(
                     FileSystem.CacheDirectory,
                     $"{Guid.NewGuid():N}_{safeFileName}");
 

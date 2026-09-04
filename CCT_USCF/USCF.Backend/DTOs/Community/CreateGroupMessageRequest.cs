@@ -2,6 +2,7 @@ namespace USCF.Backend.DTOs.Community;
 
 public sealed class CreateGroupMessageRequest
 {
+    public string? ClientMessageId { get; set; }
     public string CommunityId { get; set; } = string.Empty;
 
     public string OrganizationalLevel { get; set; } = string.Empty;
@@ -15,4 +16,14 @@ public sealed class CreateGroupMessageRequest
     public string Content { get; set; } = string.Empty;
 
     public string MessageType { get; set; } = "text";
+
+    public string? MediaUrl { get; set; }
+
+    public string? ThumbnailUrl { get; set; }
+
+    public string? FileName { get; set; }
+
+    public long FileSize { get; set; }
+
+    public double Duration { get; set; }
 }

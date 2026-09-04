@@ -1,13 +1,19 @@
+using CCT_USCF.Services;
+
 namespace CCT_USCF.Pages;
 
 public partial class SettingsPage : ContentPage
 {
     private readonly Services.AuthService _auth;
+    private readonly AppAppearanceService _appearance;
 
     public SettingsPage()
     {
         InitializeComponent();
         _auth = LoginRegisterHelpers.GetAuthService();
+        _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
+        LanguagePicker.ItemsSource = AppAppearanceService.Languages.Keys.ToList();
+        BackgroundPicker.ItemsSource = AppAppearanceService.Backgrounds.Keys.Concat(["Custom"]).ToList();
     }
 
     protected override void OnAppearing()
@@ -32,11 +38,34 @@ public partial class SettingsPage : ContentPage
             UsernameEntry.Text = user.Username;
             EmailEntry.Text = user.Email;
             PhoneNumberEntry.Text = user.PhoneNumber;
+            LanguagePicker.SelectedItem = AppAppearanceService.Languages.FirstOrDefault(x => x.Value == _appearance.Language).Key;
+            BackgroundPicker.SelectedItem = _appearance.BackgroundName;
+            CustomColorEntry.Text = _appearance.CustomColor;
+            BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
         }
         catch (Exception ex)
         {
             await DisplayAlert("Error", ex.Message, "OK");
         }
+    }
+
+    private async void OnAppearanceClicked(object sender, EventArgs e)
+    {
+        if (LanguagePicker.SelectedItem is string language &&
+            AppAppearanceService.Languages.TryGetValue(language, out var code))
+            _appearance.SetLanguage(code);
+        if (BackgroundPicker.SelectedItem is string background)
+            _appearance.SetBackground(background);
+        if (!string.IsNullOrWhiteSpace(CustomColorEntry.Text) &&
+            !Color.TryParse(CustomColorEntry.Text.Trim(), out _))
+        {
+            await DisplayAlert("Appearance", "Use a valid color such as #336699.", "OK");
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(CustomColorEntry.Text))
+            _appearance.SetCustomColor(CustomColorEntry.Text.Trim());
+        BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+        await DisplayAlert("Appearance", "Appearance settings saved.", "OK");
     }
 
     private async void OnSaveClicked(object sender, EventArgs e)

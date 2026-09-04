@@ -22,12 +22,15 @@
             <VerticalStackLayout Spacing="12">
 
                 <!-- BRAND -->
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Button Grid.Column="0" Text="⋮" FontSize="28" WidthRequest="44"
+                            HeightRequest="44" Padding="0" BackgroundColor="Transparent"
+                            SemanticProperties.Description="Settings" Clicked="OpenSettings" />
 
-                    <VerticalStackLayout Spacing="2">
+                    <VerticalStackLayout Grid.Column="1" Spacing="2">
 
                         <Label
-                            Text="CCT BY USCF"
+                            Text="USCCF"
                             FontSize="23"
                             FontAttributes="Bold"
                             TextColor="#123B73" />
@@ -39,20 +42,21 @@
 
                     </VerticalStackLayout>
 
-                    <Border
-                        Grid.Column="1"
-                        WidthRequest="42"
-                        HeightRequest="42"
-                        BackgroundColor="#EEF4FC"
-                        StrokeThickness="0"
-                        StrokeShape="RoundRectangle 21">
-
-                        <Label
-                            Text="🔔"
-                            FontSize="19"
-                            HorizontalOptions="Center"
-                            VerticalOptions="Center" />
-
+                    <Border Grid.Column="2" WidthRequest="42" HeightRequest="42"
+                            BackgroundColor="#EEF4FC" StrokeThickness="0"
+                            StrokeShape="RoundRectangle 21">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OpenNotifications" />
+                        </Border.GestureRecognizers>
+                        <Grid>
+                            <Label Text="🔔" FontSize="19" HorizontalOptions="Center" VerticalOptions="Center" />
+                            <Border x:Name="UnreadBadge" IsVisible="False" BackgroundColor="#DC2626"
+                                    StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                    WidthRequest="20" HeightRequest="20" HorizontalOptions="End" VerticalOptions="Start">
+                                <Label x:Name="UnreadCountLabel" TextColor="White" FontSize="11"
+                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Border>
+                        </Grid>
                     </Border>
 
                 </Grid>
@@ -102,7 +106,6 @@
                             Stroke="#F4D59A"
                             StrokeThickness="1"
                             StrokeShape="RoundRectangle 17">
-
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OpenBible" />
                             </Border.GestureRecognizers>
@@ -206,6 +209,9 @@
                             BackgroundColor="#FFF1F2"
                             StrokeThickness="0"
                             StrokeShape="RoundRectangle 17">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OpenNotifications" />
+                            </Border.GestureRecognizers>
 
                             <VerticalStackLayout Spacing="5">
 
@@ -306,7 +312,7 @@
                     <VerticalStackLayout Spacing="6">
 
                         <Label
-                            Text="Welcome to CCT by USCF 👋"
+                            Text="Welcome to USCCF 👋"
                             FontSize="24"
                             FontAttributes="Bold"
                             TextColor="White" />
@@ -372,6 +378,11 @@
                 <VerticalStackLayout Spacing="9">
                     <Label Text="Bible Readings" FontSize="21" FontAttributes="Bold" TextColor="#172033" />
                     <StackLayout x:Name="BibleFeedStack" Spacing="12" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="9">
+                    <Label Text="🌍 Full Community" FontSize="21" FontAttributes="Bold" TextColor="#167A4A" />
+                    <StackLayout x:Name="NationalFeedStack" Spacing="12" />
                 </VerticalStackLayout>
 
 

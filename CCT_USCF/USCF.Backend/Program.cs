@@ -17,6 +17,7 @@ builder.Services.AddScoped<CctOrganizationAuthorizationService>();
 builder.Services.AddScoped<AppwriteTeamResolverService>();
 builder.Services.AddScoped<AppwriteMembershipSynchronizationService>();
 builder.Services.AddScoped<GroupMessageService>();
+builder.Services.AddScoped<BranchInvitationService>();
 builder.Services.AddSingleton<IAppwriteCommunityGateway, AppwriteCommunityGateway>();
 
 builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.SectionName));
@@ -130,6 +131,8 @@ using (var scope = app.Services.CreateScope())
         await AppwriteCommunitySchemaInitializer.EnsureCreatedAsync(
             db,
             loggerFactory.CreateLogger("AppwriteCommunitySchema"));
+        await USCF.Backend.Services.ChurchAnnouncementSchemaInitializer.EnsureCreatedAsync(db);
+        await USCF.Backend.Services.BranchInvitationSchemaInitializer.EnsureCreatedAsync(db);
     }
     catch (Exception ex)
     {

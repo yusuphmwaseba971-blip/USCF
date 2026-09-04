@@ -113,6 +113,7 @@ public sealed class AppwriteCommunityGateway : IAppwriteCommunityGateway
         var data = new Dictionary<string, object?>
         {
             ["message_id"] = message.MessageId,
+            ["client_message_id"] = message.ClientMessageId,
             ["sender_id"] = message.SenderAppwriteUserId,
             ["sender_uid"] = message.SenderFirebaseUid,
             ["sender_name"] = message.SenderName,
@@ -124,6 +125,11 @@ public sealed class AppwriteCommunityGateway : IAppwriteCommunityGateway
             ["organization_id"] = message.OrganizationId.ToString(),
             ["appwrite_team_id"] = message.AppwriteTeamId,
             ["message_type"] = message.MessageType,
+            ["media_url"] = message.MediaUrl,
+            ["thumbnail_url"] = message.ThumbnailUrl,
+            ["file_name"] = message.FileName,
+            ["file_size"] = message.FileSize,
+            ["duration"] = message.Duration,
             ["status"] = "sent",
             ["created_at"] = message.CreatedAtUtc.ToString("O")
         };
@@ -229,6 +235,7 @@ public sealed class AppwriteCommunityGateway : IAppwriteCommunityGateway
         {
             Id = document.Id,
             MessageId = TryGetString(data, "message_id", document.Id) ?? document.Id,
+            ClientMessageId = TryGetString(data, "client_message_id", string.Empty) ?? string.Empty,
             SenderAppwriteUserId = TryGetString(data, "sender_id", string.Empty) ?? string.Empty,
             SenderFirebaseUid = TryGetString(data, "sender_uid", string.Empty) ?? string.Empty,
             SenderName = TryGetString(data, "sender_name", "Community member") ?? "Community member",
@@ -238,6 +245,11 @@ public sealed class AppwriteCommunityGateway : IAppwriteCommunityGateway
             AppwriteTeamId = TryGetString(data, "appwrite_team_id", string.Empty) ?? string.Empty,
             Content = TryGetString(data, "content", string.Empty) ?? string.Empty,
             MessageType = TryGetString(data, "message_type", "text") ?? "text",
+            MediaUrl = TryGetString(data, "media_url", string.Empty) ?? string.Empty,
+            ThumbnailUrl = TryGetString(data, "thumbnail_url", string.Empty) ?? string.Empty,
+            FileName = TryGetString(data, "file_name", string.Empty) ?? string.Empty,
+            FileSize = TryGetLong(data, "file_size"),
+            Duration = TryGetDouble(data, "duration"),
             CreatedAtUtc = DateTime.TryParse(TryGetString(data, "created_at", document.CreatedAt), out var createdAt)
                 ? createdAt
                 : DateTime.UtcNow,
@@ -253,6 +265,20 @@ public sealed class AppwriteCommunityGateway : IAppwriteCommunityGateway
         return data.TryGetValue(key, out var value) && value != null
             ? Convert.ToString(value)
             : fallback;
+    }
+
+    private static long TryGetLong(Dictionary<string, object?> data, string key)
+    {
+        return data.TryGetValue(key, out var value) && long.TryParse(Convert.ToString(value), out var result)
+            ? result
+            : 0;
+    }
+
+    private static double TryGetDouble(Dictionary<string, object?> data, string key)
+    {
+        return data.TryGetValue(key, out var value) && double.TryParse(Convert.ToString(value), out var result)
+            ? result
+            : 0;
     }
 
     private static string? TryGetNestedString(JsonElement element, params string[] path)

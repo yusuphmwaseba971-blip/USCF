@@ -189,6 +189,8 @@ builder.Services.AddSingleton<
 // Bible
 builder.Services.AddSingleton<
     CCT_USCF.Services.BibleService>();
+builder.Services.AddSingleton<ChurchAnnouncementService>();
+builder.Services.AddSingleton<AppAppearanceService>();
         // =====================================================
         // FIREBASE DATA SEEDERS
         // =====================================================
@@ -252,4 +254,3 @@ builder.Services.AddSingleton<
            isStorageEnabled: false);
    }
 }
-

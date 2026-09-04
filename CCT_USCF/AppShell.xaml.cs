@@ -15,12 +15,15 @@ public partial class AppShell : Shell
         // =====================================================
 
         Routing.RegisterRoute(nameof(BiblePage), typeof(BiblePage));
+        Routing.RegisterRoute(nameof(FullCommunityPage), typeof(FullCommunityPage));
         Routing.RegisterRoute(nameof(PrayerPage), typeof(PrayerPage));
         Routing.RegisterRoute(nameof(CommunityPage), typeof(CommunityPage));
         Routing.RegisterRoute(nameof(ProfilePage), typeof(ProfilePage));
         Routing.RegisterRoute(nameof(SermonsPage), typeof(SermonsPage));
         Routing.RegisterRoute(nameof(EventsPage), typeof(EventsPage));
         Routing.RegisterRoute(nameof(GivingPage), typeof(GivingPage));
+        Routing.RegisterRoute(nameof(ChurchAnnouncementPage), typeof(ChurchAnnouncementPage));
+        Routing.RegisterRoute(nameof(AnnouncementActivityPage), typeof(AnnouncementActivityPage));
 
         Routing.RegisterRoute(
             nameof(SettingsPage),

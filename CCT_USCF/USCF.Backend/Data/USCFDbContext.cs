@@ -16,6 +16,7 @@ public class USCFDbContext : DbContext
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<AppwriteTeamMapping> AppwriteTeamMappings => Set<AppwriteTeamMapping>();
     public DbSet<AppwriteTeamMembership> AppwriteTeamMemberships => Set<AppwriteTeamMembership>();
+    public DbSet<BranchInvitation> BranchInvitations => Set<BranchInvitation>();
 
     // Community
     public DbSet<Post> Posts => Set<Post>();
@@ -24,6 +25,12 @@ public class USCFDbContext : DbContext
     public DbSet<PrayerRequest> PrayerRequests => Set<PrayerRequest>();
     public DbSet<USCF.Backend.Models.BiblePost> BiblePosts => Set<USCF.Backend.Models.BiblePost>();
     public DbSet<FirebaseAppwriteIdentityMapping> FirebaseAppwriteIdentityMappings => Set<FirebaseAppwriteIdentityMapping>();
+    public DbSet<NationalCommunityPost> NationalCommunityPosts => Set<NationalCommunityPost>();
+    public DbSet<NationalCommunityLike> NationalCommunityLikes => Set<NationalCommunityLike>();
+    public DbSet<NationalCommunityComment> NationalCommunityComments => Set<NationalCommunityComment>();
+    public DbSet<NationalCommunityEvent> NationalCommunityEvents => Set<NationalCommunityEvent>();
+    public DbSet<ChurchAnnouncement> ChurchAnnouncements => Set<ChurchAnnouncement>();
+    public DbSet<ChurchNotification> ChurchNotifications => Set<ChurchNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -96,5 +103,26 @@ public class USCFDbContext : DbContext
         modelBuilder.Entity<AppwriteTeamMembership>()
             .HasIndex(membership => new { membership.TeamMappingId, membership.AppwriteUserId })
             .IsUnique();
+        modelBuilder.Entity<BranchInvitation>()
+            .HasIndex(invitation => invitation.TokenHash)
+            .IsUnique();
+
+        modelBuilder.Entity<NationalCommunityPost>()
+            .HasMany(p => p.Likes).WithOne().HasForeignKey(l => l.PostId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<NationalCommunityPost>()
+            .HasMany(p => p.Comments).WithOne().HasForeignKey(c => c.PostId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<NationalCommunityLike>()
+            .HasIndex(l => new { l.PostId, l.UserUid }).IsUnique();
+        modelBuilder.Entity<NationalCommunityPost>()
+            .HasIndex(p => new { p.Visibility, p.CreatedAtUtc });
+        modelBuilder.Entity<NationalCommunityEvent>()
+            .HasIndex(e => new { e.RecipientUid, e.CreatedAtUtc });
+        modelBuilder.Entity<ChurchAnnouncement>()
+            .HasMany(x => x.Notifications).WithOne().HasForeignKey(x => x.AnnouncementId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ChurchNotification>()
+            .HasIndex(x => new { x.AnnouncementId, x.RecipientUid }).IsUnique();
+        modelBuilder.Entity<ChurchNotification>()
+            .HasIndex(x => new { x.RecipientUid, x.CreatedAtUtc });
     }
 }

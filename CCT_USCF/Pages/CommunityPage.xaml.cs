@@ -30,6 +30,12 @@ public partial class CommunityPage : ContentPage
             destination.Equals("Cancel", StringComparison.OrdinalIgnoreCase))
             return;
 
+        if (destination.Equals("Full Community", StringComparison.OrdinalIgnoreCase))
+        {
+            await Shell.Current.GoToAsync(nameof(Pages.FullCommunityPage));
+            return;
+        }
+
         await Shell.Current.GoToAsync(
             $"{nameof(Pages.ChurchGroupSelectionPage)}?destination={Uri.EscapeDataString(destination)}");
     }
@@ -38,6 +44,9 @@ public partial class CommunityPage : ContentPage
     {
         await Shell.Current.GoToAsync(nameof(Pages.ChurchGroupSelectionPage));
     }
+
+    private async void OnChurchAnnouncementsClicked(object sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(Pages.ChurchAnnouncementPage));
 
     private static string[] GetPostingDestinations(string? role, string? leadershipLevel, string? leadershipDuty)
     {
