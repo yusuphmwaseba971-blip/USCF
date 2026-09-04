@@ -4,9 +4,13 @@ namespace CCT_USCF.Pages;
 
 public partial class HomePage : ContentPage
 {
+    private readonly CCT_USCF.Services.AppAppearanceService _appearance;
+
     public HomePage()
     {
         InitializeComponent();
+        _appearance = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.AppAppearanceService>();
+        _appearance.AppearanceChanged += OnAppearanceChanged;
     }
 
     protected override void OnAppearing()
@@ -16,7 +20,16 @@ public partial class HomePage : ContentPage
         _ = LoadNationalFeedAsync();
         _ = RefreshUnreadCountAsync();
         _ = RegisterMessagingTokenAsync();
-        BackgroundColor = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.AppAppearanceService>().BackgroundColor;
+        ApplyAppearance();
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e) => MainThread.BeginInvokeOnMainThread(ApplyAppearance);
+    private void ApplyAppearance() => BackgroundColor = _appearance.BackgroundColor;
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        _appearance.AppearanceChanged -= OnAppearanceChanged;
     }
 
     private async Task RefreshUnreadCountAsync()

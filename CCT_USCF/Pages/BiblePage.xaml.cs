@@ -134,8 +134,23 @@ public partial class BiblePage : ContentPage
     {
         if (s is not Button { CommandParameter: VerseRow verse }) return;
         var color = await DisplayActionSheet("Highlight", "Cancel", null, "Yellow", "Green", "Blue", "Remove");
-        await _bible.SetHighlightAsync(Key(verse.Number), color == "Remove" || color == "Cancel" ? null : color);
-        await RefreshVersesAsync();
+        var selectedColor = color == "Remove" || color == "Cancel" ? null : color;
+        var index = _verses.IndexOf(verse);
+        if (index >= 0)
+            _verses[index] = verse with { Highlight = selectedColor };
+        _ = PersistHighlightAsync(Key(verse.Number), selectedColor);
+    }
+
+    private async Task PersistHighlightAsync(string key, string? color)
+    {
+        try
+        {
+            await _bible.SetHighlightAsync(key, color);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Bible highlight persistence failed: {ex}");
+        }
     }
 
     private async void OnAppearanceClicked(object? s, EventArgs e)

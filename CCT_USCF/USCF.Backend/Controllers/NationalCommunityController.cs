@@ -19,11 +19,12 @@ public sealed class NationalCommunityController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Feed([FromQuery] int limit = 20, CancellationToken ct = default)
     {
-        await RequireUserAsync(ct);
+        var currentUser = await RequireUserAsync(ct);
         var posts = await _db.NationalCommunityPosts.AsNoTracking().Include(p => p.Likes).Include(p => p.Comments)
             .Where(p => p.Visibility == "national").OrderByDescending(p => p.CreatedAtUtc)
             .Take(Math.Clamp(limit, 1, 50)).ToListAsync(ct);
-        return Ok(posts.Select(p => ToDto(p, null)));
+        var currentUid = currentUser.FirebaseIdentity.FirebaseUid;
+        return Ok(posts.Select(p => ToDto(p, currentUid)));
     }
 
     [HttpPost]

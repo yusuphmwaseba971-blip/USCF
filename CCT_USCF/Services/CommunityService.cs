@@ -663,36 +663,21 @@ SenderUid =
                     normalizedGroupId,
                     safeLimit);
 
-            if (cachedMessages.Count > 0)
+            try
+            {
+                var remoteMessages = await GetGroupMessagesAsync(normalizedGroupId, safeLimit);
+                if (remoteMessages.Count > 0)
+                    await CacheCommunityMessagesAsync(remoteMessages);
+                return remoteMessages.Count > 0 ? remoteMessages : cachedMessages;
+            }
+            catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    "[COMMUNITY_CACHE] Cache HIT: " +
-                    $"community_id={normalizedGroupId}, " +
-                    $"count={cachedMessages.Count}");
-
-                return cachedMessages;
+                    $"[COMMUNITY_CACHE] Remote load failed; using {cachedMessages.Count} cached messages: {ex.Message}");
+                if (cachedMessages.Count > 0)
+                    return cachedMessages;
+                throw;
             }
-
-            System.Diagnostics.Debug.WriteLine(
-                "[COMMUNITY_CACHE] Cache MISS: " +
-                $"community_id={normalizedGroupId}");
-
-            var remoteMessages =
-                await GetGroupMessagesAsync(
-                    normalizedGroupId,
-                    safeLimit);
-
-            if (remoteMessages.Count > 0)
-            {
-                await CacheCommunityMessagesAsync(
-                    remoteMessages);
-            }
-
-            System.Diagnostics.Debug.WriteLine(
-                "[COMMUNITY_CACHE] Initial Appwrite load cached: " +
-                $"{remoteMessages.Count} messages.");
-
-            return remoteMessages;
         }
 
         // ============================================================
@@ -1298,6 +1283,17 @@ SenderUid =
                 new { branchId });
         }
 
+        public Task AcceptBranchInvitationAsync(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new ArgumentException("Invitation token is required.", nameof(token));
+
+            return SendAuthorizedCommunityApiAsync<object>(
+                HttpMethod.Post,
+                "api/community/branch-invitations/accept",
+                new { token = token.Trim() });
+        }
+
         public sealed class BranchInvitationResponse
         {
             public string Url { get; set; } = string.Empty;
@@ -1709,6 +1705,18 @@ SenderUid =
             using var response =
                 await _httpClient.SendAsync(request);
 
+            var rawJson =
+                await response.Content.ReadAsStringAsync();
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[APPWRITE_COMMUNITY] RESPONSE STATUS: {(int)response.StatusCode} {response.StatusCode}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[APPWRITE_COMMUNITY] RESPONSE URI: {request.RequestUri}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[APPWRITE_COMMUNITY] RESPONSE CONTENT-TYPE: {response.Content.Headers.ContentType}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[APPWRITE_COMMUNITY] RAW RESPONSE: {rawJson}");
+
             if (response.StatusCode ==
                     System.Net.HttpStatusCode.Unauthorized ||
                 response.StatusCode ==
@@ -1724,21 +1732,15 @@ SenderUid =
 
             if (!response.IsSuccessStatusCode)
             {
-                var details =
-                    await response.Content.ReadAsStringAsync();
-
                 System.Diagnostics.Debug.WriteLine(
                     $"[APPWRITE_COMMUNITY] API request failed: " +
                     $"status={(int)response.StatusCode}, uri={requestUri}, " +
-                    $"response={details}");
+                    $"response={rawJson}");
 
                 throw new InvalidOperationException(
                     $"Community API request failed with status " +
-                    $"{(int)response.StatusCode}: {details}");
+                    $"{(int)response.StatusCode}: {rawJson}");
             }
-
-            var rawJson =
-                await response.Content.ReadAsStringAsync();
 
             if (string.IsNullOrWhiteSpace(rawJson))
             {
@@ -1806,47 +1808,29 @@ SenderUid =
                 string json,
                 JsonSerializerOptions options)
         {
-            var root =
-                JsonDocument.Parse(json).RootElement;
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
 
             if (root.ValueKind ==
                 JsonValueKind.Object)
             {
-                if (root.TryGetProperty(
-                        "message",
-                        out var messageValue) &&
-                    messageValue.ValueKind !=
-                        JsonValueKind.Null)
+                if (TryGetPropertyIgnoreCase(root, "message", out var messageValue) &&
+                    messageValue.ValueKind == JsonValueKind.Object)
                 {
-                    return
-                        JsonSerializer.Deserialize<CommunityMessage>(
-                            messageValue.GetRawText(),
-                            options)
-                        ?? throw new JsonException(
-                            "Community API message payload was empty.");
+                    return DeserializeMessageObject(messageValue, options);
                 }
 
-                if (root.TryGetProperty(
-                        "data",
-                        out var dataValue) &&
-                    dataValue.ValueKind !=
-                        JsonValueKind.Null)
+                if (TryGetPropertyIgnoreCase(root, "data", out var dataValue) &&
+                    dataValue.ValueKind == JsonValueKind.Object)
                 {
-                    return
-                        JsonSerializer.Deserialize<CommunityMessage>(
-                            dataValue.GetRawText(),
-                            options)
-                        ?? throw new JsonException(
-                            "Community API data payload was empty.");
+                    return DeserializeMessageObject(dataValue, options);
                 }
+
+                return DeserializeMessageObject(root, options);
             }
 
-            return
-                JsonSerializer.Deserialize<CommunityMessage>(
-                    json,
-                    options)
-                ?? throw new JsonException(
-                    "Community API returned an empty message payload.");
+            throw new JsonException(
+                "Community API response did not contain a message object.");
         }
 
         // ============================================================
@@ -1858,54 +1842,82 @@ SenderUid =
                 string json,
                 JsonSerializerOptions options)
         {
-            var root =
-                JsonDocument.Parse(json).RootElement;
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
 
             if (root.ValueKind ==
                 JsonValueKind.Array)
             {
-                return
-                    JsonSerializer.Deserialize<
-                        List<CommunityMessage>>(
-                        root.GetRawText(),
-                        options)
-                    ?? new List<CommunityMessage>();
+                return DeserializeMessageArray(root, options);
             }
 
             if (root.ValueKind ==
                 JsonValueKind.Object)
             {
-                if (root.TryGetProperty(
-                        "messages",
-                        out var messagesValue) &&
-                    messagesValue.ValueKind ==
-                        JsonValueKind.Array)
+                foreach (var propertyName in new[] { "messages", "data", "items", "results" })
                 {
-                    return
-                        JsonSerializer.Deserialize<
-                            List<CommunityMessage>>(
-                            messagesValue.GetRawText(),
-                            options)
-                        ?? new List<CommunityMessage>();
-                }
-
-                if (root.TryGetProperty(
-                        "data",
-                        out var dataValue) &&
-                    dataValue.ValueKind ==
-                        JsonValueKind.Array)
-                {
-                    return
-                        JsonSerializer.Deserialize<
-                            List<CommunityMessage>>(
-                            dataValue.GetRawText(),
-                            options)
-                        ?? new List<CommunityMessage>();
+                    if (TryGetPropertyIgnoreCase(root, propertyName, out var value) &&
+                        value.ValueKind == JsonValueKind.Array)
+                    {
+                        return DeserializeMessageArray(value, options);
+                    }
                 }
             }
 
             throw new JsonException(
                 "Community API response did not contain a message list.");
+        }
+
+        private static CommunityMessage DeserializeMessageObject(
+            JsonElement value,
+            JsonSerializerOptions options)
+        {
+            var message = JsonSerializer.Deserialize<CommunityMessage>(
+                value.GetRawText(),
+                options);
+
+            if (message is null ||
+                (string.IsNullOrWhiteSpace(message.MessageId) &&
+                 string.IsNullOrWhiteSpace(message.ClientMessageId) &&
+                 string.IsNullOrWhiteSpace(message.Id)))
+            {
+                throw new JsonException(
+                    "Community API message payload did not contain a message identifier.");
+            }
+
+            return message;
+        }
+
+        private static List<CommunityMessage> DeserializeMessageArray(
+            JsonElement value,
+            JsonSerializerOptions options)
+        {
+            return JsonSerializer.Deserialize<List<CommunityMessage>>(
+                       value.GetRawText(),
+                       options)
+                   ?? throw new JsonException(
+                       "Community API message list payload was empty.");
+        }
+
+        private static bool TryGetPropertyIgnoreCase(
+            JsonElement objectElement,
+            string propertyName,
+            out JsonElement value)
+        {
+            foreach (var property in objectElement.EnumerateObject())
+            {
+                if (string.Equals(
+                        property.Name,
+                        propertyName,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+
+            value = default;
+            return false;
         }
 
         // ============================================================
@@ -2436,6 +2448,10 @@ var organizationalLevel =
     TryGetString(
         data,
         "organizational_level",
+        null)
+    ?? TryGetString(
+        data,
+        "organization_type",
         null);
 
 var branchId =
@@ -3493,7 +3509,10 @@ ConversationId =
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException(body);
-            return JsonSerializer.Deserialize<NationalCommunityPost>(body) ?? throw new InvalidOperationException("The server returned no post.");
+            return JsonSerializer.Deserialize<NationalCommunityPost>(
+                body,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                ?? throw new InvalidOperationException("The server returned no post.");
         }
 
         public async Task<(bool Liked, int Count)> ToggleNationalLikeAsync(Guid postId, bool liked)

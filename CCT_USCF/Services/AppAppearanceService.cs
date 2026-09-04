@@ -4,6 +4,7 @@ namespace CCT_USCF.Services;
 
 public sealed class AppAppearanceService
 {
+    public event EventHandler? AppearanceChanged;
     private const string LanguageKey = "app.language";
     private const string BackgroundKey = "app.background";
     private const string ColorKey = "app.background.color";
@@ -30,8 +31,20 @@ public sealed class AppAppearanceService
         }
     }
 
-    public void SetLanguage(string language) => Preferences.Default.Set(LanguageKey, language);
-    public void SetBackground(string background) => Preferences.Default.Set(BackgroundKey, background);
+    public void SetLanguage(string language)
+    {
+        if (!Languages.Values.Contains(language, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("Unsupported application language.", nameof(language));
+        Preferences.Default.Set(LanguageKey, language);
+        AppearanceChanged?.Invoke(this, EventArgs.Empty);
+    }
+    public void SetBackground(string background)
+    {
+        if (!Backgrounds.ContainsKey(background) && !string.Equals(background, "Custom", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Unsupported application background.", nameof(background));
+        Preferences.Default.Set(BackgroundKey, background);
+        AppearanceChanged?.Invoke(this, EventArgs.Empty);
+    }
     public void SetCustomColor(string color)
     {
         if (Color.TryParse(color, out _))

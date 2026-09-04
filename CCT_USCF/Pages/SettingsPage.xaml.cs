@@ -19,7 +19,23 @@ public partial class SettingsPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        _appearance.AppearanceChanged += OnAppearanceChanged;
         _ = LoadCurrentAsync();
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            BackgroundColor = _appearance.BackgroundColor;
+            BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+        });
+    }
+
+    protected override void OnDisappearing()
+    {
+        _appearance.AppearanceChanged -= OnAppearanceChanged;
+        base.OnDisappearing();
     }
 
     private async Task LoadCurrentAsync()
@@ -65,6 +81,7 @@ public partial class SettingsPage : ContentPage
         if (!string.IsNullOrWhiteSpace(CustomColorEntry.Text))
             _appearance.SetCustomColor(CustomColorEntry.Text.Trim());
         BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+        BackgroundColor = _appearance.BackgroundColor;
         await DisplayAlert("Appearance", "Appearance settings saved.", "OK");
     }
 
