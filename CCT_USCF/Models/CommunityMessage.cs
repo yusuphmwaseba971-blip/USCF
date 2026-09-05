@@ -28,6 +28,8 @@ public class CommunityMessage
 
     public string? DistrictId { get; set; }
 
+    public string? AppwriteTeamId { get; set; }
+
     // text | image | video | audio
     public string MessageType { get; set; } = "text";
 

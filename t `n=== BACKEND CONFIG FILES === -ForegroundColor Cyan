@@ -1,0 +1,45 @@
+[35mPages/BranchChatPage.xaml.cs[m[36m:[m[32m335[m[36m:[m                        AppwriteService.[1;31mProjectId[m)}"
+[35mPages/GroupChatPage.xaml.cs[m[36m:[m[32m366[m[36m:[m                        AppwriteService.[1;31mProjectId[m)}"
+[35mServices/Appwrite/AppwriteConfig.cs[m[36m:[m[32m6[m[36m:[m    public const string [1;31mProjectId[m =
+[35mServices/Appwrite/AppwriteService.cs[m[36m:[m[32m9[m[36m:[m    public const string [1;31mProjectId[m = "cct-uscf";
+[35mServices/Appwrite/AppwriteService.cs[m[36m:[m[32m22[m[36m:[m            .SetProject([1;31mProjectId[m);
+[35mServices/AuthService.cs[m[36m:[m[32m267[m[36m:[m    // [1;31mFirebase:[m
+[35mServices/AuthService.cs[m[36m:[m[32m1059[m[36m:[m    // [1;31mFirebase:[m
+[35mUSCF.Backend.Tests/AppwriteCommunityAuthorizationTests.cs[m[36m:[m[32m311[m[36m:[m                [1;31mFirebaseProject[mId = "cct-uscf",
+[35mUSCF.Backend.Tests/FirebaseIdentityBridgeTests.cs[m[36m:[m[32m71[m[36m:[m            [1;31mFirebaseProject[mId = "cct-uscf"
+[35mUSCF.Backend/Controllers/AuthController.cs[m[36m:[m[32m337[m[36m:[m        var creds = new Signing[1;31mCredential[ms(securityKey, SecurityAlgorithms.HmacSha256);
+[35mUSCF.Backend/Controllers/AuthController.cs[m[36m:[m[32m353[m[36m:[m            signing[1;31mCredential[ms: creds);
+[35mUSCF.Backend/Controllers/ChurchAnnouncementsController.cs[m[36m:[m[32m1[m[36m:[musing [1;31mFirebaseAdmin[m;
+[35mUSCF.Backend/Controllers/ChurchAnnouncementsController.cs[m[36m:[m[32m2[m[36m:[musing [1;31mFirebaseAdmin[m.Messaging;
+[35mUSCF.Backend/Controllers/ChurchAnnouncementsController.cs[m[36m:[m[32m143[m[36m:[m        var projectId = _configuration["[1;31mFirebase:[m[1;31mProjectId[m"];
+[35mUSCF.Backend/Models/FirebaseAppwriteIdentityMapping.cs[m[36m:[m[32m20[m[36m:[m    public string [1;31mFirebaseProject[mId { get; set; } = string.Empty;
+[35mUSCF.Backend/Program.cs[m[36m:[m[32m12[m[36m:[mbuilder.Services.AddSingleton<IFirebaseTokenVerifier, [1;31mFirebaseAdmin[mTokenVerifier>();
+[35mUSCF.Backend/Services/Appwrite/AppwriteService.cs[m[36m:[m[32m15[m[36m:[m    public string [1;31mProjectId[m { get; }
+[35mUSCF.Backend/Services/Appwrite/AppwriteService.cs[m[36m:[m[32m28[m[36m:[m        [1;31mProjectId[m = configuration["Appwrite:[1;31mProjectId[m"]
+[35mUSCF.Backend/Services/Appwrite/AppwriteService.cs[m[36m:[m[32m52[m[36m:[m            .SetProject([1;31mProjectId[m)
+[35mUSCF.Backend/Services/Community/AppwriteCommunityGateway.cs[m[36m:[m[32m31[m[36m:[m            _appwrite.[1;31mProjectId[m);
+[35mUSCF.Backend/Services/Community/CommunityIdentityService.cs[m[36m:[m[32m39[m[36m:[m                [1;31mFirebaseProject[mId = identity.[1;31mProjectId[m,
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m1[m[36m:[musing [1;31mFirebaseAdmin[m;
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m2[m[36m:[musing [1;31mFirebaseAdmin[m.Auth;
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m7[m[36m:[mpublic sealed class [1;31mFirebaseAdmin[mTokenVerifier : IFirebaseTokenVerifier
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m11[m[36m:[m    private readonly ILogger<[1;31mFirebaseAdmin[mTokenVerifier> _logger;
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m13[m[36m:[m    public [1;31mFirebaseAdmin[mTokenVerifier(
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m15[m[36m:[m        ILogger<[1;31mFirebaseAdmin[mTokenVerifier> logger)
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m18[m[36m:[m        _projectId = configuration["[1;31mFirebase:[m[1;31mProjectId[m"]
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m20[m[36m:[m                "[1;31mFirebase:[m[1;31mProjectId[m is not configured.");
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m42[m[36m:[m            var token[1;31mProjectId[m = GetStringClaim(decodedToken, "aud");
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m43[m[36m:[m            if (!string.Equals(token[1;31mProjectId[m, _projectId, StringComparison.Ordinal))
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m83[m[36m:[m        var serviceAccountPath = configuration["[1;31mFirebase:[m[1;31mServiceAccount[mPath"];
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m84[m[36m:[m        var serviceAccountJson = configuration["[1;31mFirebase:[m[1;31mServiceAccount[mJson"];
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m86[m[36m:[m        [1;31mGoogleCredential[m? credential = null;
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m88[m[36m:[m            credential = [1;31mGoogleCredential[m.FromJson(serviceAccountJson);
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m90[m[36m:[m            credential = [1;31mGoogleCredential[m.FromFile(serviceAccountPath);
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m95[m[36m:[m                [1;31mProjectId[m = projectId,
+[35mUSCF.Backend/Services/Identity/FirebaseAdminTokenVerifier.cs[m[36m:[m[32m96[m[36m:[m                [1;31mCredential[m = credential
+[35mUSCF.Backend/Services/Identity/FirebaseIdentityBridgeSchemaInitializer.cs[m[36m:[m[32m21[m[36m:[m        [[1;31mFirebaseProject[mId] nvarchar(128) NOT NULL,
+[35mUSCF.Backend/Services/Identity/FirebaseIdentityBridgeService.cs[m[36m:[m[32m57[m[36m:[m            [1;31mFirebaseProject[mId = identity.[1;31mProjectId[m,
+[35mUSCF.Backend/Services/Identity/VerifiedFirebaseIdentity.cs[m[36m:[m[32m5[m[36m:[m    string [1;31mProjectId[m,
+[35mUSCF.Backend/USCF.Backend.csproj[m[36m:[m[32m12[m[36m:[m    <PackageReference Include="[1;31mFirebaseAdmin[m" Version="3.6.0" />
+[35mUSCF.Backend/appsettings.json[m[36m:[m[32m45[m[36m:[m    "[1;31mProjectId[m": "cct-uscf",
+[35mUSCF.Backend/appsettings.json[m[36m:[m[32m46[m[36m:[m    "[1;31mServiceAccount[mPath": "",
+[35mUSCF.Backend/appsettings.json[m[36m:[m[32m47[m[36m:[m    "[1;31mServiceAccount[mJson": ""

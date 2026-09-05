@@ -1,9 +1,10 @@
 namespace CCT_USCF.Services
 {
-    // Centralized API configuration for development. Use this single place to change the backend address.
+    // Production Community API endpoint used by the Android client.
+    // This must remain pointed at the active Appwrite Function domain.
     public static class ApiConfig
     {
-        // Development backend host (physical device on same LAN)
-        public const string BaseUrl = "https://cctapi.sgp.appwrite.run";
+        public const string BaseUrl = "https://6a9ade0a003b6bd60240.sgp.appwrite.run";
     }
 }
+

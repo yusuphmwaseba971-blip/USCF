@@ -138,13 +138,10 @@ public static class MauiProgram
             _ => CrossFirebaseFirestore.Current);
 
         // =====================================================
-        // EXISTING ASP.NET CORE API
+        // PRODUCTION COMMUNITY API (Appwrite Function)
         // =====================================================
-        //
-        // Kept temporarily because existing services may still
-        // communicate with the ASP.NET Core backend.
-        //
-        // It can be removed later after complete migration.
+        // The Android app must use the live Appwrite Function domain,
+        // not the obsolete localhost or ASP.NET development backend.
         // =====================================================
 
         builder.Services.AddSingleton<HttpClient>(_ =>
