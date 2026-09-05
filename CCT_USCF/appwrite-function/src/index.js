@@ -1111,7 +1111,7 @@ async function createGroupMessage(
   );
 
   log(
-    "[CCT_MESSAGE_CREATE] Appwrite createDocument START"
+    "[CCT_MESSAGE_CREATE] Direct Appwrite REST create START"
   );
 
   let document;
@@ -1167,7 +1167,7 @@ try {
 console.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST create SUCCESS");
 
     log(
-      "[CCT_MESSAGE_CREATE] Appwrite createDocument SUCCESS"
+      "[CCT_MESSAGE_CREATE] Direct Appwrite REST create SUCCESS"
     );
 
     log(
@@ -1177,7 +1177,7 @@ console.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST create SUCCESS");
     logErrorDetails(
       log,
       error,
-      "Appwrite createDocument"
+      "Direct Appwrite REST create"
     );
 
     throw error;
