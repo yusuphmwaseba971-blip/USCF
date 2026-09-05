@@ -1878,8 +1878,7 @@ SenderUid =
 
             if (message is null ||
                 (string.IsNullOrWhiteSpace(message.MessageId) &&
-                 string.IsNullOrWhiteSpace(message.ClientMessageId) &&
-                 string.IsNullOrWhiteSpace(message.Id)))
+                 string.IsNullOrWhiteSpace(message.ClientMessageId)))
             {
                 throw new JsonException(
                     "Community API message payload did not contain a message identifier.");
@@ -1892,11 +1891,23 @@ SenderUid =
             JsonElement value,
             JsonSerializerOptions options)
         {
-            return JsonSerializer.Deserialize<List<CommunityMessage>>(
-                       value.GetRawText(),
-                       options)
-                   ?? throw new JsonException(
-                       "Community API message list payload was empty.");
+            var messages = new List<CommunityMessage>();
+
+            foreach (var item in value.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    throw new JsonException(
+                        "Community API message list contained a non-object item.");
+                }
+
+                messages.Add(
+                    DeserializeMessageObject(
+                        item,
+                        options));
+            }
+
+            return messages;
         }
 
         private static bool TryGetPropertyIgnoreCase(
@@ -2416,6 +2427,13 @@ SenderUid =
                     document.Id)
                 ?? document.Id;
 
+            var clientMessageId =
+                TryGetString(
+                    data,
+                    "client_message_id",
+                    messageId)
+                ?? messageId;
+
             var senderUid =
                 TryGetString(
                     data,
@@ -2478,6 +2496,13 @@ var messageType =
         "message_type",
         "text")
     ?? "text";
+
+var appwriteTeamId =
+    TryGetString(
+        data,
+        "appwrite_team_id",
+        null);
+
             var mediaUrl =
                 TryGetString(
                     data,
@@ -2541,6 +2566,9 @@ var messageType =
                 MessageId =
                     messageId,
 
+                ClientMessageId =
+                    clientMessageId,
+
                 SenderUid =
                     senderUid,
 
@@ -2567,6 +2595,9 @@ DistrictId =
 
 MessageType =
     messageType,
+
+AppwriteTeamId =
+    appwriteTeamId,
 
 MediaUrl =
     mediaUrl,

@@ -75,8 +75,14 @@ public partial class BranchChatPage : ContentPage
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[COMMUNITY_MESSAGE] SEND START type={localMessage.MessageType}, has_attachment=true");
+
             if (localMessage.PendingFile == null)
                 throw new InvalidOperationException("The selected attachment is no longer available.");
+
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_MESSAGE] MEDIA UPLOAD START");
 
             var uploadResult = localMessage.MessageType switch
             {
@@ -85,6 +91,14 @@ public partial class BranchChatPage : ContentPage
                 "audio" => await _cloudinaryService.UploadAudioAsync(localMessage.PendingFile),
                 _ => throw new InvalidOperationException($"Unsupported attachment type: {localMessage.MessageType}")
             };
+
+            if (string.IsNullOrWhiteSpace(uploadResult.SecureUrl))
+                throw new InvalidOperationException("Cloudinary did not return a usable media URL.");
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[COMMUNITY_MESSAGE] MEDIA UPLOAD SUCCESS type={localMessage.MessageType}");
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_MESSAGE] APPWRITE MESSAGE CREATE START");
 
             var createdMessage = await _communityService.CreateCommunityMessageAsync(
                 communityId: _branchId.ToString(),
@@ -97,6 +111,9 @@ public partial class BranchChatPage : ContentPage
                 fileSize: uploadResult.Bytes,
                 duration: uploadResult.Duration,
                 clientMessageId: localMessage.ClientMessageId);
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[COMMUNITY_MESSAGE] APPWRITE MESSAGE CREATE SUCCESS message_id={createdMessage.MessageId}");
 
             await _communityService.CacheCommunityMessageAsync(createdMessage);
             var uiMessage = ToUiMessage(createdMessage);
@@ -115,7 +132,7 @@ public partial class BranchChatPage : ContentPage
         {
             localMessage.Status = "failed";
             await MainThread.InvokeOnMainThreadAsync(RenderMessages);
-            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT_MEDIA] {ex}");
+            System.Diagnostics.Debug.WriteLine($"[COMMUNITY_MESSAGE] MEDIA SEND FAILED {ex}");
         }
     }
 
@@ -2330,6 +2347,18 @@ DateTime? updatedAt =
 
         try
         {
+            if (uploadResult == null ||
+                string.IsNullOrWhiteSpace(uploadResult.SecureUrl))
+            {
+                throw new InvalidOperationException(
+                    "Cloudinary did not return a usable media URL.");
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[COMMUNITY_MESSAGE] SEND START type={messageType}, has_attachment=true");
+            System.Diagnostics.Debug.WriteLine(
+                "[COMMUNITY_MESSAGE] APPWRITE MESSAGE CREATE START");
+
             await FirebaseInit.Initialized;
 
             var currentUser =
@@ -2441,16 +2470,14 @@ DateTime? updatedAt =
             RenderMessages();
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_MEDIA] " +
-                $"Media message sent. " +
-                $"type={messageType}, " +
+                $"[COMMUNITY_MESSAGE] SEND COMPLETE type={messageType}, " +
                 $"message_id={createdMessage.MessageId}");
             return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_MEDIA] Send failed: {ex}");
+                $"[COMMUNITY_MESSAGE] MEDIA SEND FAILED {ex}");
 
             await DisplayAlert(
                 "Media message failed",
@@ -2506,6 +2533,10 @@ DateTime? updatedAt =
     {
         var text =
             MessageEntry.Text?.Trim();
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[COMMUNITY_MESSAGE] SEND START type={( _pendingAttachment?.Type ?? "text")}, " +
+            $"has_attachment={_pendingAttachment != null}");
 
         if (_pendingAttachment != null)
         {
@@ -2684,15 +2715,19 @@ DateTime? updatedAt =
             RenderMessages();
 
             System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT_SEND] " +
-                $"Message persisted. " +
+                $"[COMMUNITY_MESSAGE] SEND COMPLETE type=text, " +
                 $"message_id={createdMessage.MessageId}");
         }
         catch (Exception ex)
         {
             localMessage.Status = "failed";
             await MainThread.InvokeOnMainThreadAsync(RenderMessages);
-            System.Diagnostics.Debug.WriteLine($"[BRANCH_CHAT_SEND] {ex}");
+            System.Diagnostics.Debug.WriteLine($"[COMMUNITY_MESSAGE] TEXT SEND FAILED {ex}");
+            await MainThread.InvokeOnMainThreadAsync(
+                () => DisplayAlert(
+                    "Unable to send",
+                    ex.Message,
+                    "OK"));
         }
     }
 
