@@ -1,4 +1,3 @@
-
 import { randomUUID } from "node:crypto";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -48,7 +47,8 @@ function createFirebaseApp() {
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
   if (serviceAccountJson) {
-    const serviceAccount = JSON.parse(serviceAccountJson);
+    const serviceAccount =
+      JSON.parse(serviceAccountJson);
 
     return initializeApp({
       credential: cert(serviceAccount)
@@ -82,24 +82,43 @@ function createFirebaseApp() {
   });
 }
 
-const firebaseApp = createFirebaseApp();
-const auth = getAuth(firebaseApp);
+const firebaseApp =
+  createFirebaseApp();
+
+const auth =
+  getAuth(firebaseApp);
 
 /* ------------------------------------------------------------
  * Appwrite initialization
  * ------------------------------------------------------------ */
 
-const appwriteClient = new Client()
-  .setEndpoint(
-    process.env.APPWRITE_ENDPOINT ||
-      "https://sgp.cloud.appwrite.io/v1"
-  )
-  .setProject(
-    process.env.APPWRITE_PROJECT_ID
-  )
-  .setKey(
-    process.env.APPWRITE_API_KEY
+const appwriteEndpoint =
+  process.env.APPWRITE_ENDPOINT ||
+  "https://sgp.cloud.appwrite.io/v1";
+
+const appwriteProjectId =
+  process.env.APPWRITE_PROJECT_ID;
+
+const appwriteApiKey =
+  process.env.APPWRITE_API_KEY;
+
+if (!appwriteProjectId) {
+  throw new Error(
+    "APPWRITE_PROJECT_ID is not configured."
   );
+}
+
+if (!appwriteApiKey) {
+  throw new Error(
+    "APPWRITE_API_KEY is not configured."
+  );
+}
+
+const appwriteClient =
+  new Client()
+    .setEndpoint(appwriteEndpoint)
+    .setProject(appwriteProjectId)
+    .setKey(appwriteApiKey);
 
 const databases =
   new Databases(appwriteClient);
@@ -117,11 +136,160 @@ const COMMUNITY_MESSAGES_COLLECTION_ID =
   "community_messages";
 
 /* ------------------------------------------------------------
+ * Diagnostic helpers
+ * ------------------------------------------------------------ */
+
+/*
+ * Safely convert an unknown error/cause into diagnostic text.
+ *
+ * IMPORTANT:
+ * Never log request headers, Firebase tokens,
+ * Appwrite API keys, private keys, passwords,
+ * or other credentials.
+ */
+function getErrorDetails(error) {
+  if (error === null || error === undefined) {
+    return {
+      name: "UnknownError",
+      message: "Unknown error.",
+      cause: null,
+      stack: null
+    };
+  }
+
+  if (error instanceof Error) {
+    let cause = null;
+
+    if (error.cause !== undefined) {
+      if (
+        error.cause instanceof Error
+      ) {
+        cause = {
+          name:
+            error.cause.name ||
+            "Error",
+
+          message:
+            error.cause.message ||
+            String(error.cause),
+
+          stack:
+            error.cause.stack ||
+            null
+        };
+      } else if (
+        typeof error.cause === "object"
+      ) {
+        try {
+          cause =
+            JSON.stringify(
+              error.cause
+            );
+        } catch {
+          cause =
+            String(error.cause);
+        }
+      } else {
+        cause =
+          String(error.cause);
+      }
+    }
+
+    return {
+      name:
+        error.name ||
+        "Error",
+
+      message:
+        error.message ||
+        String(error),
+
+      cause,
+
+      stack:
+        error.stack ||
+        null
+    };
+  }
+
+  return {
+    name:
+      "UnknownError",
+
+    message:
+      String(error),
+
+    cause: null,
+
+    stack: null
+  };
+}
+
+function logErrorDetails(
+  log,
+  error,
+  stage
+) {
+  const details =
+    getErrorDetails(error);
+
+  log(
+    `[CCT_ERROR] STAGE=${stage}`
+  );
+
+  log(
+    `[CCT_ERROR] NAME=${details.name}`
+  );
+
+  log(
+    `[CCT_ERROR] MESSAGE=${details.message}`
+  );
+
+  if (
+    details.cause !== null &&
+    details.cause !== undefined
+  ) {
+    if (
+      typeof details.cause === "object"
+    ) {
+      log(
+        `[CCT_ERROR] CAUSE_NAME=${details.cause.name || ""}`
+      );
+
+      log(
+        `[CCT_ERROR] CAUSE_MESSAGE=${details.cause.message || ""}`
+      );
+
+      if (details.cause.stack) {
+        log(
+          `[CCT_ERROR] CAUSE_STACK=${details.cause.stack}`
+        );
+      }
+    } else {
+      log(
+        `[CCT_ERROR] CAUSE=${details.cause}`
+      );
+    }
+  } else {
+    log(
+      "[CCT_ERROR] CAUSE=<none>"
+    );
+  }
+
+  if (details.stack) {
+    log(
+      `[CCT_ERROR] STACK=${details.stack}`
+    );
+  }
+}
+
+/* ------------------------------------------------------------
  * Utility helpers
  * ------------------------------------------------------------ */
 
 function readHeader(req, name) {
-  const headers = req.headers || {};
+  const headers =
+    req.headers || {};
 
   const direct =
     headers[name] ??
@@ -137,7 +305,8 @@ function readHeader(req, name) {
     headers.Authorization;
 
   if (
-    name.toLowerCase() === "authorization" &&
+    name.toLowerCase() ===
+      "authorization" &&
     authorization
   ) {
     return authorization;
@@ -166,7 +335,8 @@ function parseOptionalInt(value) {
     return null;
   }
 
-  const number = Number(value);
+  const number =
+    Number(value);
 
   if (!Number.isFinite(number)) {
     return null;
@@ -184,7 +354,8 @@ function toNumber(value) {
     return 0;
   }
 
-  const number = Number(value);
+  const number =
+    Number(value);
 
   return Number.isFinite(number)
     ? number
@@ -205,9 +376,14 @@ function safeIsoDate(value) {
     return new Date().toISOString();
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     return new Date().toISOString();
   }
 
@@ -296,10 +472,14 @@ function mapMessageDocument(document) {
       "",
 
     fileSize:
-      toNumber(document.file_size),
+      toNumber(
+        document.file_size
+      ),
 
     duration:
-      toNumber(document.duration),
+      toNumber(
+        document.duration
+      ),
 
     createdAt:
       safeIsoDate(
@@ -322,7 +502,9 @@ function mapMessageDocument(document) {
 function buildCreateResponse(message) {
   return {
     message,
-    data: message,
+
+    data:
+      message,
 
     id:
       message.id,
@@ -333,18 +515,29 @@ function buildCreateResponse(message) {
     clientMessageId:
       message.clientMessageId,
 
-    success: true
+    success:
+      true
   };
 }
 
 function buildListResponse(items) {
   return {
-    messages: items,
-    data: items,
+    messages:
+      items,
+
+    data:
+      items,
+
     items,
-    results: items,
-    count: items.length,
-    success: true
+
+    results:
+      items,
+
+    count:
+      items.length,
+
+    success:
+      true
   };
 }
 
@@ -352,7 +545,10 @@ function buildListResponse(items) {
  * Firebase authentication
  * ------------------------------------------------------------ */
 
-async function verifyFirebaseRequest(req) {
+async function verifyFirebaseRequest(
+  req,
+  log
+) {
   const authorization =
     readHeader(
       req,
@@ -385,9 +581,39 @@ async function verifyFirebaseRequest(req) {
     );
   }
 
-  return await auth.verifyIdToken(
-    idToken
+  log(
+    "[CCT_FIREBASE_AUTH] Firebase ID-token verification START"
   );
+
+  try {
+    const firebaseUser =
+      await auth.verifyIdToken(
+        idToken
+      );
+
+    if (
+      !firebaseUser ||
+      !firebaseUser.uid
+    ) {
+      throw new Error(
+        "Firebase ID-token verification returned no UID."
+      );
+    }
+
+    log(
+      `[CCT_FIREBASE_AUTH] Firebase ID-token verification SUCCESS UID=${firebaseUser.uid}`
+    );
+
+    return firebaseUser;
+  } catch (error) {
+    logErrorDetails(
+      log,
+      error,
+      "Firebase ID-token verification"
+    );
+
+    throw error;
+  }
 }
 
 /* ------------------------------------------------------------
@@ -399,17 +625,25 @@ function getRequestBody(req) {
     return {};
   }
 
-  if (typeof req.body === "object") {
+  if (
+    typeof req.body ===
+    "object"
+  ) {
     return req.body;
   }
 
-  if (typeof req.body === "string") {
+  if (
+    typeof req.body ===
+    "string"
+  ) {
     if (!req.body.trim()) {
       return {};
     }
 
     try {
-      return JSON.parse(req.body);
+      return JSON.parse(
+        req.body
+      );
     } catch {
       throw new Error(
         "Request body contains invalid JSON."
@@ -424,9 +658,15 @@ function getRequestBody(req) {
  * GET group messages
  * ------------------------------------------------------------ */
 
-async function listGroupMessages(req, log) {
+async function listGroupMessages(
+  req,
+  log
+) {
   const firebaseUser =
-    await verifyFirebaseRequest(req);
+    await verifyFirebaseRequest(
+      req,
+      log
+    );
 
   const body =
     getRequestBody(req);
@@ -484,7 +724,10 @@ async function listGroupMessages(req, log) {
       body.limit
     );
 
-  if (!limit || limit < 1) {
+  if (
+    !limit ||
+    limit < 1
+  ) {
     limit = 50;
   }
 
@@ -501,8 +744,12 @@ async function listGroupMessages(req, log) {
       "community_id",
       [communityId]
     ),
+
     Query.limit(limit),
-    Query.orderDesc("$createdAt")
+
+    Query.orderDesc(
+      "$createdAt"
+    )
   ];
 
   if (organizationalLevel) {
@@ -541,30 +788,68 @@ async function listGroupMessages(req, log) {
     );
   }
 
-  const result =
-    await databases.listDocuments(
-      DEFAULT_DATABASE_ID,
-      COMMUNITY_MESSAGES_COLLECTION_ID,
-      queries
+  log(
+    "[CCT_MESSAGE_LIST] Appwrite listDocuments START"
+  );
+
+  let result;
+
+  try {
+    result =
+      await databases.listDocuments(
+        DEFAULT_DATABASE_ID,
+        COMMUNITY_MESSAGES_COLLECTION_ID,
+        queries
+      );
+
+    log(
+      `[CCT_MESSAGE_LIST] Appwrite listDocuments SUCCESS count=${result.documents?.length || 0}`
     );
+  } catch (error) {
+    logErrorDetails(
+      log,
+      error,
+      "Appwrite listDocuments"
+    );
+
+    throw error;
+  }
 
   const items =
     (result.documents || [])
-      .map(mapMessageDocument);
+      .map(
+        mapMessageDocument
+      );
 
-  return buildListResponse(items);
+  return buildListResponse(
+    items
+  );
 }
 
 /* ------------------------------------------------------------
  * POST create group message
  * ------------------------------------------------------------ */
 
-async function createGroupMessage(req, log) {
+async function createGroupMessage(
+  req,
+  log
+) {
   const body =
     getRequestBody(req);
 
+  log(
+    "[CCT_MESSAGE_CREATE] Request body parsed."
+  );
+
+  /*
+   * Firebase authentication MUST happen
+   * before creating the Appwrite message.
+   */
   const firebaseUser =
-    await verifyFirebaseRequest(req);
+    await verifyFirebaseRequest(
+      req,
+      log
+    );
 
   const communityId =
     normalizeString(
@@ -586,7 +871,11 @@ async function createGroupMessage(req, log) {
       "text"
     ).toLowerCase();
 
-  if (!isAllowedMessageType(messageType)) {
+  if (
+    !isAllowedMessageType(
+      messageType
+    )
+  ) {
     throw new Error(
       "Invalid messageType."
     );
@@ -594,7 +883,8 @@ async function createGroupMessage(req, log) {
 
   const content =
     normalizeString(
-      body.content ?? ""
+      body.content ??
+      ""
     );
 
   const mediaUrl =
@@ -736,88 +1026,123 @@ async function createGroupMessage(req, log) {
     `[CCT_MESSAGE_CREATE] MessageType=${messageType}`
   );
 
+  log(
+    `[CCT_MESSAGE_CREATE] Firebase UID=${senderUid}`
+  );
+
   /*
    * IMPORTANT:
    *
    * Do not use senderUid from the request body.
    * Firebase verified UID is used instead.
    */
-  const document =
-    await databases.createDocument(
-      DEFAULT_DATABASE_ID,
-      COMMUNITY_MESSAGES_COLLECTION_ID,
+
+  const documentData = {
+    message_id:
       messageId,
-      {
-        message_id:
-          messageId,
 
-        client_message_id:
-          clientMessageId ||
-          messageId,
+    client_message_id:
+      clientMessageId ||
+      messageId,
 
-        sender_uid:
-          senderUid,
+    sender_uid:
+      senderUid,
 
-        sender_name:
-          senderName,
+    sender_name:
+      senderName,
 
-        content:
-          content,
+    content:
+      content,
 
-        community_id:
-          communityId,
+    community_id:
+      communityId,
 
-        branch_id:
-          branchId !== null
-            ? String(branchId)
-            : null,
+    branch_id:
+      branchId !== null
+        ? String(branchId)
+        : null,
 
-        region_id:
-          regionId !== null
-            ? String(regionId)
-            : null,
+    region_id:
+      regionId !== null
+        ? String(regionId)
+        : null,
 
-        district_id:
-          districtId !== null
-            ? String(districtId)
-            : null,
+    district_id:
+      districtId !== null
+        ? String(districtId)
+        : null,
 
-        organization_type:
-          organizationalLevel,
+    organization_type:
+      organizationalLevel,
 
-        message_type:
-          messageType,
+    message_type:
+      messageType,
 
-        media_url:
-          mediaUrl,
+    media_url:
+      mediaUrl,
 
-        thumbnail_url:
-          thumbnailUrl,
+    thumbnail_url:
+      thumbnailUrl,
 
-        file_name:
-          fileName,
+    file_name:
+      fileName,
 
-        file_size:
-          fileSize,
+    file_size:
+      fileSize,
 
-        duration:
-          duration,
+    duration:
+      duration,
 
-        created_at:
-          createdAt,
+    created_at:
+      createdAt,
 
-        updated_at:
-          createdAt,
+    updated_at:
+      createdAt,
 
-        appwrite_team_id:
-          appwriteTeamId
-      },
-      undefined
-    );
+    appwrite_team_id:
+      appwriteTeamId
+  };
 
   log(
-    "[CCT_MESSAGE_CREATE] Appwrite document created."
+    `[CCT_MESSAGE_CREATE] Database=${DEFAULT_DATABASE_ID}`
   );
+
+  log(
+    `[CCT_MESSAGE_CREATE] Collection=${COMMUNITY_MESSAGES_COLLECTION_ID}`
+  );
+
+  log(
+    "[CCT_MESSAGE_CREATE] Appwrite createDocument START"
+  );
+
+  let document;
+
+  try {
+    document =
+      await databases.createDocument(
+        DEFAULT_DATABASE_ID,
+        COMMUNITY_MESSAGES_COLLECTION_ID,
+        messageId,
+        documentData,
+        undefined
+      );
+
+    log(
+      "[CCT_MESSAGE_CREATE] Appwrite createDocument SUCCESS"
+    );
+
+    log(
+      `[CCT_MESSAGE_CREATE] Appwrite document ID=${document.$id || document.id || ""}`
+    );
+  } catch (error) {
+    logErrorDetails(
+      log,
+      error,
+      "Appwrite createDocument"
+    );
+
+    throw error;
+  }
 
   const message =
     mapMessageDocument(
@@ -829,8 +1154,24 @@ async function createGroupMessage(req, log) {
   );
 
   log(
+    `[CCT_MESSAGE_CREATE] Mapped response ClientMessageId=${message.clientMessageId}`
+  );
+
+  log(
     `[CCT_MESSAGE_CREATE] Mapped response CommunityId=${message.communityId}`
   );
+
+  if (!message.messageId) {
+    throw new Error(
+      "Appwrite document was created but mapped MessageId is empty."
+    );
+  }
+
+  if (!message.communityId) {
+    throw new Error(
+      "Appwrite document was created but mapped CommunityId is empty."
+    );
+  }
 
   return buildCreateResponse(
     message
@@ -847,6 +1188,9 @@ export default async ({
   log,
   error
 }) => {
+  let currentStage =
+    "Function startup";
+
   try {
     log(
       "CCT API function started"
@@ -874,7 +1218,10 @@ export default async ({
         "/"
       )
         .split("?")[0]
-        .replace(/\/+$/, "");
+        .replace(
+          /\/+$/,
+          ""
+        );
 
     log(
       `CCT community route: ${route}`
@@ -907,6 +1254,9 @@ export default async ({
       if (
         req.method === "GET"
       ) {
+        currentStage =
+          "GET group messages";
+
         const result =
           await listGroupMessages(
             req,
@@ -927,6 +1277,9 @@ export default async ({
       if (
         req.method === "POST"
       ) {
+        currentStage =
+          "POST create group message";
+
         const result =
           await createGroupMessage(
             req,
@@ -940,7 +1293,9 @@ export default async ({
 
       return res.json(
         {
-          success: false,
+          success:
+            false,
+
           error:
             "Method not allowed."
         },
@@ -955,34 +1310,63 @@ export default async ({
      */
 
     return res.json({
-      success: true,
-      service: "CCT Appwrite API",
-      status: "online",
+      success:
+        true,
+
+      service:
+        "CCT Appwrite API",
+
+      status:
+        "online",
+
       route
     });
 
   } catch (e) {
-    error(e);
-
-    const message =
-      e instanceof Error
-        ? e.message
-        : String(e);
+    /*
+     * Full safe diagnostic information goes
+     * to Appwrite logs.
+     */
+    logErrorDetails(
+      log,
+      e,
+      currentStage
+    );
 
     /*
-     * Do not expose secrets,
-     * Firebase tokens,
-     * Appwrite API keys,
-     * or private credentials.
+     * Also preserve Appwrite's error logger.
      */
+    try {
+      error(e);
+    } catch {
+      // Do not allow diagnostic logging
+      // itself to replace the original error.
+    }
 
+    const details =
+      getErrorDetails(e);
+
+    /*
+     * Do not expose:
+     * - Firebase tokens
+     * - Appwrite API keys
+     * - private keys
+     * - passwords
+     * - credentials
+     * - stack traces to the mobile client
+     *
+     * Detailed diagnostics remain in
+     * Appwrite execution logs.
+     */
     return res.json(
       {
-        success: false,
-        error: message
+        success:
+          false,
+
+        error:
+          details.message || "Internal server error."
       },
       500
     );
   }
 };
-
