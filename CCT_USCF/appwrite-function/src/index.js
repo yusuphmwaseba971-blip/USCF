@@ -93,11 +93,14 @@ const auth =
  * ------------------------------------------------------------ */
 
 const appwriteEndpoint =
-  process.env.APPWRITE_ENDPOINT ||
-  "https://sgp.cloud.appwrite.io/v1";
+  (
+    process.env.APPWRITE_ENDPOINT ||
+    "https://sgp.cloud.appwrite.io/v1"
+  ).replace(/\/+$/, "");
 
 const appwriteProjectId =
-  process.env.APPWRITE_PROJECT_ID;
+  process.env.APPWRITE_PROJECT_ID ||
+  "project-sgp-cct-uscf";
 
 const appwriteApiKey =
   process.env.APPWRITE_API_KEY;
@@ -127,13 +130,9 @@ const databases =
  * Constants
  * ------------------------------------------------------------ */
 
-const DEFAULT_DATABASE_ID =
-  process.env.APPWRITE_DATABASE_ID ||
-  "database-cct-uscf-db";
+const DEFAULT_DATABASE_ID = "database-cct-uscf-db";
 
-const COMMUNITY_MESSAGES_COLLECTION_ID =
-  process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
-  "community_messages";
+const COMMUNITY_MESSAGES_COLLECTION_ID = "community_messages";
 
 /* ------------------------------------------------------------
  * Diagnostic helpers
@@ -1118,14 +1117,54 @@ async function createGroupMessage(
   let document;
 
   try {
-    document =
-      await databases.createDocument(
-        DEFAULT_DATABASE_ID,
-        COMMUNITY_MESSAGES_COLLECTION_ID,
-        messageId,
-        documentData,
-        undefined
-      );
+    const appwriteCreateUrl =
+  `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents`;
+
+console.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST URL=" + appwriteCreateUrl);
+console.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST create START");
+
+const appwriteResponse = await fetch(appwriteCreateUrl, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-Appwrite-Project": appwriteProjectId,
+    "X-Appwrite-Key": appwriteApiKey
+  },
+  body: JSON.stringify({
+    documentId: messageId,
+    data: documentData
+  })
+});
+
+const appwriteResponseText = await appwriteResponse.text();
+
+console.log(
+  "[CCT_MESSAGE_CREATE] Direct Appwrite REST status=" +
+  appwriteResponse.status
+);
+
+if (!appwriteResponse.ok) {
+  console.error(
+    "[CCT_MESSAGE_CREATE] Direct Appwrite REST FAILED body=" +
+    appwriteResponseText
+  );
+
+  throw new Error(
+    `Appwrite create failed (${appwriteResponse.status}): ${appwriteResponseText}`
+  );
+}
+
+try {
+  document = JSON.parse(appwriteResponseText);
+} catch {
+  document = {
+    $id: messageId,
+    raw: appwriteResponseText
+  };
+}
+
+console.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST create SUCCESS");
 
     log(
       "[CCT_MESSAGE_CREATE] Appwrite createDocument SUCCESS"
