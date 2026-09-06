@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.AddPrayerPage"
+    Title="Add Prayer"
+    BackgroundColor="#F8FAFC">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+            <Label Text="🙏" FontSize="48" HorizontalOptions="Center" />
+            <Label Text="Prayer Request" FontSize="28" FontAttributes="Bold" TextColor="#0F172A" HorizontalOptions="Center" />
+            <Label Text="How can we pray for you?" FontSize="16" TextColor="#475569" HorizontalOptions="Center" />
+
+            <Border BackgroundColor="White" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Share what's on your heart." FontAttributes="Bold" TextColor="#0F172A" />
+                    <Editor x:Name="PrayerEditor" Placeholder="Write your prayer request here..." HeightRequest="180" AutoSize="TextChanges" BackgroundColor="#F8FAFC" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border BackgroundColor="White" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Prayer Category" FontAttributes="Bold" TextColor="#0F172A" />
+                    <Picker x:Name="CategoryPicker" Title="Select a category" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border BackgroundColor="White" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Who should pray for you?" FontAttributes="Bold" TextColor="#0F172A" />
+                    <Picker x:Name="ReachPicker" Title="Select prayer reach" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border BackgroundColor="White" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Who can see the prayer?" FontAttributes="Bold" TextColor="#0F172A" />
+                    <Picker x:Name="VisibilityPicker" Title="Prayer visibility" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border BackgroundColor="White" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Who can see your name?" FontAttributes="Bold" TextColor="#0F172A" />
+                    <Picker x:Name="NameVisibilityPicker" Title="Author visibility" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button
+                x:Name="SubmitPrayerButton"
+                Text="🙏 ADD PRAYER"
+                BackgroundColor="#009E2C"
+                TextColor="White"
+                CornerRadius="18"
+                HeightRequest="56"
+                Clicked="OnSubmitPrayerClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

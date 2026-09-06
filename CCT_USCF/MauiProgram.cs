@@ -233,21 +233,4 @@ builder.Services.AddSingleton<AppAppearanceService>();
         return app;
     }
 
-    // =========================================================
-    // FIREBASE SETTINGS
-    // =========================================================
-
-   private static CrossFirebaseSettings
-       CreateFirebaseSettings()
-   {
-       return new CrossFirebaseSettings(
-           isAnalyticsEnabled: true,
-           isAuthEnabled: true,
-           isCloudMessagingEnabled: true,
-           isDynamicLinksEnabled: true,
-           isFirestoreEnabled: true,
-           isFunctionsEnabled: true,
-           isRemoteConfigEnabled: true,
-           isStorageEnabled: false);
-   }
 }

@@ -31,9 +31,10 @@ import { getAuth } from "firebase-admin/auth";
  * ============================================================
  */
 
-/* ------------------------------------------------------------
- * Firebase initialization
- * ------------------------------------------------------------ */
+/* ============================================================
+ * FIREBASE INITIALIZATION
+ * ============================================================
+ */
 
 function createFirebaseApp() {
   const existingApps = getApps();
@@ -46,8 +47,16 @@ function createFirebaseApp() {
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
   if (serviceAccountJson) {
-    const serviceAccount =
-      JSON.parse(serviceAccountJson);
+    let serviceAccount;
+
+    try {
+      serviceAccount =
+        JSON.parse(serviceAccountJson);
+    } catch (error) {
+      throw new Error(
+        "FIREBASE_SERVICE_ACCOUNT_JSON contains invalid JSON."
+      );
+    }
 
     return initializeApp({
       credential: cert(serviceAccount)
@@ -63,20 +72,27 @@ function createFirebaseApp() {
   const privateKey =
     process.env.FIREBASE_PRIVATE_KEY;
 
-  if (!projectId || !clientEmail || !privateKey) {
+  if (
+    !projectId ||
+    !clientEmail ||
+    !privateKey
+  ) {
     throw new Error(
       "Firebase Admin configuration is incomplete."
     );
   }
 
+  const normalizedPrivateKey =
+    privateKey
+      .replace(/\\n/g, "\n")
+      .replace(/\r\n/g, "\n")
+      .trim();
+
   return initializeApp({
     credential: cert({
       projectId,
       clientEmail,
-      privateKey: privateKey
-        .replace(/\\n/g, "\n")
-        .replace(/\r\n/g, "\n")
-        .trim()
+      privateKey: normalizedPrivateKey
     })
   });
 }
@@ -87,19 +103,23 @@ const firebaseApp =
 const auth =
   getAuth(firebaseApp);
 
-/* ------------------------------------------------------------
- * Appwrite initialization
- * ------------------------------------------------------------ */
+
+/* ============================================================
+ * APPWRITE INITIALIZATION
+ * ============================================================
+ */
 
 const appwriteEndpoint =
-  (
-    process.env.APPWRITE_ENDPOINT ||
-    "https://sgp.cloud.appwrite.io/v1"
-  ).replace(/\/+$/, "");
+  process.env.APPWRITE_ENDPOINT ||
+  "https://sgp.cloud.appwrite.io/v1";
 
 const appwriteProjectId =
+<<<<<<< HEAD
   process.env.APPWRITE_PROJECT_ID ||
   "cct-uscf";
+=======
+  process.env.APPWRITE_PROJECT_ID;
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
 const appwriteApiKey =
   process.env.APPWRITE_API_KEY;
@@ -116,6 +136,7 @@ if (!appwriteApiKey) {
   );
 }
 
+<<<<<<< HEAD
 /* ------------------------------------------------------------
  * Constants
  * ------------------------------------------------------------ */
@@ -137,9 +158,50 @@ const COMMUNITY_MESSAGES_COLLECTION_ID =
  * Never log request headers, Firebase tokens,
  * Appwrite API keys, private keys, passwords,
  * or other credentials.
+=======
+const appwriteClient =
+  new Client()
+    .setEndpoint(appwriteEndpoint)
+    .setProject(appwriteProjectId)
+    .setKey(appwriteApiKey);
+
+const databases =
+  new Databases(appwriteClient);
+
+
+/* ============================================================
+ * CONSTANTS
+ * ============================================================
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
  */
+
+const DEFAULT_DATABASE_ID =
+  process.env.APPWRITE_DATABASE_ID ||
+  "database-cct-uscf-db";
+
+const COMMUNITY_MESSAGES_COLLECTION_ID =
+  process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
+  "community_messages";
+
+
+/* ============================================================
+ * SAFE ERROR DIAGNOSTICS
+ * ============================================================
+ *
+ * Never log:
+ * - Firebase ID tokens
+ * - Authorization headers
+ * - Appwrite API keys
+ * - Firebase private keys
+ * - passwords
+ * - credentials
+ */
+
 function getErrorDetails(error) {
-  if (error === null || error === undefined) {
+  if (
+    error === null ||
+    error === undefined
+  ) {
     return {
       name: "UnknownError",
       message: "Unknown error.",
@@ -152,9 +214,7 @@ function getErrorDetails(error) {
     let cause = null;
 
     if (error.cause !== undefined) {
-      if (
-        error.cause instanceof Error
-      ) {
+      if (error.cause instanceof Error) {
         cause = {
           name:
             error.cause.name ||
@@ -169,7 +229,8 @@ function getErrorDetails(error) {
             null
         };
       } else if (
-        typeof error.cause === "object"
+        typeof error.cause === "object" &&
+        error.cause !== null
       ) {
         try {
           cause =
@@ -204,17 +265,13 @@ function getErrorDetails(error) {
   }
 
   return {
-    name:
-      "UnknownError",
-
-    message:
-      String(error),
-
+    name: "UnknownError",
+    message: String(error),
     cause: null,
-
     stack: null
   };
 }
+
 
 function logErrorDetails(
   log,
@@ -240,27 +297,9 @@ function logErrorDetails(
     details.cause !== null &&
     details.cause !== undefined
   ) {
-    if (
-      typeof details.cause === "object"
-    ) {
-      log(
-        `[CCT_ERROR] CAUSE_NAME=${details.cause.name || ""}`
-      );
-
-      log(
-        `[CCT_ERROR] CAUSE_MESSAGE=${details.cause.message || ""}`
-      );
-
-      if (details.cause.stack) {
-        log(
-          `[CCT_ERROR] CAUSE_STACK=${details.cause.stack}`
-        );
-      }
-    } else {
-      log(
-        `[CCT_ERROR] CAUSE=${details.cause}`
-      );
-    }
+    log(
+      `[CCT_ERROR] CAUSE=${details.cause}`
+    );
   } else {
     log(
       "[CCT_ERROR] CAUSE=<none>"
@@ -274,10 +313,8 @@ function logErrorDetails(
   }
 }
 
-/* ------------------------------------------------------------
- * Utility helpers
- * ------------------------------------------------------------ */
 
+<<<<<<< HEAD
 function readHeader(req, name) {
   const requestedName = String(name).toLowerCase();
   const candidates = [
@@ -290,6 +327,44 @@ function readHeader(req, name) {
     if (!headers) {
       continue;
     }
+=======
+/* ============================================================
+ * HTTP RESPONSE HELPERS
+ * ============================================================
+ */
+
+function jsonResponse(
+  res,
+  body,
+  statusCode = 200
+) {
+  return res.json(
+    body,
+    statusCode
+  );
+}
+
+
+/* ============================================================
+ * HEADER HELPERS
+ * ============================================================
+ */
+
+function readHeader(
+  req,
+  name
+) {
+  const headers =
+    req.headers || {};
+
+  const lowerName =
+    name.toLowerCase();
+
+  const direct =
+    headers[name] ??
+    headers[lowerName] ??
+    headers[name.toUpperCase()];
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
     if (typeof headers.get === "function") {
       const value = headers.get(name) ?? headers.get(requestedName);
@@ -298,6 +373,7 @@ function readHeader(req, name) {
       }
     }
 
+<<<<<<< HEAD
     if (typeof headers === "object") {
       for (const [key, value] of Object.entries(headers)) {
         if (key.toLowerCase() === requestedName) {
@@ -318,10 +394,27 @@ function readHeader(req, name) {
         return String(value).trim();
       }
     }
+=======
+  if (
+    lowerName ===
+    "authorization"
+  ) {
+    return (
+      headers.authorization ??
+      headers.Authorization ??
+      ""
+    );
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   return "";
 }
+
+
+/* ============================================================
+ * GENERAL UTILITY HELPERS
+ * ============================================================
+ */
 
 function normalizeString(value) {
   if (
@@ -333,6 +426,7 @@ function normalizeString(value) {
 
   return String(value).trim();
 }
+
 
 function parseOptionalInt(value) {
   if (
@@ -353,6 +447,7 @@ function parseOptionalInt(value) {
   return Math.trunc(number);
 }
 
+
 function toNumber(value) {
   if (
     value === null ||
@@ -370,6 +465,7 @@ function toNumber(value) {
     : 0;
 }
 
+
 function isAllowedMessageType(value) {
   return [
     "text",
@@ -378,6 +474,7 @@ function isAllowedMessageType(value) {
     "audio"
   ].includes(value);
 }
+
 
 function safeIsoDate(value) {
   if (!value) {
@@ -398,11 +495,15 @@ function safeIsoDate(value) {
   return date.toISOString();
 }
 
-/* ------------------------------------------------------------
- * Appwrite document → API message
- * ------------------------------------------------------------ */
 
-function mapMessageDocument(document) {
+/* ============================================================
+ * APPWRITE DOCUMENT → API MESSAGE
+ * ============================================================
+ */
+
+function mapMessageDocument(
+  document
+) {
   return {
     id:
       document.$id ??
@@ -503,16 +604,21 @@ function mapMessageDocument(document) {
   };
 }
 
-/* ------------------------------------------------------------
- * Response builders
- * ------------------------------------------------------------ */
 
-function buildCreateResponse(message) {
+/* ============================================================
+ * RESPONSE BUILDERS
+ * ============================================================
+ */
+
+function buildCreateResponse(
+  message
+) {
   return {
+    success: true,
+
     message,
 
-    data:
-      message,
+    data: message,
 
     id:
       message.id,
@@ -521,37 +627,35 @@ function buildCreateResponse(message) {
       message.messageId,
 
     clientMessageId:
-      message.clientMessageId,
-
-    success:
-      true
+      message.clientMessageId
   };
 }
 
-function buildListResponse(items) {
-  return {
-    messages:
-      items,
 
-    data:
-      items,
+function buildListResponse(
+  items
+) {
+  return {
+    success: true,
+
+    messages: items,
+
+    data: items,
 
     items,
 
-    results:
-      items,
+    results: items,
 
     count:
-      items.length,
-
-    success:
-      true
+      items.length
   };
 }
 
-/* ------------------------------------------------------------
- * Firebase authentication
- * ------------------------------------------------------------ */
+
+/* ============================================================
+ * FIREBASE AUTHENTICATION
+ * ============================================================
+ */
 
 async function verifyFirebaseRequest(
   req,
@@ -566,10 +670,21 @@ async function verifyFirebaseRequest(
     );
 
   if (!authorization) {
+<<<<<<< HEAD
     log("[CCT_FIREBASE_AUTH] Authorization header found: NO");
     throw new Error(
       "Missing Authorization header."
     );
+=======
+    const error =
+      new Error(
+        "Missing Authorization header."
+      );
+
+    error.statusCode = 401;
+
+    throw error;
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   log("[CCT_FIREBASE_AUTH] Authorization header found: YES");
@@ -580,24 +695,54 @@ async function verifyFirebaseRequest(
     );
 
   if (!match) {
+<<<<<<< HEAD
     log("[CCT_FIREBASE_AUTH] Authorization scheme = invalid");
     throw new Error(
       "Invalid Authorization header."
     );
+=======
+    const error =
+      new Error(
+        "Invalid Authorization header."
+      );
+
+    error.statusCode = 401;
+
+    throw error;
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   const idToken =
     match[1].trim();
 
   if (!idToken) {
+<<<<<<< HEAD
     log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer, token present: NO");
     throw new Error(
       "Missing Firebase ID token."
     );
+=======
+    const error =
+      new Error(
+        "Missing Firebase ID token."
+      );
+
+    error.statusCode = 401;
+
+    throw error;
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer");
   log("[CCT_FIREBASE_AUTH] Firebase token present: YES");
+  log(
+    "[CCT_FIREBASE_AUTH] Authorization header found: YES"
+  );
+
+  log(
+    "[CCT_FIREBASE_AUTH] Authorization scheme = Bearer"
+  );
+
   log(
     "[CCT_FIREBASE_AUTH] Firebase ID-token verification START"
   );
@@ -612,9 +757,14 @@ async function verifyFirebaseRequest(
       !firebaseUser ||
       !firebaseUser.uid
     ) {
-      throw new Error(
-        "Firebase ID-token verification returned no UID."
-      );
+      const error =
+        new Error(
+          "Firebase ID-token verification returned no UID."
+        );
+
+      error.statusCode = 401;
+
+      throw error;
     }
 
     log(
@@ -622,6 +772,7 @@ async function verifyFirebaseRequest(
     );
 
     return firebaseUser;
+<<<<<<< HEAD
     } catch (error) {
       logErrorDetails(
         log,
@@ -637,11 +788,40 @@ async function verifyFirebaseRequest(
         "Firebase ID-token verification failed."
       );
     }
+=======
+
+  } catch (error) {
+    logErrorDetails(
+      log,
+      error,
+      "Firebase ID-token verification"
+    );
+
+    if (
+      error &&
+      error.statusCode === 401
+    ) {
+      throw error;
+    }
+
+    const authError =
+      new Error(
+        "Firebase ID-token verification failed."
+      );
+
+    authError.statusCode = 401;
+    authError.cause = error;
+
+    throw authError;
+  }
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 }
 
-/* ------------------------------------------------------------
- * Request body parsing
- * ------------------------------------------------------------ */
+
+/* ============================================================
+ * REQUEST BODY
+ * ============================================================
+ */
 
 function getRequestBody(req) {
   if (!req.body) {
@@ -677,9 +857,11 @@ function getRequestBody(req) {
   return {};
 }
 
-/* ------------------------------------------------------------
- * GET group messages
- * ------------------------------------------------------------ */
+
+/* ============================================================
+ * GET GROUP MESSAGES
+ * ============================================================
+ */
 
 async function listGroupMessages(
   req,
@@ -801,6 +983,7 @@ async function listGroupMessages(
     log(
       `[CCT_MESSAGE_LIST] Appwrite REST list SUCCESS count=${result.documents?.length || 0}`
     );
+
   } catch (error) {
     logErrorDetails(
       log,
@@ -811,7 +994,15 @@ async function listGroupMessages(
     throw error;
   }
 
+  const documents =
+    Array.isArray(
+      result.documents
+    )
+      ? result.documents
+      : [];
+
   const items =
+<<<<<<< HEAD
     (result.documents || [])
       .filter(document => {
         const documentCommunityId =
@@ -866,15 +1057,22 @@ async function listGroupMessages(
       .map(
         mapMessageDocument
       );
+=======
+    documents.map(
+      mapMessageDocument
+    );
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
   return buildListResponse(
     items
   );
 }
 
-/* ------------------------------------------------------------
- * POST create group message
- * ------------------------------------------------------------ */
+
+/* ============================================================
+ * POST CREATE GROUP MESSAGE
+ * ============================================================
+ */
 
 async function createGroupMessage(
   req,
@@ -889,7 +1087,7 @@ async function createGroupMessage(
 
   /*
    * Firebase authentication MUST happen
-   * before creating the Appwrite message.
+   * before Appwrite message creation.
    */
   const firebaseUser =
     await verifyFirebaseRequest(
@@ -959,10 +1157,12 @@ async function createGroupMessage(
   }
 
   /*
-   * Firebase UID is authoritative.
+   * SECURITY:
    *
-   * Never trust senderUid supplied
-   * by the mobile application.
+   * Firebase verified UID is authoritative.
+   *
+   * senderUid supplied by the mobile client
+   * is deliberately ignored.
    */
   const senderUid =
     firebaseUser.uid;
@@ -1087,13 +1287,6 @@ async function createGroupMessage(
     `[CCT_MESSAGE_CREATE] BranchId=${branchId ?? ""}`
   );
 
-  /*
-   * IMPORTANT:
-   *
-   * Do not use senderUid from the request body.
-   * Firebase verified UID is used instead.
-   */
-
   const documentData = {
     message_id:
       messageId,
@@ -1168,11 +1361,18 @@ async function createGroupMessage(
     `[CCT_MESSAGE_CREATE] Collection=${COMMUNITY_MESSAGES_COLLECTION_ID}`
   );
 
+<<<<<<< HEAD
   log("[CCT_MESSAGE_CREATE] Appwrite REST create START");
+=======
+  log(
+    "[CCT_MESSAGE_CREATE] Appwrite createDocument START"
+  );
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
   let document;
 
   try {
+<<<<<<< HEAD
     const appwriteCreateUrl =
       `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
       `/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents`;
@@ -1209,7 +1409,25 @@ async function createGroupMessage(
 
     log(
       `[CCT_MESSAGE_CREATE] Appwrite REST create SUCCESS documentId=${document.$id || document.id || ""}`
+=======
+    document =
+      await databases.createDocument(
+        DEFAULT_DATABASE_ID,
+        COMMUNITY_MESSAGES_COLLECTION_ID,
+        messageId,
+        documentData,
+        undefined
+      );
+
+    log(
+      "[CCT_MESSAGE_CREATE] Appwrite createDocument SUCCESS"
     );
+
+    log(
+      `[CCT_MESSAGE_CREATE] Appwrite document ID=${document.$id || document.id || ""}`
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
+    );
+
   } catch (error) {
     logErrorDetails(
       log,
@@ -1254,9 +1472,79 @@ async function createGroupMessage(
   );
 }
 
-/* ------------------------------------------------------------
- * Main Appwrite Function
- * ------------------------------------------------------------ */
+
+/* ============================================================
+ * ROUTE RESOLUTION
+ * ============================================================
+ */
+
+function getRoute(req) {
+  const url =
+    new URL(
+      req.url ||
+      "https://example.invalid/"
+    );
+
+  return (
+    url.pathname ||
+    req.path ||
+    "/"
+  )
+    .split("?")[0]
+    .replace(
+      /\/+$/,
+      ""
+    );
+}
+
+
+/* ============================================================
+ * ERROR STATUS
+ * ============================================================
+ */
+
+function getErrorStatusCode(error) {
+  if (
+    error &&
+    Number.isInteger(
+      error.statusCode
+    )
+  ) {
+    return error.statusCode;
+  }
+
+  const message =
+    error?.message ||
+    "";
+
+  if (
+    message ===
+      "Missing Authorization header." ||
+    message ===
+      "Invalid Authorization header." ||
+    message ===
+      "Missing Firebase ID token." ||
+    message ===
+      "Firebase ID-token verification failed."
+  ) {
+    return 401;
+  }
+
+  if (
+    message ===
+    "Method not allowed."
+  ) {
+    return 405;
+  }
+
+  return 500;
+}
+
+
+/* ============================================================
+ * MAIN APPWRITE FUNCTION
+ * ============================================================
+ */
 
 export default async ({
   req,
@@ -1272,32 +1560,8 @@ export default async ({
       "CCT API function started"
     );
 
-    const url =
-      new URL(
-        req.url ||
-        "https://example.invalid/"
-      );
-
-    /*
-     * IMPORTANT:
-     *
-     * Prefer URL pathname over req.path.
-     *
-     * In Appwrite, req.path may sometimes
-     * resolve to "/" while the actual URL
-     * contains the function route.
-     */
     const route =
-      (
-        url.pathname ||
-        req.path ||
-        "/"
-      )
-        .split("?")[0]
-        .replace(
-          /\/+$/,
-          ""
-        );
+      getRoute(req);
 
     log(
       `CCT community route: ${route}`
@@ -1316,9 +1580,9 @@ export default async ({
     );
 
     /*
-     * --------------------------------------------------------
-     * GET /api/community/messages/group
-     * --------------------------------------------------------
+     * ========================================================
+     * COMMUNITY GROUP MESSAGE ROUTE
+     * ========================================================
      */
 
     if (
@@ -1327,6 +1591,13 @@ export default async ({
       route ===
         "api/community/messages/group"
     ) {
+
+      /*
+       * ------------------------------------------------------
+       * GET
+       * ------------------------------------------------------
+       */
+
       if (
         req.method === "GET"
       ) {
@@ -1339,14 +1610,17 @@ export default async ({
             log
           );
 
-        return res.json(
-          result
+        return jsonResponse(
+          res,
+          result,
+          200
         );
       }
 
+
       /*
        * ------------------------------------------------------
-       * POST /api/community/messages/group
+       * POST
        * ------------------------------------------------------
        */
 
@@ -1362,93 +1636,125 @@ export default async ({
             log
           );
 
-        return res.json(
-          result
+        return jsonResponse(
+          res,
+          result,
+          200
         );
       }
 
-      return res.json(
-        {
-          success:
-            false,
 
-          error:
-            "Method not allowed."
+      /*
+       * ------------------------------------------------------
+       * OTHER METHODS
+       * ------------------------------------------------------
+       */
+
+      return jsonResponse(
+        res,
+        {
+          success: false,
+          error: "Method not allowed."
         },
         405
       );
     }
 
+
     /*
-     * --------------------------------------------------------
-     * Health / default response
-     * --------------------------------------------------------
+     * ========================================================
+     * DEFAULT / HEALTH RESPONSE
+     * ========================================================
      */
 
-    return res.json({
-      success:
-        true,
+    return jsonResponse(
+      res,
+      {
+        success: true,
 
-      service:
-        "CCT Appwrite API",
+        service:
+          "CCT Appwrite API",
 
-      status:
-        "online",
+        status:
+          "online",
 
-      route
-    });
+        route
+      },
+      200
+    );
 
   } catch (e) {
+
     /*
-     * Full safe diagnostic information goes
-     * to Appwrite logs.
+     * --------------------------------------------------------
+     * SAFE DIAGNOSTICS
+     * --------------------------------------------------------
      */
+
     logErrorDetails(
       log,
       e,
       currentStage
     );
 
+
     /*
-     * Also preserve Appwrite's error logger.
+     * Preserve Appwrite error logger.
+     *
+     * This must NEVER replace the original
+     * exception if logging itself fails.
      */
+
     try {
       error(e);
     } catch {
-      // Do not allow diagnostic logging
-      // itself to replace the original error.
+      // Ignore diagnostic logger failure.
     }
+
 
     const details =
       getErrorDetails(e);
 
+<<<<<<< HEAD
     const isAuthenticationFailure =
       currentStage.includes("group message") &&
       /Authorization|Firebase|ID-token|token/i.test(
         details.message || ""
       );
+=======
+    const statusCode =
+      getErrorStatusCode(e);
+
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
     /*
-     * Do not expose:
-     * - Firebase tokens
-     * - Appwrite API keys
-     * - private keys
-     * - passwords
-     * - credentials
-     * - stack traces to the mobile client
+     * --------------------------------------------------------
+     * SAFE CLIENT RESPONSE
+     * --------------------------------------------------------
      *
-     * Detailed diagnostics remain in
-     * Appwrite execution logs.
+     * Never return:
+     * - stack traces
+     * - Firebase tokens
+     * - Authorization headers
+     * - private keys
+     * - Appwrite API keys
+     * - credentials
      */
-    return res.json(
+
+    return jsonResponse(
+      res,
       {
-        success:
-          false,
+        success: false,
 
         error:
-          details.message || "Internal server error."
+          details.message ||
+          "Internal server error."
       },
+<<<<<<< HEAD
       isAuthenticationFailure ? 401 : 500
+=======
+      statusCode
+>>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
     );
   }
 };
