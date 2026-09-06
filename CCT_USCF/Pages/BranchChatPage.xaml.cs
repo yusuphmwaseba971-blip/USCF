@@ -771,6 +771,26 @@ DateTime? updatedAt =
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(message.MessageId))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BRANCH_CHAT_REALTIME] Skipping realtime message with missing message id. sender_uid={message.SenderUid}, branch={message.BranchId}, source={(isUpdate ? "update" : "create")}");
+                return;
+            }
+
+            var existingIndex =
+                _messages.FindIndex(
+                    existing =>
+                        IsSameMessage(existing, message));
+
+            if (existingIndex >= 0)
+            {
+                _messages[existingIndex] = message;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BRANCH_CHAT_REALTIME] Duplicate realtime message suppressed. message_id={message.MessageId}, branch={message.BranchId}");
+                return;
+            }
+
             await MainThread.InvokeOnMainThreadAsync(() =>
                 ApplyMessageToUi(
                     message,
@@ -1659,12 +1679,37 @@ DateTime? updatedAt =
         BranchChatMessageUi left,
         BranchChatMessageUi right)
     {
+        if (left == null || right == null)
+        {
+            return ReferenceEquals(left, right);
+        }
+
+        if (!string.IsNullOrWhiteSpace(left.MessageId) &&
+            !string.IsNullOrWhiteSpace(right.MessageId) &&
+            string.Equals(left.MessageId, right.MessageId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         if (!string.IsNullOrWhiteSpace(left.ClientMessageId) &&
             !string.IsNullOrWhiteSpace(right.ClientMessageId) &&
             string.Equals(left.ClientMessageId, right.ClientMessageId, StringComparison.Ordinal))
+        {
             return true;
+        }
 
-        return string.Equals(left.MessageId, right.MessageId, StringComparison.Ordinal);
+        if (left.BranchId > 0 && right.BranchId > 0 &&
+            left.BranchId == right.BranchId &&
+            !string.IsNullOrWhiteSpace(left.SenderUid) &&
+            !string.IsNullOrWhiteSpace(right.SenderUid) &&
+            string.Equals(left.SenderUid, right.SenderUid, StringComparison.Ordinal) &&
+            left.CreatedAt == right.CreatedAt &&
+            string.Equals(left.Text, right.Text, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private void AddTextMessage(

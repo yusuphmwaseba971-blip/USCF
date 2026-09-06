@@ -176,6 +176,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<
             CCT_USCF.Services.AuthService>();
 
+       builder.Services.AddSingleton<
+           CCT_USCF.Services.PrayerService>();
+
 // Community
 builder.Services.AddSingleton<
     CCT_USCF.Services.CommunityService>();
@@ -233,4 +236,21 @@ builder.Services.AddSingleton<AppAppearanceService>();
         return app;
     }
 
+    // =========================================================
+    // FIREBASE SETTINGS
+    // =========================================================
+
+    private static CrossFirebaseSettings
+        CreateFirebaseSettings()
+    {
+        return new CrossFirebaseSettings(
+            isAnalyticsEnabled: true,
+            isAuthEnabled: true,
+            isCloudMessagingEnabled: true,
+            isDynamicLinksEnabled: true,
+            isFirestoreEnabled: true,
+            isFunctionsEnabled: true,
+            isRemoteConfigEnabled: true,
+            isStorageEnabled: false);
+    }
 }

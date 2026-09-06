@@ -662,6 +662,29 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(message.MessageId))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP_CHAT] Skipping realtime message with missing message id. sender_uid={message.SenderUid}, group={message.GroupId}");
+                return;
+            }
+
+            var existingIndex =
+                _messages.FindIndex(
+                    existing =>
+                        string.Equals(
+                            existing.MessageId,
+                            message.MessageId,
+                            StringComparison.Ordinal));
+
+            if (existingIndex >= 0)
+            {
+                _messages[existingIndex] = message;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP_CHAT] Duplicate realtime message suppressed. message_id={message.MessageId}, group={message.GroupId}");
+                return;
+            }
+
             await MainThread.InvokeOnMainThreadAsync(
                 () =>
                 {
@@ -2158,6 +2181,13 @@ public partial class GroupChatPage : ContentPage
     private void AddOrReplaceMessage(
         GroupChatMessageUi message)
     {
+        if (string.IsNullOrWhiteSpace(message.MessageId))
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Ignoring empty message id while adding chat message. sender_uid={message.SenderUid}, group={message.GroupId}");
+            return;
+        }
+
         var existingIndex =
             _messages.FindIndex(
                 existing =>
@@ -2170,12 +2200,11 @@ public partial class GroupChatPage : ContentPage
         {
             _messages[existingIndex] =
                 message;
+            return;
         }
-        else
-        {
-            _messages.Add(
-                message);
-        }
+
+        _messages.Add(
+            message);
 
         _messages.Sort(
             (left, right) =>

@@ -1,54 +1,97 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using CCT_USCF.Models;
+using CCT_USCF.Services;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Storage;
 
 namespace CCT_USCF.Pages;
 
 public partial class PrayerPage : ContentPage
 {
-    private readonly CCT_USCF.Services.CommunityService _community;
+    private readonly PrayerService _prayerService;
+    private readonly List<PrayerRequest> _items = new();
 
     public PrayerPage()
     {
         InitializeComponent();
-        _community = (CCT_USCF.Services.CommunityService)MauiProgram.Services.GetService(typeof(CCT_USCF.Services.CommunityService))!;
+        _prayerService = MauiProgram.Services.GetRequiredService<PrayerService>();
+        PrayerRefreshView.Refreshing += OnRefreshRequested;
     }
 
-    private async void OnSubmitClicked(object sender, EventArgs e)
+    protected override async void OnAppearing()
     {
-        var title = TitleEntry?.Text?.Trim() ?? string.Empty;
-        var description = DescriptionEditor?.Text?.Trim() ?? string.Empty;
+        base.OnAppearing();
+        await LoadPrayerWallAsync();
+        ShowIntroIfNeeded();
+    }
 
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(description))
-        {
-            await DisplayAlert("Validation", "Please enter a title and description for the prayer request.", "OK");
-            return;
-        }
-
+    private async Task LoadPrayerWallAsync()
+    {
         try
         {
-            SubmitButton.IsEnabled = false;
-            SubmitButton.Text = "Sending...";
+            var items = await _prayerService.GetPrayerWallAsync(25);
+            _items.Clear();
+            foreach (var item in items)
+                _items.Add(item);
 
-            var dto = await _community.CreatePrayerRequestAsync(title, description);
-            if (dto != null)
-            {
-                await DisplayAlert("Success", "Prayer request submitted.", "OK");
-                TitleEntry.Text = string.Empty;
-                DescriptionEditor.Text = string.Empty;
-            }
-            else
-            {
-                await DisplayAlert("Error", "Server did not return the created prayer request.", "OK");
-            }
+            PrayerCollectionView.ItemsSource = _items.OrderByDescending(x => x.CreatedAtUtc).ToList();
+            PrayerRefreshView.IsRefreshing = false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[PRAYER] Create error: {ex}");
-            await DisplayAlert("Error", ex.Message.Contains("Unauthorized") ? "You must be logged in to submit a prayer request." : "Unable to submit prayer request. Server may be unavailable.", "OK");
+            System.Diagnostics.Debug.WriteLine($"[PRAYER] Load wall error: {ex}");
+            PrayerCollectionView.ItemsSource = new List<PrayerRequest>();
+            PrayerRefreshView.IsRefreshing = false;
         }
-        finally
+    }
+
+    private void ShowIntroIfNeeded()
+    {
+        var seen = Preferences.Default.Get("PrayerIntroSeen", false);
+        IntroOverlay.IsVisible = !seen;
+    }
+
+    private async void OnAddPrayerClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(AddPrayerPage));
+    }
+
+    private async void OnPrayClicked(object sender, EventArgs e)
+    {
+        if (sender is not Button button || button.CommandParameter is not string prayerId)
+            return;
+
+        try
         {
-            SubmitButton.IsEnabled = true;
-            SubmitButton.Text = "🙏 Submit Prayer Request";
+            var success = await _prayerService.PrayForRequestAsync(prayerId);
+            if (!success)
+            {
+                await DisplayAlert("Prayer", "You have already prayed for this request.", "OK");
+                return;
+            }
+
+            await DisplayAlert("Someone prayed for this request.", "🙏", "OK");
+            await LoadPrayerWallAsync();
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PRAYER] Prayer action failed: {ex}");
+            await DisplayAlert("Prayer", "We couldn't record your prayer action right now.", "OK");
+        }
+    }
+
+    private void OnRefreshRequested(object? sender, EventArgs e)
+    {
+        _ = LoadPrayerWallAsync();
+    }
+
+    private void OnIntroDismissed(object sender, EventArgs e)
+    {
+        Preferences.Default.Set("PrayerIntroSeen", true);
+        IntroOverlay.IsVisible = false;
     }
 }

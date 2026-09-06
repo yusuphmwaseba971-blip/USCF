@@ -17,7 +17,8 @@
     <Nullable>enable</Nullable>
 
     <!-- Android -->
-    <SupportedOSPlatformVersion>23.0</SupportedOSPlatformVersion>
+    <TargetPlatformVersion>36.0</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
 
     <!-- Build -->
