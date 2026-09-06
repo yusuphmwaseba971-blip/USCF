@@ -119,14 +119,10 @@ public partial class BranchChatPage : ContentPage
             var uiMessage = ToUiMessage(createdMessage);
             uiMessage.Status = "sent";
             uiMessage.LocalPreviewBytes = null;
-            var existingIndex = _messages.FindIndex(existing => IsSameMessage(existing, uiMessage));
-            if (existingIndex >= 0)
-                _messages[existingIndex] = uiMessage;
-            else
-                _messages.Add(uiMessage);
-
-            _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
-            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            await MainThread.InvokeOnMainThreadAsync(
+                () => ApplyMessageToUi(
+                    uiMessage,
+                    "media-send"));
         }
         catch (Exception ex)
         {
@@ -278,7 +274,7 @@ public partial class BranchChatPage : ContentPage
             {
                 try
                 {
-                    await ListenForAppwriteMessagesAsync(
+                    await ListenForAppwriteMessagesWithReconnectAsync(
                         cancellationToken);
                 }
                 catch (OperationCanceledException)
@@ -333,6 +329,57 @@ public partial class BranchChatPage : ContentPage
         _appwriteRealtimeSocket = null;
     }
 
+    private async Task ListenForAppwriteMessagesWithReconnectAsync(
+        CancellationToken cancellationToken)
+    {
+        var reconnectDelay = TimeSpan.FromSeconds(1);
+
+        while (!cancellationToken.IsCancellationRequested &&
+               _realtimeEnabled)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT_REALTIME] Subscription START branch={_branchId}");
+
+                await ListenForAppwriteMessagesAsync(
+                    cancellationToken);
+
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "[CCT_REALTIME] Subscription ended; reconnecting.");
+                }
+            }
+            catch (OperationCanceledException) when (
+                cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CCT_REALTIME] Subscription failed: {ex.Message}");
+            }
+
+            if (cancellationToken.IsCancellationRequested ||
+                !_realtimeEnabled)
+            {
+                return;
+            }
+
+            await Task.Delay(
+                reconnectDelay,
+                cancellationToken);
+
+            reconnectDelay =
+                TimeSpan.FromSeconds(
+                    Math.Min(
+                        reconnectDelay.TotalSeconds * 2,
+                        15));
+        }
+    }
+
     private async Task ListenForAppwriteMessagesAsync(
         CancellationToken cancellationToken)
     {
@@ -385,7 +432,7 @@ public partial class BranchChatPage : ContentPage
             cancellationToken);
 
         System.Diagnostics.Debug.WriteLine(
-            $"[BRANCH_CHAT] Realtime subscription sent for branch {_branchId}");
+            $"[CCT_REALTIME] Subscription READY branch={_branchId}");
 
         var buffer =
             new byte[16 * 1024];
@@ -428,8 +475,8 @@ public partial class BranchChatPage : ContentPage
 
             messageBuilder.Clear();
 
-            ProcessRealtimeMessage(
-                rawMessage);
+            await MainThread.InvokeOnMainThreadAsync(
+                () => ProcessRealtimeMessage(rawMessage));
         }
     }
 
@@ -724,35 +771,13 @@ DateTime? updatedAt =
     {
         try
         {
+            await MainThread.InvokeOnMainThreadAsync(() =>
+                ApplyMessageToUi(
+                    message,
+                    "realtime"));
+
             await CacheUiMessageAsync(
                 message);
-
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                var existingIndex =
-                    _messages.FindIndex(
-                        existing =>
-                            IsSameMessage(existing, message));
-
-                if (existingIndex >= 0)
-                {
-                    message.Status = "sent";
-                    _messages[existingIndex] =
-                        message;
-                }
-                else
-                {
-                    _messages.Add(
-                        message);
-                }
-
-                _messages.Sort(
-                    (left, right) =>
-                        left.CreatedAt.CompareTo(
-                            right.CreatedAt));
-
-                RenderMessages();
-            });
         }
         catch (Exception ex)
         {
@@ -772,14 +797,25 @@ DateTime? updatedAt =
         {
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                _messages.RemoveAll(
-                    message =>
-                        string.Equals(
-                            message.MessageId,
-                            messageId,
-                            StringComparison.Ordinal));
+                var messageIndex =
+                    _messages.FindIndex(
+                        message =>
+                            string.Equals(
+                                message.MessageId,
+                                messageId,
+                                StringComparison.Ordinal));
 
-                RenderMessages();
+                if (messageIndex < 0)
+                {
+                    return;
+                }
+
+                _messages.RemoveAt(messageIndex);
+
+                if (messageIndex < MessagesLayout.Children.Count)
+                {
+                    MessagesLayout.Children.RemoveAt(messageIndex);
+                }
             });
 
             System.Diagnostics.Debug.WriteLine(
@@ -1039,10 +1075,31 @@ DateTime? updatedAt =
                         message.CreatedAt)
                     .ToList();
 
-            _messages.Clear();
+            foreach (var loadedMessage in uiMessages)
+            {
+                var existingIndex =
+                    _messages.FindIndex(
+                        existing =>
+                            IsSameMessage(
+                                existing,
+                                loadedMessage));
 
-            _messages.AddRange(
-                uiMessages);
+                if (existingIndex >= 0)
+                {
+                    _messages[existingIndex] =
+                        loadedMessage;
+                }
+                else
+                {
+                    _messages.Add(
+                        loadedMessage);
+                }
+            }
+
+            _messages.Sort(
+                (left, right) =>
+                    left.CreatedAt.CompareTo(
+                        right.CreatedAt));
 
             RenderMessages();
 
@@ -1314,6 +1371,87 @@ DateTime? updatedAt =
                 container);
         }
 
+        BranchStatusLabel.Text = "Connected";
+        _ = ScrollMessagesToBottomAsync();
+    }
+
+    private void ApplyMessageToUi(
+        BranchChatMessageUi message,
+        string source)
+    {
+        var existingIndex =
+            _messages.FindIndex(
+                existing =>
+                    IsSameMessage(existing, message));
+
+        if (existingIndex >= 0)
+        {
+            message.Status = "sent";
+            _messages[existingIndex] = message;
+
+            if (existingIndex < MessagesLayout.Children.Count)
+            {
+                var isCurrentUser =
+                    string.Equals(
+                        message.SenderUid,
+                        GetCurrentUserUid(),
+                        StringComparison.Ordinal);
+
+                MessagesLayout.Children[existingIndex] =
+                    CreateMessageContainer(
+                        message,
+                        isCurrentUser,
+                        isCurrentUser ? "You" : message.SenderName);
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT_REALTIME] Updated message source={source} " +
+                $"message_id={message.MessageId}");
+
+            return;
+        }
+
+        var insertIndex =
+            _messages.FindIndex(
+                existing =>
+                    existing.CreatedAt > message.CreatedAt);
+
+        if (insertIndex < 0)
+        {
+            insertIndex = _messages.Count;
+        }
+
+        _messages.Insert(
+            insertIndex,
+            message);
+
+        if (MessagesLayout.Children.Count == 1 &&
+            MessagesLayout.Children[0] is Label emptyLabel &&
+            emptyLabel.Text?.StartsWith("No messages", StringComparison.Ordinal) == true)
+        {
+            MessagesLayout.Children.Clear();
+        }
+
+        var isNewCurrentUser =
+            string.Equals(
+                message.SenderUid,
+                GetCurrentUserUid(),
+                StringComparison.Ordinal);
+
+        MessagesLayout.Children.Insert(
+            Math.Min(insertIndex, MessagesLayout.Children.Count),
+            CreateMessageContainer(
+                message,
+                isNewCurrentUser,
+                isNewCurrentUser ? "You" : message.SenderName));
+
+        BranchStatusLabel.Text = "Connected";
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[CCT_REALTIME] Applied message source={source} " +
+            $"message_id={message.MessageId} " +
+            $"sender_uid_present={!string.IsNullOrWhiteSpace(message.SenderUid)}");
+
         _ = ScrollMessagesToBottomAsync();
     }
 
@@ -1566,33 +1704,38 @@ DateTime? updatedAt =
 
             return;
         }
-        else if (string.IsNullOrWhiteSpace(
-                message.MediaUrl))
+        else
         {
-            AddUnavailableMediaLabel(
-                stack,
-                "Image unavailable.");
-
-            return;
-        }
-
-        var image =
-            new Image
+            if (!TryCreateMediaUri(
+                    message.MediaUrl,
+                    out var imageUri))
             {
-                Source =
-                    ImageSource.FromUri(
-                        new Uri(
-                            message.MediaUrl)),
+                AddUnavailableMediaLabel(
+                    stack,
+                    "Processing...");
 
-                HeightRequest =
-                    190,
+                return;
+            }
 
-                WidthRequest =
-                    255,
+            AddImageFromUri(
+                stack,
+                message,
+                imageUri);
+        }
+    }
 
-                Aspect =
-                    Aspect.AspectFill
-            };
+    private void AddImageFromUri(
+        VerticalStackLayout stack,
+        BranchChatMessageUi message,
+        Uri imageUri)
+    {
+        var image = new Image
+        {
+            Source = ImageSource.FromUri(imageUri),
+            HeightRequest = 190,
+            WidthRequest = 255,
+            Aspect = Aspect.AspectFill
+        };
 
         var tap =
             new TapGestureRecognizer();
@@ -1630,6 +1773,12 @@ DateTime? updatedAt =
         VerticalStackLayout stack,
         BranchChatMessageUi message)
     {
+        if (!TryCreateMediaUri(message.MediaUrl, out _))
+        {
+            AddUnavailableMediaLabel(stack, "Processing...");
+            return;
+        }
+
         var button =
             new Button
             {
@@ -1679,6 +1828,12 @@ DateTime? updatedAt =
         VerticalStackLayout stack,
         BranchChatMessageUi message)
     {
+        if (!TryCreateMediaUri(message.MediaUrl, out _))
+        {
+            AddUnavailableMediaLabel(stack, "Processing...");
+            return;
+        }
+
         var button =
             new Button
             {
@@ -1742,11 +1897,24 @@ DateTime? updatedAt =
             });
     }
 
+    private static bool TryCreateMediaUri(
+        string? mediaUrl,
+        out Uri uri)
+    {
+        return Uri.TryCreate(
+                   mediaUrl,
+                   UriKind.Absolute,
+                   out uri!) &&
+               (uri.Scheme == Uri.UriSchemeHttp ||
+                uri.Scheme == Uri.UriSchemeHttps);
+    }
+
     private static async Task OpenMediaAsync(
         string? mediaUrl)
     {
-        if (string.IsNullOrWhiteSpace(
-                mediaUrl))
+        if (!TryCreateMediaUri(
+                mediaUrl,
+                out var uri))
         {
             return;
         }
@@ -1754,7 +1922,7 @@ DateTime? updatedAt =
         try
         {
             await Launcher.Default.OpenAsync(
-                new Uri(mediaUrl));
+                uri);
         }
         catch (Exception ex)
         {
@@ -2074,14 +2242,23 @@ DateTime? updatedAt =
                 return;
             }
 
+            System.Diagnostics.Debug.WriteLine(
+                "[CCT_MEDIA_PICKER] ATTACHMENT_SELECTED type=image");
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT_MEDIA_PICKER] FILE_NAME_PRESENT={!string.IsNullOrWhiteSpace(result.FileName)}");
+
             byte[]? previewBytes = null;
             await using (var stream = await result.OpenReadAsync())
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "[CCT_MEDIA_PICKER] FILE_ACCESS=SUCCESS");
                 using var memory = new MemoryStream();
                 await stream.CopyToAsync(memory);
                 previewBytes = memory.ToArray();
             }
 
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT_MEDIA_PICKER] FILE_SIZE={previewBytes.Length}");
             SetPendingAttachment(result, "image", previewBytes);
         }
         catch (Exception ex)
@@ -2445,31 +2622,9 @@ DateTime? updatedAt =
                 ToUiMessage(
                     createdMessage);
 
-            var existingIndex =
-                _messages.FindIndex(
-                    existing =>
-                        string.Equals(
-                            existing.MessageId,
-                            uiMessage.MessageId,
-                            StringComparison.Ordinal));
-
-            if (existingIndex >= 0)
-            {
-                _messages[existingIndex] =
-                    uiMessage;
-            }
-            else
-            {
-                _messages.Add(
-                    uiMessage);
-            }
-
-            _messages.Sort(
-                (left, right) =>
-                    left.CreatedAt.CompareTo(
-                        right.CreatedAt));
-
-            RenderMessages();
+            ApplyMessageToUi(
+                uiMessage,
+                "media-send");
 
             System.Diagnostics.Debug.WriteLine(
                 $"[COMMUNITY_MESSAGE] SEND COMPLETE type={messageType}, " +

@@ -1,5 +1,6 @@
 
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Maui.Storage;
@@ -146,10 +147,23 @@ namespace CCT_USCF.Services.Cloudinary
             var uploadUrl =
                 $"https://api.cloudinary.com/v1_1/" +
                 $"{CloudName}/" +
-                $"{normalizedResourceType}/upload";
+                $"{normalizedResourceType}/upload" +
+                $"?upload_preset={Uri.EscapeDataString(UploadPreset)}";
 
             using var form =
                 new MultipartFormDataContent();
+
+            // --------------------------------------------------------
+            // UNSIGNED UPLOAD PRESET
+            // --------------------------------------------------------
+
+            // Add the preset before the binary part. Some Android HTTP
+            // handlers otherwise omit the scalar multipart field.
+            form.Add(
+                new StringContent(
+                    UploadPreset,
+                    Encoding.UTF8),
+                "upload_preset");
 
             // --------------------------------------------------------
             // FILE
@@ -169,15 +183,6 @@ namespace CCT_USCF.Services.Cloudinary
                 file.FileName);
 
             // --------------------------------------------------------
-            // UNSIGNED UPLOAD PRESET
-            // --------------------------------------------------------
-
-            form.Add(
-                new StringContent(
-                    UploadPreset),
-                "upload_preset");
-
-            // --------------------------------------------------------
             // DEBUG
             // --------------------------------------------------------
 
@@ -185,7 +190,7 @@ namespace CCT_USCF.Services.Cloudinary
                 "================================================");
 
             System.Diagnostics.Debug.WriteLine(
-                "[CLOUDINARY] UPLOAD START");
+                "[CCT_CLOUDINARY] UPLOAD_START");
 
             System.Diagnostics.Debug.WriteLine(
                 $"CloudName={CloudName}");
@@ -225,7 +230,7 @@ namespace CCT_USCF.Services.Cloudinary
             if (!response.IsSuccessStatusCode)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    "[CLOUDINARY] UPLOAD FAILED");
+                    "[CCT_CLOUDINARY] UPLOAD_FAILED");
 
                 System.Diagnostics.Debug.WriteLine(
                     $"StatusCode={(int)response.StatusCode}");
@@ -344,7 +349,7 @@ namespace CCT_USCF.Services.Cloudinary
                 "================================================");
 
             System.Diagnostics.Debug.WriteLine(
-                "[CLOUDINARY] UPLOAD SUCCESS");
+                "[CCT_CLOUDINARY] UPLOAD_SUCCESS");
 
             System.Diagnostics.Debug.WriteLine(
                 $"SecureUrl={result.SecureUrl}");
