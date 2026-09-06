@@ -7,7 +7,7 @@ public sealed class AppwriteService
 {
     public const string Endpoint = "https://sgp.cloud.appwrite.io/v1";
     public const string ProjectId = "cct-uscf";
-    public const string DatabaseId = "cct-uscf-db";
+    public const string DatabaseId = "database-cct-uscf-db";
     public const string MessagesCollectionId = "community_messages";
 
     public Client Client { get; }

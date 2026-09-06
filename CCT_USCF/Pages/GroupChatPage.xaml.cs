@@ -665,10 +665,7 @@ public partial class GroupChatPage : ContentPage
             await MainThread.InvokeOnMainThreadAsync(
                 () =>
                 {
-                    AddOrReplaceMessage(
-                        message);
-
-                    RenderMessages();
+                    AddOrReplaceMessage(message);
                 });
 
             await CacheUiMessageAsync(
@@ -809,8 +806,7 @@ public partial class GroupChatPage : ContentPage
 
             _messages.Clear();
 
-            _messages.AddRange(
-                loadedMessages);
+            _messages.AddRange(loadedMessages);
 
             RenderMessages();
         }
@@ -1547,8 +1543,6 @@ public partial class GroupChatPage : ContentPage
 
             MessageEntry.Text =
                 string.Empty;
-
-            RenderMessages();
         }
         catch (Exception ex)
         {
@@ -2084,8 +2078,6 @@ public partial class GroupChatPage : ContentPage
                 string.Empty;
 
             ClearPendingAttachment();
-
-            RenderMessages();
 
             GroupStatusLabel.Text =
                 "Message sent";
