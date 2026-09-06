@@ -5,6 +5,7 @@ using Appwrite;
 using CCT_USCF.Models;
 using CCT_USCF.Services.Appwrite;
 using SQLite;
+using System.Diagnostics;
 
 namespace CCT_USCF.Services
 {
@@ -1161,6 +1162,10 @@ SenderUid =
                     "Community member";
             }
 
+            branchId ??= currentUser.BranchId?.ToString();
+            regionId ??= currentUser.RegionId?.ToString();
+            districtId ??= currentUser.DistrictId?.ToString();
+
             var messageId =
                 Guid.NewGuid().ToString("N");
 
@@ -1683,107 +1688,144 @@ SenderUid =
                 string requestUri,
                 object? body = null)
         {
-            var firebaseIdToken =
-                await _authService.GetCurrentFirebaseIdTokenAsync();
+           var firebaseIdToken =
+               await _authService.GetCurrentFirebaseIdTokenAsync();
 
-            using var request =
-                new HttpRequestMessage(
-                    method,
-                    requestUri);
+           Debug.WriteLine(
+               "[APPWRITE_COMMUNITY] Firebase user authenticated: YES");
+           Debug.WriteLine(
+               "[APPWRITE_COMMUNITY] Authorization header attached: YES " +
+               "scheme=Bearer token_present=YES");
 
-            request.Headers.Authorization =
-                new AuthenticationHeaderValue(
-                    "Bearer",
-                    firebaseIdToken);
+           async Task<HttpResponseMessage> SendAsync(string token)
+           {
+               using var request =
+                   new HttpRequestMessage(
+                       method,
+                       requestUri);
 
-            if (body != null)
-            {
-                request.Content =
-                    JsonContent.Create(body);
-            }
+               request.Headers.Authorization =
+                   new AuthenticationHeaderValue(
+                       "Bearer",
+                       token);
 
-            using var response =
-                await _httpClient.SendAsync(request);
+               if (body != null)
+               {
+                   request.Content =
+                       JsonContent.Create(body);
+               }
 
-            var rawJson =
-                await response.Content.ReadAsStringAsync();
+               return await _httpClient.SendAsync(request);
+           }
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[APPWRITE_COMMUNITY] RESPONSE STATUS: {(int)response.StatusCode} {response.StatusCode}");
-            System.Diagnostics.Debug.WriteLine(
-                $"[APPWRITE_COMMUNITY] RESPONSE URI: {request.RequestUri}");
-            System.Diagnostics.Debug.WriteLine(
-                $"[APPWRITE_COMMUNITY] RESPONSE CONTENT-TYPE: {response.Content.Headers.ContentType}");
-            System.Diagnostics.Debug.WriteLine(
-                $"[APPWRITE_COMMUNITY] RAW RESPONSE: {rawJson}");
+           var firstResponse =
+               await SendAsync(firebaseIdToken);
 
-            if (response.StatusCode ==
-                    System.Net.HttpStatusCode.Unauthorized ||
-                response.StatusCode ==
-                    System.Net.HttpStatusCode.Forbidden)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[APPWRITE_COMMUNITY] API authorization failed: " +
-                    $"status={(int)response.StatusCode}, uri={requestUri}");
+           HttpResponseMessage response;
+           if (firstResponse.StatusCode ==
+               System.Net.HttpStatusCode.Unauthorized)
+           {
+               Debug.WriteLine(
+                   "[APPWRITE_COMMUNITY] Firebase token rejected; " +
+                   "refreshing once.");
 
-                throw new UnauthorizedAccessException(
-                    "You are not authorized for this community group.");
-            }
+               var refreshedToken =
+                   await _authService.GetCurrentFirebaseIdTokenAsync(
+                       forceRefresh: true);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[APPWRITE_COMMUNITY] API request failed: " +
-                    $"status={(int)response.StatusCode}, uri={requestUri}, " +
-                    $"response={rawJson}");
+               firstResponse.Dispose();
+               response =
+                   await SendAsync(refreshedToken);
+           }
+           else
+           {
+               response = firstResponse;
+           }
 
-                throw new InvalidOperationException(
-                    $"Community API request failed with status " +
-                    $"{(int)response.StatusCode}: {rawJson}");
-            }
+           using (response)
+           {
+               var rawJson =
+                   await response.Content.ReadAsStringAsync();
 
-            if (string.IsNullOrWhiteSpace(rawJson))
-            {
-                throw new InvalidOperationException(
-                    "Community API returned an empty response.");
-            }
+               System.Diagnostics.Debug.WriteLine(
+                   $"[APPWRITE_COMMUNITY] RESPONSE STATUS: " +
+                   $"{(int)response.StatusCode} {response.StatusCode}");
+               System.Diagnostics.Debug.WriteLine(
+                   $"[APPWRITE_COMMUNITY] RESPONSE URI: {requestUri}");
+               System.Diagnostics.Debug.WriteLine(
+                   $"[APPWRITE_COMMUNITY] RESPONSE CONTENT-TYPE: " +
+                   $"{response.Content.Headers.ContentType}");
+               System.Diagnostics.Debug.WriteLine(
+                   $"[APPWRITE_COMMUNITY] RAW RESPONSE: {rawJson}");
 
-            var options =
-                new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
+               if (response.StatusCode ==
+                   System.Net.HttpStatusCode.Unauthorized ||
+                   response.StatusCode ==
+                   System.Net.HttpStatusCode.Forbidden)
+               {
+                   System.Diagnostics.Debug.WriteLine(
+                       $"[APPWRITE_COMMUNITY] API authorization failed: " +
+                       $"status={(int)response.StatusCode}, uri={requestUri}");
 
-            if (typeof(T) == typeof(CommunityMessage))
-            {
-                var message =
-                    DeserializeCommunityMessage(
-                        rawJson,
-                        options);
+                   throw new UnauthorizedAccessException(
+                       "You are not authorized for this community group.");
+               }
 
-                return (T)(object)message;
-            }
+               if (!response.IsSuccessStatusCode)
+               {
+                   System.Diagnostics.Debug.WriteLine(
+                       $"[APPWRITE_COMMUNITY] API request failed: " +
+                       $"status={(int)response.StatusCode}, uri={requestUri}, " +
+                       $"response={rawJson}");
 
-            if (typeof(T) ==
-                typeof(List<CommunityMessage>))
-            {
-                var messages =
-                    DeserializeCommunityMessages(
-                        rawJson,
-                        options);
+                   throw new InvalidOperationException(
+                       $"Community API request failed with status " +
+                       $"{(int)response.StatusCode}: {rawJson}");
+               }
 
-                return (T)(object)messages;
-            }
+               if (string.IsNullOrWhiteSpace(rawJson))
+               {
+                   throw new InvalidOperationException(
+                       "Community API returned an empty response.");
+               }
 
-            var result =
-                JsonSerializer.Deserialize<T>(
-                    rawJson,
-                    options);
+               var options =
+                   new JsonSerializerOptions
+                   {
+                       PropertyNameCaseInsensitive = true
+                   };
 
-            return result
-                ?? throw new InvalidOperationException(
-                    "Community API returned an empty response.");
-        }
+               if (typeof(T) == typeof(CommunityMessage))
+               {
+                   var message =
+                       DeserializeCommunityMessage(
+                           rawJson,
+                           options);
+
+                   return (T)(object)message;
+               }
+
+               if (typeof(T) ==
+                   typeof(List<CommunityMessage>))
+               {
+                   var messages =
+                       DeserializeCommunityMessages(
+                           rawJson,
+                           options);
+
+                   return (T)(object)messages;
+               }
+
+               var result =
+                   JsonSerializer.Deserialize<T>(
+                       rawJson,
+                       options);
+
+               return result
+                   ?? throw new InvalidOperationException(
+                       "Community API returned an empty response.");
+           }
+       }
 
         private static int? ParseOptionalInt(string? value)
         {

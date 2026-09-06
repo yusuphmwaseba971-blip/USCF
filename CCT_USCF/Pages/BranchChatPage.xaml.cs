@@ -1563,6 +1563,8 @@ DateTime? updatedAt =
                 WidthRequest = 255,
                 Aspect = Aspect.AspectFill
             });
+
+            return;
         }
         else if (string.IsNullOrWhiteSpace(
                 message.MediaUrl))

@@ -1,0 +1,109 @@
+warning: in the working copy of 'CCT_USCF/appwrite-function/src/index.js', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/CCT_USCF/appwrite-function/src/index.js b/CCT_USCF/appwrite-function/src/index.js[m
+[1mindex ed6ee85..7aaebe8 100644[m
+[1m--- a/CCT_USCF/appwrite-function/src/index.js[m
+[1m+++ b/CCT_USCF/appwrite-function/src/index.js[m
+[36m@@ -93,11 +93,14 @@[m [mconst auth =[m
+  * ------------------------------------------------------------ */[m
+ [m
+ const appwriteEndpoint =[m
+[31m-  process.env.APPWRITE_ENDPOINT ||[m
+[31m-  "https://sgp.cloud.appwrite.io/v1";[m
+[32m+[m[32m  ([m
+[32m+[m[32m    process.env.APPWRITE_ENDPOINT ||[m
+[32m+[m[32m    "https://sgp.cloud.appwrite.io/v1"[m
+[32m+[m[32m  ).replace(/\/+$/, "");[m
+ [m
+ const appwriteProjectId =[m
+[31m-  process.env.APPWRITE_PROJECT_ID;[m
+[32m+[m[32m  process.env.APPWRITE_PROJECT_ID ||[m
+[32m+[m[32m  "project-sgp-cct-uscf";[m
+ [m
+ const appwriteApiKey =[m
+   process.env.APPWRITE_API_KEY;[m
+[36m@@ -127,13 +130,9 @@[m [mconst databases =[m
+  * Constants[m
+  * ------------------------------------------------------------ */[m
+ [m
+[31m-const DEFAULT_DATABASE_ID =[m
+[31m-  process.env.APPWRITE_DATABASE_ID ||[m
+[31m-  "database-cct-uscf-db";[m
+[32m+[m[32mconst DEFAULT_DATABASE_ID = "database-cct-uscf-db";[m
+ [m
+[31m-const COMMUNITY_MESSAGES_COLLECTION_ID =[m
+[31m-  process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||[m
+[31m-  "community_messages";[m
+[32m+[m[32mconst COMMUNITY_MESSAGES_COLLECTION_ID = "community_messages";[m
+ [m
+ /* ------------------------------------------------------------[m
+  * Diagnostic helpers[m
+[36m@@ -1118,14 +1117,54 @@[m [masync function createGroupMessage([m
+   let document;[m
+ [m
+   try {[m
+[31m-    document =[m
+[31m-      await databases.createDocument([m
+[31m-        DEFAULT_DATABASE_ID,[m
+[31m-        COMMUNITY_MESSAGES_COLLECTION_ID,[m
+[31m-        messageId,[m
+[31m-        documentData,[m
+[31m-        undefined[m
+[31m-      );[m
+[32m+[m[32m    const appwriteCreateUrl =[m
+[32m+[m[32m  `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents`;[m
+[32m+[m
+[32m+[m[32mconsole.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST URL=" + appwriteCreateUrl);[m
+[32m+[m[32mconsole.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST create START");[m
+[32m+[m
+[32m+[m[32mconst appwriteResponse = await fetch(appwriteCreateUrl, {[m
+[32m+[m[32m  method: "POST",[m
+[32m+[m[32m  headers: {[m
+[32m+[m[32m    "Content-Type": "application/json",[m
+[32m+[m[32m    "Accept": "application/json",[m
+[32m+[m[32m    "X-Appwrite-Project": appwriteProjectId,[m
+[32m+[m[32m    "X-Appwrite-Key": appwriteApiKey[m
+[32m+[m[32m  },[m
+[32m+[m[32m  body: JSON.stringify({[m
+[32m+[m[32m    documentId: messageId,[m
+[32m+[m[32m    data: documentData[m
+[32m+[m[32m  })[m
+[32m+[m[32m});[m
+[32m+[m
+[32m+[m[32mconst appwriteResponseText = await appwriteResponse.text();[m
+[32m+[m
+[32m+[m[32mconsole.log([m
+[32m+[m[32m  "[CCT_MESSAGE_CREATE] Direct Appwrite REST status=" +[m
+[32m+[m[32m  appwriteResponse.status[m
+[32m+[m[32m);[m
+[32m+[m
+[32m+[m[32mif (!appwriteResponse.ok) {[m
+[32m+[m[32m  console.error([m
+[32m+[m[32m    "[CCT_MESSAGE_CREATE] Direct Appwrite REST FAILED body=" +[m
+[32m+[m[32m    appwriteResponseText[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  throw new Error([m
+[32m+[m[32m    `Appwrite create failed (${appwriteResponse.status}): ${appwriteResponseText}`[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mtry {[m
+[32m+[m[32m  document = JSON.parse(appwriteResponseText);[m
+[32m+[m[32m} catch {[m
+[32m+[m[32m  document = {[m
+[32m+[m[32m    $id: messageId,[m
+[32m+[m[32m    raw: appwriteResponseText[m
+[32m+[m[32m  };[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mconsole.log("[CCT_MESSAGE_CREATE] Direct Appwrite REST create SUCCESS");[m
+ [m
+     log([m
+       "[CCT_MESSAGE_CREATE] Appwrite createDocument SUCCESS"[m
+[36m@@ -1370,3 +1409,6 @@[m [mexport default async ({[m
+     );[m
+   }[m
+ };[m
+[41m+[m
+[41m+[m
+[41m+[m
