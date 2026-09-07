@@ -133,13 +133,18 @@ public partial class BranchChatPage : ContentPage
         }
     }
 
-    private Task RetryMessageAsync(BranchChatMessageUi message)
+    private async Task RetryMessageAsync(BranchChatMessageUi message)
     {
         message.Status = "sending";
-        RenderMessages();
-        return message.MessageType.Equals("text", StringComparison.OrdinalIgnoreCase)
-            ? PersistTextMessageAsync(message)
-            : PersistMediaMessageAsync(message);
+        await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+        if (message.MessageType.Equals("text", StringComparison.OrdinalIgnoreCase))
+        {
+            await PersistTextMessageAsync(message);
+        }
+        else
+        {
+            await PersistMediaMessageAsync(message);
+        }
     }
 
     // ============================================================
@@ -484,6 +489,10 @@ public partial class BranchChatPage : ContentPage
             uriBuilder.Uri,
             cancellationToken);
 
+        System.Diagnostics.Debug.WriteLine(
+        $"[CCT_REALTIME] Socket OPEN state={socket.State} " +
+        $"branch={_branchId}");
+
         await socket.SendAsync(
             Encoding.UTF8.GetBytes(
                 subscription),
@@ -534,6 +543,9 @@ public partial class BranchChatPage : ContentPage
                 messageBuilder.ToString();
 
             messageBuilder.Clear();
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[CCT_REALTIME] Frame RECEIVED length={rawMessage.Length}");
 
             await MainThread.InvokeOnMainThreadAsync(
                 () => ProcessRealtimeMessage(rawMessage));
@@ -1094,24 +1106,14 @@ DateTime? updatedAt =
                 return;
             }
 
-            var members =
-                await LoadBranchMembersAsync();
-
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT] " +
                 $"UID={GetCurrentUserUid()} " +
-                $"Branch={_branchId} " +
-                $"Members={members.Count}");
+                $"Branch={_branchId}; starting Appwrite message load.");
 
-            BranchStatusLabel.Text =
-                members.Count == 1
-                    ? "1 member in this Branch"
-                    : $"{members.Count} members in this Branch";
-
-            MembersLabel.Text =
-                members.Count == 1
-                    ? "Members (1)"
-                    : $"Members ({members.Count})";
+            // Firestore member metadata is optional for chat history. Do not
+            // let a denied or slow member query block Appwrite messages.
+            _ = LoadBranchMembersForDisplayAsync();
 
             await LoadMessagesFromCacheFirstAsync();
         }
@@ -1122,6 +1124,35 @@ DateTime? updatedAt =
 
             BranchStatusLabel.Text =
                 "Unable to load the Church Group right now.";
+        }
+    }
+
+    private async Task LoadBranchMembersForDisplayAsync()
+    {
+        try
+        {
+            var members = await LoadBranchMembersAsync();
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                BranchStatusLabel.Text =
+                    members.Count == 1
+                        ? "1 member in this Branch"
+                        : $"{members.Count} members in this Branch";
+
+                MembersLabel.Text =
+                    members.Count == 1
+                        ? "Members (1)"
+                        : $"Members ({members.Count})";
+            });
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Member display load complete. Members={members.Count}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT] Member display load failed without blocking messages: {ex}");
         }
     }
 
@@ -1197,7 +1228,7 @@ DateTime? updatedAt =
                     left.CreatedAt.CompareTo(
                         right.CreatedAt));
 
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
 
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT] " +
@@ -1331,7 +1362,7 @@ DateTime? updatedAt =
                     left.CreatedAt.CompareTo(
                         right.CreatedAt));
 
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
 
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT_REFRESH] " +
@@ -1469,7 +1500,6 @@ DateTime? updatedAt =
         }
 
         BranchStatusLabel.Text = "Connected";
-        _ = ScrollMessagesToBottomAsync();
     }
 
     private void ApplyMessageToUi(
@@ -2216,7 +2246,7 @@ DateTime? updatedAt =
                     left.CreatedAt.CompareTo(
                         right.CreatedAt));
 
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
         }
         catch (UnauthorizedAccessException)
         {
@@ -2275,7 +2305,7 @@ DateTime? updatedAt =
                         message.MessageId,
                         StringComparison.Ordinal));
 
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
         }
         catch (UnauthorizedAccessException)
         {
@@ -2841,7 +2871,7 @@ DateTime? updatedAt =
             _messages.Add(localMessage);
             OnRemoveAttachmentClicked(null, EventArgs.Empty);
             MessageEntry.Text = string.Empty;
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
             _ = PersistMediaMessageAsync(localMessage);
 
             return;
@@ -2920,7 +2950,7 @@ DateTime? updatedAt =
 
             _messages.Add(localMessage);
             MessageEntry.Text = string.Empty;
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
 
             _ = PersistTextMessageAsync(localMessage);
         }
@@ -2991,7 +3021,7 @@ DateTime? updatedAt =
                     left.CreatedAt.CompareTo(
                         right.CreatedAt));
 
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
 
             System.Diagnostics.Debug.WriteLine(
                 $"[COMMUNITY_MESSAGE] SEND COMPLETE type=text, " +
@@ -3247,8 +3277,8 @@ DateTime? updatedAt =
                     {
                         await scrollView
                             .ScrollToAsync(
-                                0,
-                                double.MaxValue,
+                                MessagesLayout,
+                                ScrollToPosition.End,
                                 false);
                     }
                 });

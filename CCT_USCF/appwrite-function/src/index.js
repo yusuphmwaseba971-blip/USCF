@@ -703,42 +703,66 @@ async function verifyFirebaseRequest(
  * ============================================================
  */
 
+function getQueryValue(req, name) {
+  const queryValue =
+    req.query?.[name];
+
+  if (
+    queryValue !== undefined &&
+    queryValue !== null
+  ) {
+    return Array.isArray(queryValue)
+      ? queryValue[0]
+      : queryValue;
+  }
+
+  const requestUrl =
+    req.url ||
+    req.path ||
+    "";
+
+  if (!requestUrl) {
+    return undefined;
+  }
+
+  try {
+    return new URL(
+      requestUrl,
+      "https://appwrite.local"
+    ).searchParams.get(name) ??
+      undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseRequestDate(value) {
+  if (
+    typeof value !==
+    "string"
+  ) {
+    return null;
+  }
+
+  const normalizedValue =
+    value.replace(
+      /(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/,
+      "$1$2"
+    );
+
+  const parsedDate =
+    new Date(normalizedValue);
+
+  return Number.isNaN(
+    parsedDate.getTime()
+  )
+    ? null
+    : parsedDate;
+}
+
 function getRequestBody(req) {
   if (!req.body) {
     return {};
-  }
-
-  function getQueryValue(req, name) {
-    const queryValue =
-      req.query?.[name];
-
-    if (
-      queryValue !== undefined &&
-      queryValue !== null
-    ) {
-      return Array.isArray(queryValue)
-        ? queryValue[0]
-        : queryValue;
-    }
-
-    const requestUrl =
-      req.url ||
-      req.path ||
-      "";
-
-    if (!requestUrl) {
-      return undefined;
-    }
-
-    try {
-      return new URL(
-        requestUrl,
-        "https://appwrite.local"
-      ).searchParams.get(name) ??
-        undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   if (
@@ -843,9 +867,9 @@ async function listGroupMessages(
     body.newer_than;
 
   const newerThan =
-    newerThanValue
-      ? new Date(newerThanValue)
-      : null;
+    parseRequestDate(
+      newerThanValue
+    );
 
   const newerThanMs =
     newerThan &&
@@ -880,42 +904,83 @@ async function listGroupMessages(
     "[CCT_MESSAGE_LIST] Appwrite listDocuments START"
   );
 
-  let result;
+  const documents = [];
+  let cursorAfter = null;
+  let pageCount = 0;
 
   try {
-    const listUrl =
-      `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
-      `/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents`;
+    do {
+      pageCount += 1;
 
-    const appwriteResponse =
-      await fetch(
-        listUrl,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "X-Appwrite-Project": appwriteProjectId,
-            "X-Appwrite-Key": appwriteApiKey
+      const queries = [
+        JSON.stringify({
+          method: "limit",
+          values: [100]
+        })
+      ];
+
+      if (cursorAfter) {
+        queries.push(
+          JSON.stringify({
+            method: "cursorAfter",
+            values: [cursorAfter]
+          })
+        );
+      }
+
+      const pageUrl =
+        `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
+        `/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents?` +
+        queries
+          .map(query => `queries[]=${encodeURIComponent(query)}`)
+          .join("&");
+
+      const appwriteResponse =
+        await fetch(
+          pageUrl,
+          {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              "X-Appwrite-Project": appwriteProjectId,
+              "X-Appwrite-Key": appwriteApiKey
+            }
           }
-        }
+        );
+
+      const responseText =
+        await appwriteResponse.text();
+
+      if (!appwriteResponse.ok) {
+        throw new Error(
+          `Appwrite list failed (${appwriteResponse.status}): ${responseText}`
+        );
+      }
+
+      const page =
+        JSON.parse(responseText);
+      const pageDocuments =
+        Array.isArray(page.documents)
+          ? page.documents
+          : [];
+
+      documents.push(...pageDocuments);
+      cursorAfter =
+        pageDocuments.length === 100
+          ? pageDocuments[pageDocuments.length - 1].$id
+          : null;
+
+      log(
+        `[CCT_MESSAGE_LIST] Appwrite REST page=${pageCount} ` +
+        `count=${pageDocuments.length} total=${documents.length}`
       );
+    } while (cursorAfter && pageCount < 100);
 
-    const responseText =
-      await appwriteResponse.text();
-
-    if (!appwriteResponse.ok) {
+    if (cursorAfter) {
       throw new Error(
-        `Appwrite list failed (${appwriteResponse.status}): ${responseText}`
+        "Appwrite message pagination exceeded the safety limit."
       );
     }
-
-    result =
-      JSON.parse(responseText);
-
-    log(
-      `[CCT_MESSAGE_LIST] Appwrite REST list SUCCESS count=${result.documents?.length || 0}`
-    );
-
   } catch (error) {
     logErrorDetails(
       log,
@@ -926,15 +991,8 @@ async function listGroupMessages(
     throw error;
   }
 
-  const documents =
-    Array.isArray(
-      result.documents
-    )
-      ? result.documents
-      : [];
-
   const items =
-    (result.documents || [])
+    documents
       .filter(document => {
         const documentCommunityId =
           normalizeString(document.community_id);
@@ -1000,10 +1058,15 @@ async function listGroupMessages(
 
         return rightDate - leftDate;
       })
-      .slice(0, limit)
       .map(
         mapMessageDocument
       );
+
+  log(
+    `[CCT_MESSAGE_LIST] Filtered response count=${items.length} ` +
+    `newerThanApplied=${newerThanMs !== null} ` +
+    `pages=${pageCount}`
+  );
 
   return buildListResponse(
     items

@@ -2,6 +2,23 @@
     "organizationId": "6a8ea0100003d54cc2d8",
     "projectId": "cct-uscf",
     "projectName": "CCT-USCF",
+    "functions": [
+      {
+        "functionId": "6a9ade08000d0a17360d",
+        "name": "CCT API",
+        "runtime": "node-22.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "",
+        "timeout": 30,
+        "enabled": true,
+        "logging": true,
+        "entrypoint": "src/index.js",
+        "buildCommands": "npm install --omit=dev",
+        "scopes": [],
+        "path": "appwrite-function"
+      }
+    ],
     "endpoint": "https://sgp.cloud.appwrite.io/v1",
     "settings": {
         "services": {
