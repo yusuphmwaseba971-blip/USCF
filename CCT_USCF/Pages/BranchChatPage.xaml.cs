@@ -195,23 +195,35 @@ public partial class BranchChatPage : ContentPage
         {
             _realtimeEnabled = true;
 
-            if (_branchId <= 0)
+            var currentUser =
+                await MauiProgram
+                    .CreateAuthServiceForPages()
+                    .GetCurrentUserAsync();
+
+            System.Diagnostics.Debug.WriteLine(
+                "[BRANCH_CHAT_DIAGNOSTIC] " +
+                $"FirebaseUid={_auth.CurrentUser?.Uid ?? "null"}, " +
+                $"MauiCurrentUserUid={MauiProgram.CurrentUser?.Id.ToString() ?? "null"}, " +
+                $"CurrentUserBranchId={currentUser?.BranchId?.ToString() ?? "null"}, " +
+                $"CurrentUserBranchName={currentUser?.Branch ?? "null"}, " +
+                $"PageBranchId={_branchId}, " +
+                $"PageBranchName={_branchName}, " +
+                $"RequestedCommunityId={_branchId}, " +
+                "RequestedBranchId=" +
+                $"{_branchId}, OrganizationalLevel=Branch");
+
+            if (currentUser?.BranchId is int currentBranchId &&
+                currentBranchId > 0)
             {
-                var currentUser =
-                    MauiProgram.CurrentUser
-                    ?? await MauiProgram
-                        .CreateAuthServiceForPages()
-                        .GetCurrentUserAsync();
-
-                if (currentUser?.BranchId is int branchId &&
-                    branchId > 0)
+                if (_branchId != currentBranchId)
                 {
-                    BranchId = branchId;
-
-                    BranchName =
-                        currentUser.Branch
-                        ?? "Branch Group";
+                    BranchId = currentBranchId;
+                    BranchName = currentUser.Branch ?? "Branch Group";
                 }
+            }
+            else
+            {
+                BranchId = 0;
             }
 
             if (_branchId <= 0)
@@ -1122,6 +1134,12 @@ DateTime? updatedAt =
 
         try
         {
+            System.Diagnostics.Debug.WriteLine(
+                $"[PHONE_ACCOUNT_DIAGNOSTIC] " +
+                $"LoadMessagesFromCacheFirstAsync started: " +
+                $"FirebaseUid={GetCurrentUserUid() ?? "null"}, " +
+                $"BranchId={_branchId}, CommunityId={_branchId}");
+
             BranchStatusLabel.Text =
                 "Loading messages...";
 
@@ -1142,6 +1160,16 @@ DateTime? updatedAt =
                     .OrderBy(message =>
                         message.CreatedAt)
                     .ToList();
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[BRANCH_CHAT_DIAGNOSTIC] " +
+                $"CacheOrRemoteReturnedCount={messages.Count}, " +
+                $"UiFilterInputCount={messages.Count}, " +
+                $"UiFilterOutputCount={uiMessages.Count}, " +
+                $"FirstMessageId={messages.FirstOrDefault()?.MessageId ?? "none"}, " +
+                $"FirstMessageCommunityId={messages.FirstOrDefault()?.CommunityId ?? "none"}, " +
+                $"FirstMessageBranchId={messages.FirstOrDefault()?.BranchId ?? "none"}, " +
+                $"FirstMessageSenderUid={messages.FirstOrDefault()?.SenderUid ?? "none"}");
 
             foreach (var loadedMessage in uiMessages)
             {
@@ -1174,7 +1202,8 @@ DateTime? updatedAt =
             System.Diagnostics.Debug.WriteLine(
                 $"[BRANCH_CHAT] " +
                 $"Cache-first load complete. " +
-                $"Messages={_messages.Count}");
+                $"Messages={_messages.Count}; " +
+                $"Inserted={uiMessages.Count}");
         }
         catch (Exception ex)
         {

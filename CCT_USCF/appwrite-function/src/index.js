@@ -134,7 +134,7 @@ if (!appwriteApiKey) {
 
 const DEFAULT_DATABASE_ID =
   process.env.APPWRITE_DATABASE_ID ||
-  "database-cct-uscf-db";
+  "cct-uscf-db";
 
 const COMMUNITY_MESSAGES_COLLECTION_ID =
   process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
@@ -708,6 +708,39 @@ function getRequestBody(req) {
     return {};
   }
 
+  function getQueryValue(req, name) {
+    const queryValue =
+      req.query?.[name];
+
+    if (
+      queryValue !== undefined &&
+      queryValue !== null
+    ) {
+      return Array.isArray(queryValue)
+        ? queryValue[0]
+        : queryValue;
+    }
+
+    const requestUrl =
+      req.url ||
+      req.path ||
+      "";
+
+    if (!requestUrl) {
+      return undefined;
+    }
+
+    try {
+      return new URL(
+        requestUrl,
+        "https://appwrite.local"
+      ).searchParams.get(name) ??
+        undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   if (
     typeof req.body ===
     "object"
@@ -804,14 +837,20 @@ async function listGroupMessages(
     );
 
   const newerThanValue =
-    req.query?.newerThan ??
-    req.query?.newer_than ??
+    getQueryValue(req, "newerThan") ??
+    getQueryValue(req, "newer_than") ??
     body.newerThan ??
     body.newer_than;
 
   const newerThan =
     newerThanValue
       ? new Date(newerThanValue)
+      : null;
+
+  const newerThanMs =
+    newerThan &&
+    !Number.isNaN(newerThan.getTime())
+      ? newerThan.getTime()
       : null;
 
   let limit =
@@ -832,7 +871,9 @@ async function listGroupMessages(
   }
 
   log(
-    `[CCT_MESSAGE_LIST] UID=${firebaseUser.uid} communityId=${communityId}`
+    `[CCT_MESSAGE_LIST] UID=${firebaseUser.uid} ` +
+    `communityId=${communityId} ` +
+    `newerThan=${newerThan?.toISOString() ?? "none"}`
   );
 
   log(
@@ -915,16 +956,20 @@ async function listGroupMessages(
           return false;
         }
 
-        if (
-          newerThan &&
-          !Number.isNaN(newerThan.getTime()) &&
-          new Date(
-            document.created_at ??
-            document.$createdAt ??
-            0
-          ) <= newerThan
-        ) {
-          return false;
+        if (newerThanMs !== null) {
+          const createdAtMs =
+            new Date(
+              document.created_at ??
+              document.$createdAt ??
+              0
+            ).getTime();
+
+          if (
+            Number.isNaN(createdAtMs) ||
+            createdAtMs <= newerThanMs
+          ) {
+            return false;
+          }
         }
 
         const matchesOptionalId =

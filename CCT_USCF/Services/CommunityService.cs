@@ -666,7 +666,18 @@ SenderUid =
 
             try
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "[BRANCH_CHAT_DIAGNOSTIC] " +
+                    $"CacheReturnedCount={cachedMessages.Count}, " +
+                    $"CommunityId={normalizedGroupId}");
+
                 var remoteMessages = await GetGroupMessagesAsync(normalizedGroupId, safeLimit);
+
+                System.Diagnostics.Debug.WriteLine(
+                    "[BRANCH_CHAT_DIAGNOSTIC] " +
+                    $"RemoteReturnedCount={remoteMessages.Count}, " +
+                    $"CommunityId={normalizedGroupId}");
+
                 if (remoteMessages.Count > 0)
                     await CacheCommunityMessagesAsync(remoteMessages);
                 return remoteMessages.Count > 0 ? remoteMessages : cachedMessages;
@@ -745,11 +756,42 @@ SenderUid =
                 $"community_id={normalizedGroupId}, " +
                 $"newestCachedCreatedAt={newestCreatedAt:O}");
 
+            System.Diagnostics.Debug.WriteLine(
+                "[BRANCH_CHAT_DIAGNOSTIC] " +
+                $"SyncCommunityId={normalizedGroupId}, " +
+                $"NewestCachedCreatedAt={newestCreatedAt:O}, " +
+                $"NewerThan={newestCreatedAt:O}");
+
             var newMessages =
                 await GetGroupMessagesAsync(
                     normalizedGroupId,
                     safeLimit,
                     newestCreatedAt);
+
+            var cachedMessageIds =
+                (await database
+                    .Table<CachedCommunityMessage>()
+                    .Where(row =>
+                        row.CommunityId ==
+                        normalizedGroupId)
+                    .ToListAsync())
+                .Select(row => row.MessageId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+
+            newMessages =
+                newMessages
+                    .Where(message =>
+                    {
+                        var messageId =
+                            string.IsNullOrWhiteSpace(message.MessageId)
+                                ? message.Id
+                                : message.MessageId;
+
+                        return !cachedMessageIds.Contains(messageId) &&
+                            EnsureUtc(message.CreatedAt) > newestCreatedAt;
+                    })
+                    .ToList();
 
             if (newMessages.Count == 0)
             {
@@ -766,6 +808,11 @@ SenderUid =
             System.Diagnostics.Debug.WriteLine(
                 "[COMMUNITY_CACHE] Incremental sync received " +
                 $"{newMessages.Count} new messages.");
+
+            System.Diagnostics.Debug.WriteLine(
+                "[BRANCH_CHAT_DIAGNOSTIC] " +
+                $"NewMessagesReturned={newMessages.Count}, " +
+                $"SyncCommunityId={normalizedGroupId}");
 
             return newMessages;
         }

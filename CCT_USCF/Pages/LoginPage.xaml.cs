@@ -68,14 +68,11 @@ public partial class LoginPage : ContentPage
                     return;
                 }
 
-                CCT_USCF.Models.CurrentUser? user = MauiProgram.CurrentUser;
+                CCT_USCF.Models.CurrentUser? user = null;
                 try
                 {
-                    if (user == null)
-                    {
-                        System.Diagnostics.Debug.WriteLine("[LOGIN] Loading current Firebase user profile after login");
-                        user = await _authService.GetCurrentUserAsync();
-                    }
+                    System.Diagnostics.Debug.WriteLine("[LOGIN] Loading current Firebase user profile after login");
+                    user = await _authService.GetCurrentUserAsync();
 
                     System.Diagnostics.Debug.WriteLine($"[LOGIN] Current user after login: {(user != null ? user.Username : "null")}");
                 }

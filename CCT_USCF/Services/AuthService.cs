@@ -192,6 +192,11 @@ public class AuthService
             var currentUser = await LoadCurrentUserAsync();
             MauiProgram.SetCurrentUser(currentUser);
 
+            System.Diagnostics.Debug.WriteLine(
+                $"[ACCOUNT_SWITCH_DIAGNOSTIC] LoginUid={firebaseUser.Uid}, " +
+                $"ProfileUid={GetCurrentFirebaseUid()}, " +
+                $"BranchId={currentUser?.BranchId?.ToString() ?? "null"}");
+
             return new AuthResult
             {
                 Success = true,
@@ -480,20 +485,12 @@ public class AuthService
             if (currentUser != null)
                 return currentUser;
 
-            var previousUser = MauiProgram.CurrentUser;
-            if (previousUser != null && !string.IsNullOrWhiteSpace(previousUser.Email))
-                return previousUser;
-
             return null;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[FIREBASE AUTH] GetCurrentUser failed: {ex}");
-
-            var previousUser = MauiProgram.CurrentUser;
-            if (previousUser != null && !string.IsNullOrWhiteSpace(previousUser.Email))
-                return previousUser;
 
             return null;
         }
@@ -525,10 +522,6 @@ public class AuthService
                 System.Diagnostics.Debug.WriteLine(
                     $"[FIREBASE AUTH] Firebase account exists but Firestore profile is missing for UID {uid}.");
 
-                var existingUser = MauiProgram.CurrentUser;
-                if (existingUser != null && !string.IsNullOrWhiteSpace(existingUser.Email))
-                    return existingUser;
-
                 return null;
             }
 
@@ -544,10 +537,6 @@ public class AuthService
             {
                 System.Diagnostics.Debug.WriteLine(
                     $"[FIREBASE AUTH] Firestore profile UID mismatch: authUid={uid}, profileUid={profileUid}, documentId={documentId}");
-
-                var existingUser = MauiProgram.CurrentUser;
-                if (existingUser != null && !string.IsNullOrWhiteSpace(existingUser.Email))
-                    return existingUser;
 
                 return null;
             }
@@ -594,10 +583,6 @@ public class AuthService
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[FIREBASE AUTH] Failed to load user profile for UID {uid}: {ex}");
-
-            var existingUser = MauiProgram.CurrentUser;
-            if (existingUser != null && !string.IsNullOrWhiteSpace(existingUser.Email))
-                return existingUser;
 
             return null;
         }
