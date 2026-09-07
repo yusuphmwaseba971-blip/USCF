@@ -9,12 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
 
 using Plugin.Firebase.Auth;
-using Plugin.Firebase.Bundled.Shared;
 using Plugin.Firebase.Firestore;
-
-#if ANDROID
-using Plugin.Firebase.Bundled.Platforms.Android;
-#endif
 
 namespace CCT_USCF;
 
@@ -85,6 +80,16 @@ public static class MauiProgram
                     "OpenSansSemibold");
             });
 
+#if ANDROID
+        builder.ConfigureLifecycleEvents(events =>
+        {
+            events.AddAndroid(android =>
+            {
+                android.OnCreate((_, _) => FirebaseInit.SignalInitialized());
+            });
+        });
+#endif
+
         // =====================================================
         // LOGGING
         // =====================================================
@@ -96,32 +101,6 @@ public static class MauiProgram
         // =====================================================
         // FIREBASE INITIALIZATION
         // =====================================================
-
-#if ANDROID
-
-        builder.ConfigureLifecycleEvents(events =>
-        {
-            events.AddAndroid(android =>
-            {
-                android.OnCreate((activity, _) =>
-                {
-                    var firebaseSettings =
-                        CreateFirebaseSettings();
-
-                    CrossFirebase.Initialize(
-                        activity,
-                        () => Platform.CurrentActivity,
-                        firebaseSettings);
-
-                    // Signal that CrossFirebase.Initialize has completed so
-                    // pages can await FirebaseInit.Initialized before issuing
-                    // Firestore/Auth calls.
-                    FirebaseInit.SignalInitialized();
-                });
-            });
-        });
-
-#endif
 
         // =====================================================
         // FIREBASE AUTHENTICATION
@@ -236,21 +215,4 @@ builder.Services.AddSingleton<AppAppearanceService>();
         return app;
     }
 
-    // =========================================================
-    // FIREBASE SETTINGS
-    // =========================================================
-
-    private static CrossFirebaseSettings
-        CreateFirebaseSettings()
-    {
-        return new CrossFirebaseSettings(
-            isAnalyticsEnabled: true,
-            isAuthEnabled: true,
-            isCloudMessagingEnabled: true,
-            isDynamicLinksEnabled: true,
-            isFirestoreEnabled: true,
-            isFunctionsEnabled: true,
-            isRemoteConfigEnabled: true,
-            isStorageEnabled: false);
-    }
 }

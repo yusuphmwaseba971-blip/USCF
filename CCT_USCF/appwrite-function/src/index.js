@@ -114,12 +114,8 @@ const appwriteEndpoint =
   "https://sgp.cloud.appwrite.io/v1";
 
 const appwriteProjectId =
-<<<<<<< HEAD
   process.env.APPWRITE_PROJECT_ID ||
   "cct-uscf";
-=======
-  process.env.APPWRITE_PROJECT_ID;
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
 const appwriteApiKey =
   process.env.APPWRITE_API_KEY;
@@ -135,45 +131,6 @@ if (!appwriteApiKey) {
     "APPWRITE_API_KEY is not configured."
   );
 }
-
-<<<<<<< HEAD
-/* ------------------------------------------------------------
- * Constants
- * ------------------------------------------------------------ */
-const DEFAULT_DATABASE_ID =
-  process.env.APPWRITE_DATABASE_ID ||
-  "database-cct-uscf-db";
-
-const COMMUNITY_MESSAGES_COLLECTION_ID =
-  process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
-  "community_messages";
-/* ------------------------------------------------------------
- * Diagnostic helpers
- * ------------------------------------------------------------ */
-
-/*
- * Safely convert an unknown error/cause into diagnostic text.
- *
- * IMPORTANT:
- * Never log request headers, Firebase tokens,
- * Appwrite API keys, private keys, passwords,
- * or other credentials.
-=======
-const appwriteClient =
-  new Client()
-    .setEndpoint(appwriteEndpoint)
-    .setProject(appwriteProjectId)
-    .setKey(appwriteApiKey);
-
-const databases =
-  new Databases(appwriteClient);
-
-
-/* ============================================================
- * CONSTANTS
- * ============================================================
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
- */
 
 const DEFAULT_DATABASE_ID =
   process.env.APPWRITE_DATABASE_ID ||
@@ -314,20 +271,6 @@ function logErrorDetails(
 }
 
 
-<<<<<<< HEAD
-function readHeader(req, name) {
-  const requestedName = String(name).toLowerCase();
-  const candidates = [
-    req?.headers,
-    req?.header,
-    req?.request?.headers
-  ];
-
-  for (const headers of candidates) {
-    if (!headers) {
-      continue;
-    }
-=======
 /* ============================================================
  * HTTP RESPONSE HELPERS
  * ============================================================
@@ -350,21 +293,18 @@ function jsonResponse(
  * ============================================================
  */
 
-function readHeader(
-  req,
-  name
-) {
-  const headers =
-    req.headers || {};
+function readHeader(req, name) {
+  const requestedName = String(name).toLowerCase();
+  const candidates = [
+    req?.headers,
+    req?.header,
+    req?.request?.headers
+  ];
 
-  const lowerName =
-    name.toLowerCase();
-
-  const direct =
-    headers[name] ??
-    headers[lowerName] ??
-    headers[name.toUpperCase()];
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
+  for (const headers of candidates) {
+    if (!headers) {
+      continue;
+    }
 
     if (typeof headers.get === "function") {
       const value = headers.get(name) ?? headers.get(requestedName);
@@ -373,17 +313,14 @@ function readHeader(
       }
     }
 
-<<<<<<< HEAD
     if (typeof headers === "object") {
       for (const [key, value] of Object.entries(headers)) {
-        if (key.toLowerCase() === requestedName) {
-          if (Array.isArray(value)) {
-            return value.join(",").trim();
-          }
-
-          if (value !== null && value !== undefined) {
-            return String(value).trim();
-          }
+        if (key.toLowerCase() === requestedName &&
+            value !== null &&
+            value !== undefined) {
+          return Array.isArray(value)
+            ? value.join(",").trim()
+            : String(value).trim();
         }
       }
     }
@@ -394,17 +331,6 @@ function readHeader(
         return String(value).trim();
       }
     }
-=======
-  if (
-    lowerName ===
-    "authorization"
-  ) {
-    return (
-      headers.authorization ??
-      headers.Authorization ??
-      ""
-    );
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   return "";
@@ -670,21 +596,12 @@ async function verifyFirebaseRequest(
     );
 
   if (!authorization) {
-<<<<<<< HEAD
     log("[CCT_FIREBASE_AUTH] Authorization header found: NO");
-    throw new Error(
+    const error = new Error(
       "Missing Authorization header."
     );
-=======
-    const error =
-      new Error(
-        "Missing Authorization header."
-      );
-
     error.statusCode = 401;
-
     throw error;
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   log("[CCT_FIREBASE_AUTH] Authorization header found: YES");
@@ -695,42 +612,24 @@ async function verifyFirebaseRequest(
     );
 
   if (!match) {
-<<<<<<< HEAD
     log("[CCT_FIREBASE_AUTH] Authorization scheme = invalid");
-    throw new Error(
+    const error = new Error(
       "Invalid Authorization header."
     );
-=======
-    const error =
-      new Error(
-        "Invalid Authorization header."
-      );
-
     error.statusCode = 401;
-
     throw error;
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   const idToken =
     match[1].trim();
 
   if (!idToken) {
-<<<<<<< HEAD
     log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer, token present: NO");
-    throw new Error(
+    const error = new Error(
       "Missing Firebase ID token."
     );
-=======
-    const error =
-      new Error(
-        "Missing Firebase ID token."
-      );
-
     error.statusCode = 401;
-
     throw error;
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
   }
 
   log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer");
@@ -772,24 +671,6 @@ async function verifyFirebaseRequest(
     );
 
     return firebaseUser;
-<<<<<<< HEAD
-    } catch (error) {
-      logErrorDetails(
-        log,
-        error,
-        "Firebase ID-token verification"
-      );
-
-      log(
-        "[CCT_FIREBASE_AUTH] Firebase ID-token verification FAILED"
-      );
-
-      throw new Error(
-        "Firebase ID-token verification failed."
-      );
-    }
-=======
-
   } catch (error) {
     logErrorDetails(
       log,
@@ -814,7 +695,6 @@ async function verifyFirebaseRequest(
 
     throw authError;
   }
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 }
 
 
@@ -923,6 +803,17 @@ async function listGroupMessages(
       body.district_id
     );
 
+  const newerThanValue =
+    req.query?.newerThan ??
+    req.query?.newer_than ??
+    body.newerThan ??
+    body.newer_than;
+
+  const newerThan =
+    newerThanValue
+      ? new Date(newerThanValue)
+      : null;
+
   let limit =
     parseOptionalInt(
       req.query?.limit ??
@@ -1002,7 +893,6 @@ async function listGroupMessages(
       : [];
 
   const items =
-<<<<<<< HEAD
     (result.documents || [])
       .filter(document => {
         const documentCommunityId =
@@ -1021,6 +911,18 @@ async function listGroupMessages(
         if (
           organizationalLevel &&
           documentOrganizationType !== organizationalLevel
+        ) {
+          return false;
+        }
+
+        if (
+          newerThan &&
+          !Number.isNaN(newerThan.getTime()) &&
+          new Date(
+            document.created_at ??
+            document.$createdAt ??
+            0
+          ) <= newerThan
         ) {
           return false;
         }
@@ -1057,11 +959,6 @@ async function listGroupMessages(
       .map(
         mapMessageDocument
       );
-=======
-    documents.map(
-      mapMessageDocument
-    );
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
   return buildListResponse(
     items
@@ -1361,18 +1258,11 @@ async function createGroupMessage(
     `[CCT_MESSAGE_CREATE] Collection=${COMMUNITY_MESSAGES_COLLECTION_ID}`
   );
 
-<<<<<<< HEAD
   log("[CCT_MESSAGE_CREATE] Appwrite REST create START");
-=======
-  log(
-    "[CCT_MESSAGE_CREATE] Appwrite createDocument START"
-  );
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
   let document;
 
   try {
-<<<<<<< HEAD
     const appwriteCreateUrl =
       `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
       `/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents`;
@@ -1409,23 +1299,6 @@ async function createGroupMessage(
 
     log(
       `[CCT_MESSAGE_CREATE] Appwrite REST create SUCCESS documentId=${document.$id || document.id || ""}`
-=======
-    document =
-      await databases.createDocument(
-        DEFAULT_DATABASE_ID,
-        COMMUNITY_MESSAGES_COLLECTION_ID,
-        messageId,
-        documentData,
-        undefined
-      );
-
-    log(
-      "[CCT_MESSAGE_CREATE] Appwrite createDocument SUCCESS"
-    );
-
-    log(
-      `[CCT_MESSAGE_CREATE] Appwrite document ID=${document.$id || document.id || ""}`
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
     );
 
   } catch (error) {
@@ -1715,17 +1588,8 @@ export default async ({
     const details =
       getErrorDetails(e);
 
-<<<<<<< HEAD
-    const isAuthenticationFailure =
-      currentStage.includes("group message") &&
-      /Authorization|Firebase|ID-token|token/i.test(
-        details.message || ""
-      );
-=======
     const statusCode =
       getErrorStatusCode(e);
-
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
 
     /*
      * --------------------------------------------------------
@@ -1750,11 +1614,7 @@ export default async ({
           details.message ||
           "Internal server error."
       },
-<<<<<<< HEAD
-      isAuthenticationFailure ? 401 : 500
-=======
       statusCode
->>>>>>> b8c3d331bf33af6017acea54af9f18e390fb50cf
     );
   }
 };

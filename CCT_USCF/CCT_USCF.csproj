@@ -11,18 +11,22 @@
     <!-- .NET MAUI -->
     <UseMaui>true</UseMaui>
     <SingleProject>true</SingleProject>
+    <MauiVersion>10.0.20</MauiVersion>
 
     <!-- C# -->
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
     <!-- Android -->
-    <TargetPlatformVersion>36.0</TargetPlatformVersion>
-    <SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
+    <TargetPlatformVersion>36.1</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>23.0</SupportedOSPlatformVersion>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
 
     <!-- Build -->
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <!-- The Firebase binding AARs contain overlapping legacy namespaces that the current
+         manifestmerger.jar rejects even though the Xamarin bindings are compatible. -->
+    <AndroidManifestMerger>legacy</AndroidManifestMerger>
 
     <!-- XAML source generation -->
     <MauiXamlInflator>SourceGen</MauiXamlInflator>
@@ -41,9 +45,9 @@
       C:\Users\Yusuph\AppData\Local\Android\Sdk
     </AndroidSdkDirectory>
 
-    <!-- Java 21 -->
+    <!-- Java 17 required by the installed Android workload -->
     <JavaSdkDirectory>
-      C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot
+      C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot
     </JavaSdkDirectory>
   </PropertyGroup>
 
@@ -99,14 +103,12 @@
     -->
     <PackageReference Include="Appwrite" Version="7.0.0" />
 
-    <!-- Firebase
-         Used for:
-         - Authentication
-         - Firestore
-         - Cloud Messaging
-         - Firebase services
-    -->
-    <PackageReference Include="Plugin.Firebase" Version="4.2.1" />
+    <!-- Firebase services used by the app. Keep this explicit rather than using Plugin.Firebase's umbrella
+         package, which imports unused feature modules and duplicate Android library manifests. -->
+    <PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
+    <PackageReference Include="Plugin.Firebase.Auth" Version="5.0.1" />
+    <PackageReference Include="Plugin.Firebase.Firestore" Version="4.0.0" />
+    <PackageReference Include="Plugin.Firebase.CloudMessaging" Version="4.0.1" />
 
     <!-- Logging -->
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
@@ -151,4 +153,3 @@
   </ItemGroup>
 
 </Project>
-

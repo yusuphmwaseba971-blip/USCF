@@ -32,6 +32,7 @@ public partial class BranchChatPage : ContentPage
 
     private ClientWebSocket? _appwriteRealtimeSocket;
     private CancellationTokenSource? _appwriteRealtimeCts;
+    private CancellationTokenSource? _messageSyncCts;
 
     // Used for long-press detection.
     private DateTime _pointerPressedAt = DateTime.MinValue;
@@ -224,6 +225,7 @@ public partial class BranchChatPage : ContentPage
             AttachRealtimeListener();
 
             await LoadBranchGroupAsync();
+            StartMessageSync();
         }
         catch (Exception ex)
         {
@@ -239,6 +241,7 @@ public partial class BranchChatPage : ContentPage
         _realtimeEnabled = false;
 
         DisposeRealtimeListener();
+        StopMessageSync();
     }
 
     // ============================================================
@@ -327,6 +330,51 @@ public partial class BranchChatPage : ContentPage
         }
 
         _appwriteRealtimeSocket = null;
+    }
+
+    private void StartMessageSync()
+    {
+        StopMessageSync();
+
+        if (!_realtimeEnabled || _branchId <= 0)
+        {
+            return;
+        }
+
+        _messageSyncCts = new CancellationTokenSource();
+        var cancellationToken = _messageSyncCts.Token;
+
+        _ = Task.Run(
+            async () =>
+            {
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+
+                try
+                {
+                    while (await timer.WaitForNextTickAsync(cancellationToken))
+                    {
+                        await MainThread.InvokeOnMainThreadAsync(
+                            RefreshMessagesAsync);
+                    }
+                }
+                catch (OperationCanceledException) when (
+                    cancellationToken.IsCancellationRequested)
+                {
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[BRANCH_CHAT_SYNC] Background sync failed: {ex}");
+                }
+            },
+            cancellationToken);
+    }
+
+    private void StopMessageSync()
+    {
+        _messageSyncCts?.Cancel();
+        _messageSyncCts?.Dispose();
+        _messageSyncCts = null;
     }
 
     private async Task ListenForAppwriteMessagesWithReconnectAsync(

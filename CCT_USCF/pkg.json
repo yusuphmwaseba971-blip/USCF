@@ -1,0 +1,972 @@
+{
+  "version": 1,
+  "parameters": "--include-transitive",
+  "projects": [
+    {
+      "path": "D:/PERSONAL-USES-NO-PROBLEN/Projects/CCT_USCF/CCT_USCF.csproj",
+      "frameworks": [
+        {
+          "framework": "net10.0-android",
+          "topLevelPackages": [
+            {
+              "id": "Appwrite",
+              "requestedVersion": "7.0.0",
+              "resolvedVersion": "7.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Logging.Debug",
+              "requestedVersion": "10.0.0",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Maui.Controls",
+              "requestedVersion": "10.0.20",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.NET.ILLink.Tasks",
+              "requestedVersion": "[10.0.9, )",
+              "resolvedVersion": "10.0.9",
+              "autoReferenced": "true"
+            },
+            {
+              "id": "Plugin.Firebase",
+              "requestedVersion": "4.2.1",
+              "resolvedVersion": "4.2.1"
+            },
+            {
+              "id": "sqlite-net-pcl",
+              "requestedVersion": "1.11.285",
+              "resolvedVersion": "1.11.285"
+            },
+            {
+              "id": "Xamarin.AndroidX.Activity",
+              "requestedVersion": "1.10.1.3",
+              "resolvedVersion": "1.10.1.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Collection.Jvm",
+              "requestedVersion": "1.5.0.3",
+              "resolvedVersion": "1.5.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Fragment",
+              "requestedVersion": "1.8.8.1",
+              "resolvedVersion": "1.8.8.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Common",
+              "requestedVersion": "2.9.2.1",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.LiveData.Core",
+              "requestedVersion": "2.9.2.1",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Runtime",
+              "requestedVersion": "2.9.2.1",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.ViewModel",
+              "requestedVersion": "2.9.2.1",
+              "resolvedVersion": "2.9.2.1"
+            }
+          ],
+          "transitivePackages": [
+            {
+              "id": "GoogleGson",
+              "resolvedVersion": "2.13.1.1"
+            },
+            {
+              "id": "Microsoft.Extensions.Configuration",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Configuration.Abstractions",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.DependencyInjection",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.FileProviders.Abstractions",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Hosting.Abstractions",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Logging",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Logging.Abstractions",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Options",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Extensions.Primitives",
+              "resolvedVersion": "10.0.0"
+            },
+            {
+              "id": "Microsoft.Maui.Controls.Build.Tasks",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.Maui.Controls.Core",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.Maui.Controls.Xaml",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.Maui.Core",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.Maui.Essentials",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.Maui.Graphics",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Microsoft.Maui.Resizetizer",
+              "resolvedVersion": "10.0.20"
+            },
+            {
+              "id": "Plugin.Firebase.Analytics",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "Plugin.Firebase.AppCheck",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "Plugin.Firebase.Auth",
+              "resolvedVersion": "5.0.1"
+            },
+            {
+              "id": "Plugin.Firebase.CloudMessaging",
+              "resolvedVersion": "4.0.1"
+            },
+            {
+              "id": "Plugin.Firebase.Core",
+              "resolvedVersion": "4.2.0"
+            },
+            {
+              "id": "Plugin.Firebase.Crashlytics",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "Plugin.Firebase.Firestore",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "Plugin.Firebase.Functions",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "Plugin.Firebase.RemoteConfig",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "Plugin.Firebase.Storage",
+              "resolvedVersion": "4.0.0"
+            },
+            {
+              "id": "SourceGear.sqlite3",
+              "resolvedVersion": "3.53.3"
+            },
+            {
+              "id": "SQLitePCLRaw.core",
+              "resolvedVersion": "3.0.3"
+            },
+            {
+              "id": "SQLitePCLRaw.provider.e_sqlite3",
+              "resolvedVersion": "3.0.3"
+            },
+            {
+              "id": "Square.OkHttp3",
+              "resolvedVersion": "4.12.0.7"
+            },
+            {
+              "id": "Square.OkIO",
+              "resolvedVersion": "3.9.1.2"
+            },
+            {
+              "id": "Square.OkIO.JVM",
+              "resolvedVersion": "3.9.1.2"
+            },
+            {
+              "id": "Xamarin.Android.Glide",
+              "resolvedVersion": "4.16.0.14"
+            },
+            {
+              "id": "Xamarin.Android.Glide.Annotations",
+              "resolvedVersion": "4.16.0.14"
+            },
+            {
+              "id": "Xamarin.Android.Glide.DiskLruCache",
+              "resolvedVersion": "4.16.0.14"
+            },
+            {
+              "id": "Xamarin.Android.Glide.GifDecoder",
+              "resolvedVersion": "4.16.0.14"
+            },
+            {
+              "id": "Xamarin.AndroidX.Activity.Ktx",
+              "resolvedVersion": "1.10.1.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Annotation",
+              "resolvedVersion": "1.9.1.5"
+            },
+            {
+              "id": "Xamarin.AndroidX.Annotation.Experimental",
+              "resolvedVersion": "1.5.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Annotation.Jvm",
+              "resolvedVersion": "1.9.1.5"
+            },
+            {
+              "id": "Xamarin.AndroidX.AppCompat",
+              "resolvedVersion": "1.7.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.AppCompat.AppCompatResources",
+              "resolvedVersion": "1.7.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Arch.Core.Common",
+              "resolvedVersion": "2.2.0.18"
+            },
+            {
+              "id": "Xamarin.AndroidX.Arch.Core.Runtime",
+              "resolvedVersion": "2.2.0.18"
+            },
+            {
+              "id": "Xamarin.AndroidX.Browser",
+              "resolvedVersion": "1.8.0.11"
+            },
+            {
+              "id": "Xamarin.AndroidX.CardView",
+              "resolvedVersion": "1.0.0.36"
+            },
+            {
+              "id": "Xamarin.AndroidX.Collection",
+              "resolvedVersion": "1.5.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Collection.Ktx",
+              "resolvedVersion": "1.5.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Concurrent.Futures",
+              "resolvedVersion": "1.3.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.ConstraintLayout",
+              "resolvedVersion": "2.2.1.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.ConstraintLayout.Core",
+              "resolvedVersion": "1.1.1.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.CoordinatorLayout",
+              "resolvedVersion": "1.3.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Core",
+              "resolvedVersion": "1.16.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Core.Core.Ktx",
+              "resolvedVersion": "1.16.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Core.ViewTree",
+              "resolvedVersion": "1.0.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Credentials",
+              "resolvedVersion": "1.2.2.6"
+            },
+            {
+              "id": "Xamarin.AndroidX.Credentials.PlayServicesAuth",
+              "resolvedVersion": "1.2.2.6"
+            },
+            {
+              "id": "Xamarin.AndroidX.CursorAdapter",
+              "resolvedVersion": "1.0.0.34"
+            },
+            {
+              "id": "Xamarin.AndroidX.CustomView",
+              "resolvedVersion": "1.2.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.CustomView.PoolingContainer",
+              "resolvedVersion": "1.1.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Android",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Core",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Core.Android",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Core.Jvm",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Core.OkIO",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Core.OkIO.Jvm",
+              "resolvedVersion": "1.1.1.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Preferences",
+              "resolvedVersion": "1.1.1.2"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Preferences.Android",
+              "resolvedVersion": "1.1.1.2"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Preferences.Core",
+              "resolvedVersion": "1.1.1.2"
+            },
+            {
+              "id": "Xamarin.AndroidX.DataStore.Preferences.Core.Jvm",
+              "resolvedVersion": "1.1.1.2"
+            },
+            {
+              "id": "Xamarin.AndroidX.DocumentFile",
+              "resolvedVersion": "1.0.1.30"
+            },
+            {
+              "id": "Xamarin.AndroidX.DrawerLayout",
+              "resolvedVersion": "1.2.0.18"
+            },
+            {
+              "id": "Xamarin.AndroidX.DynamicAnimation",
+              "resolvedVersion": "1.1.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.Emoji2",
+              "resolvedVersion": "1.5.0.6"
+            },
+            {
+              "id": "Xamarin.AndroidX.Emoji2.ViewsHelper",
+              "resolvedVersion": "1.5.0.6"
+            },
+            {
+              "id": "Xamarin.AndroidX.ExifInterface",
+              "resolvedVersion": "1.4.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Fragment.Ktx",
+              "resolvedVersion": "1.8.8.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Interpolator",
+              "resolvedVersion": "1.0.0.34"
+            },
+            {
+              "id": "Xamarin.AndroidX.Legacy.Support.Core.Utils",
+              "resolvedVersion": "1.0.0.30"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Common.Jvm",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.LiveData",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.LiveData.Core.Ktx",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Process",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Runtime.Android",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Runtime.Ktx",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.Runtime.Ktx.Android",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.ViewModel.Android",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.ViewModel.Ktx",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.ViewModelSavedState",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Lifecycle.ViewModelSavedState.Android",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Loader",
+              "resolvedVersion": "1.1.0.34"
+            },
+            {
+              "id": "Xamarin.AndroidX.LocalBroadcastManager",
+              "resolvedVersion": "1.1.0.18"
+            },
+            {
+              "id": "Xamarin.AndroidX.Navigation.Common",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Navigation.Common.Android",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Navigation.Fragment",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Navigation.Runtime",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Navigation.Runtime.Android",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Navigation.UI",
+              "resolvedVersion": "2.9.2.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Print",
+              "resolvedVersion": "1.0.0.30"
+            },
+            {
+              "id": "Xamarin.AndroidX.PrivacySandbox.Ads.AdsServices",
+              "resolvedVersion": "1.0.0.3-beta05"
+            },
+            {
+              "id": "Xamarin.AndroidX.PrivacySandbox.Ads.AdsServices.Java",
+              "resolvedVersion": "1.0.0.3-beta05"
+            },
+            {
+              "id": "Xamarin.AndroidX.ProfileInstaller.ProfileInstaller",
+              "resolvedVersion": "1.4.1.5"
+            },
+            {
+              "id": "Xamarin.AndroidX.RecyclerView",
+              "resolvedVersion": "1.4.0.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.ResourceInspection.Annotation",
+              "resolvedVersion": "1.0.1.22"
+            },
+            {
+              "id": "Xamarin.AndroidX.SavedState",
+              "resolvedVersion": "1.3.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.SavedState.SavedState.Android",
+              "resolvedVersion": "1.3.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.SavedState.SavedState.Ktx",
+              "resolvedVersion": "1.3.1.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Security.SecurityCrypto",
+              "resolvedVersion": "1.1.0.4-alpha07"
+            },
+            {
+              "id": "Xamarin.AndroidX.SlidingPaneLayout",
+              "resolvedVersion": "1.2.0.22"
+            },
+            {
+              "id": "Xamarin.AndroidX.Startup.StartupRuntime",
+              "resolvedVersion": "1.2.0.5"
+            },
+            {
+              "id": "Xamarin.AndroidX.SwipeRefreshLayout",
+              "resolvedVersion": "1.1.0.29"
+            },
+            {
+              "id": "Xamarin.AndroidX.Tracing.Tracing",
+              "resolvedVersion": "1.3.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Tracing.Tracing.Android",
+              "resolvedVersion": "1.3.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Transition",
+              "resolvedVersion": "1.6.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.VectorDrawable",
+              "resolvedVersion": "1.2.0.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.VectorDrawable.Animated",
+              "resolvedVersion": "1.2.0.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.VersionedParcelable",
+              "resolvedVersion": "1.2.1.3"
+            },
+            {
+              "id": "Xamarin.AndroidX.ViewPager",
+              "resolvedVersion": "1.1.0.4"
+            },
+            {
+              "id": "Xamarin.AndroidX.ViewPager2",
+              "resolvedVersion": "1.1.0.8"
+            },
+            {
+              "id": "Xamarin.AndroidX.Window",
+              "resolvedVersion": "1.4.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Window.WindowCore",
+              "resolvedVersion": "1.4.0.1"
+            },
+            {
+              "id": "Xamarin.AndroidX.Window.WindowCore.Jvm",
+              "resolvedVersion": "1.4.0.1"
+            },
+            {
+              "id": "Xamarin.Build.Download",
+              "resolvedVersion": "0.11.4"
+            },
+            {
+              "id": "Xamarin.CheckerFramework.CheckerQual",
+              "resolvedVersion": "3.47.0.1"
+            },
+            {
+              "id": "Xamarin.CodeHaus.Mojo.AnimalSnifferAnnotations",
+              "resolvedVersion": "1.23.0.6"
+            },
+            {
+              "id": "Xamarin.Firebase.Abt",
+              "resolvedVersion": "122.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.Analytics",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.Firebase.Annotations",
+              "resolvedVersion": "116.2.0.14"
+            },
+            {
+              "id": "Xamarin.Firebase.AppCheck",
+              "resolvedVersion": "118.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.AppCheck.Debug",
+              "resolvedVersion": "118.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.AppCheck.Interop",
+              "resolvedVersion": "117.1.0.7"
+            },
+            {
+              "id": "Xamarin.Firebase.AppCheck.PlayIntegrity",
+              "resolvedVersion": "118.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.Auth",
+              "resolvedVersion": "123.0.0"
+            },
+            {
+              "id": "Xamarin.Firebase.Auth.Interop",
+              "resolvedVersion": "120.0.0.19"
+            },
+            {
+              "id": "Xamarin.Firebase.Common",
+              "resolvedVersion": "121.0.0.6"
+            },
+            {
+              "id": "Xamarin.Firebase.Common.Ktx",
+              "resolvedVersion": "121.0.0.3"
+            },
+            {
+              "id": "Xamarin.Firebase.Components",
+              "resolvedVersion": "118.0.1.4"
+            },
+            {
+              "id": "Xamarin.Firebase.Config",
+              "resolvedVersion": "122.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.Config.Interop",
+              "resolvedVersion": "116.0.1.4"
+            },
+            {
+              "id": "Xamarin.Firebase.Crashlytics",
+              "resolvedVersion": "119.0.0"
+            },
+            {
+              "id": "Xamarin.Firebase.Database.Collection",
+              "resolvedVersion": "118.0.1.9"
+            },
+            {
+              "id": "Xamarin.Firebase.Datatransport",
+              "resolvedVersion": "119.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.Encoders",
+              "resolvedVersion": "117.0.0.18"
+            },
+            {
+              "id": "Xamarin.Firebase.Encoders.JSON",
+              "resolvedVersion": "118.0.1.10"
+            },
+            {
+              "id": "Xamarin.Firebase.Encoders.Proto",
+              "resolvedVersion": "116.0.0.13"
+            },
+            {
+              "id": "Xamarin.Firebase.Firestore",
+              "resolvedVersion": "125.0.0"
+            },
+            {
+              "id": "Xamarin.Firebase.Functions",
+              "resolvedVersion": "121.0.0.3"
+            },
+            {
+              "id": "Xamarin.Firebase.Iid",
+              "resolvedVersion": "121.1.0.19"
+            },
+            {
+              "id": "Xamarin.Firebase.Iid.Interop",
+              "resolvedVersion": "117.1.0.19"
+            },
+            {
+              "id": "Xamarin.Firebase.Installations",
+              "resolvedVersion": "118.0.0.3"
+            },
+            {
+              "id": "Xamarin.Firebase.Installations.InterOp",
+              "resolvedVersion": "117.2.0.7"
+            },
+            {
+              "id": "Xamarin.Firebase.Measurement.Connector",
+              "resolvedVersion": "120.0.1.6"
+            },
+            {
+              "id": "Xamarin.Firebase.Messaging",
+              "resolvedVersion": "124.0.0.2"
+            },
+            {
+              "id": "Xamarin.Firebase.ProtoliteWellKnownTypes",
+              "resolvedVersion": "118.0.0.16"
+            },
+            {
+              "id": "Xamarin.Firebase.Sessions",
+              "resolvedVersion": "2.0.0"
+            },
+            {
+              "id": "Xamarin.Firebase.Storage",
+              "resolvedVersion": "121.0.0.2"
+            },
+            {
+              "id": "Xamarin.Google.Android.DataTransport.TransportApi",
+              "resolvedVersion": "3.2.0.2"
+            },
+            {
+              "id": "Xamarin.Google.Android.DataTransport.TransportBackendCct",
+              "resolvedVersion": "3.3.0.2"
+            },
+            {
+              "id": "Xamarin.Google.Android.DataTransport.TransportRuntime",
+              "resolvedVersion": "3.3.0.2"
+            },
+            {
+              "id": "Xamarin.Google.Android.Material",
+              "resolvedVersion": "1.12.0.5"
+            },
+            {
+              "id": "Xamarin.Google.Android.Play.Core.Common",
+              "resolvedVersion": "2.0.4.2"
+            },
+            {
+              "id": "Xamarin.Google.Android.Play.Integrity",
+              "resolvedVersion": "1.4.0.1"
+            },
+            {
+              "id": "Xamarin.Google.Android.Recaptcha",
+              "resolvedVersion": "18.6.1"
+            },
+            {
+              "id": "Xamarin.Google.Code.FindBugs.JSR305",
+              "resolvedVersion": "3.0.2.21"
+            },
+            {
+              "id": "Xamarin.Google.Crypto.Tink.Android",
+              "resolvedVersion": "1.18.0.1"
+            },
+            {
+              "id": "Xamarin.Google.Dagger",
+              "resolvedVersion": "2.49.0.1"
+            },
+            {
+              "id": "Xamarin.Google.ErrorProne.Annotations",
+              "resolvedVersion": "2.41.0.1"
+            },
+            {
+              "id": "Xamarin.Google.Guava",
+              "resolvedVersion": "33.3.0.1"
+            },
+            {
+              "id": "Xamarin.Google.Guava.FailureAccess",
+              "resolvedVersion": "1.0.2.8"
+            },
+            {
+              "id": "Xamarin.Google.Guava.ListenableFuture",
+              "resolvedVersion": "9999.0.0"
+            },
+            {
+              "id": "Xamarin.Google.J2Objc.Annotations",
+              "resolvedVersion": "3.0.0.6"
+            },
+            {
+              "id": "Xamarin.GoogleAndroid.Annotations",
+              "resolvedVersion": "4.1.1.16"
+            },
+            {
+              "id": "Xamarin.GoogleAndroid.Libraries.Identity.GoogleId",
+              "resolvedVersion": "1.1.0.6"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Ads.Identifier",
+              "resolvedVersion": "118.1.0.2"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Auth",
+              "resolvedVersion": "121.2.0.2"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Auth.Api.Phone",
+              "resolvedVersion": "118.1.0.2"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Auth.Base",
+              "resolvedVersion": "118.0.13.2"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Base",
+              "resolvedVersion": "118.5.0.3"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Basement",
+              "resolvedVersion": "118.7.0.2"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.CloudMessaging",
+              "resolvedVersion": "117.3.0.3"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Fido",
+              "resolvedVersion": "121.1.0.2"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Measurement",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Measurement.Api",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Measurement.Base",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Measurement.Impl",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Measurement.Sdk",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Measurement.Sdk.Api",
+              "resolvedVersion": "122.0.2.1"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Stats",
+              "resolvedVersion": "117.1.0.3"
+            },
+            {
+              "id": "Xamarin.GooglePlayServices.Tasks",
+              "resolvedVersion": "118.3.0.2"
+            },
+            {
+              "id": "Xamarin.Grpc.Android",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.Api",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.Context",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.Core",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.OkHttp",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.Protobuf.Lite",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.Stub",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Grpc.Util",
+              "resolvedVersion": "1.59.1"
+            },
+            {
+              "id": "Xamarin.Io.PerfMark.PerfMarkApi",
+              "resolvedVersion": "0.27.0.2"
+            },
+            {
+              "id": "Xamarin.JavaX.Inject",
+              "resolvedVersion": "1.0.0.20"
+            },
+            {
+              "id": "Xamarin.Jetbrains.Annotations",
+              "resolvedVersion": "26.0.2.3"
+            },
+            {
+              "id": "Xamarin.JSpecify",
+              "resolvedVersion": "1.0.0.4"
+            },
+            {
+              "id": "Xamarin.Kotlin.Android.Extensions.Runtime.Library",
+              "resolvedVersion": "2.0.21.2"
+            },
+            {
+              "id": "Xamarin.Kotlin.Parcelize.Runtime",
+              "resolvedVersion": "2.0.21.2"
+            },
+            {
+              "id": "Xamarin.Kotlin.StdLib",
+              "resolvedVersion": "2.2.0.1"
+            },
+            {
+              "id": "Xamarin.Kotlin.StdLib.Common",
+              "resolvedVersion": "1.9.23.3"
+            },
+            {
+              "id": "Xamarin.Kotlin.StdLib.Jdk7",
+              "resolvedVersion": "2.0.21.1"
+            },
+            {
+              "id": "Xamarin.Kotlin.StdLib.Jdk8",
+              "resolvedVersion": "2.0.21.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.AtomicFU",
+              "resolvedVersion": "0.26.1.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.AtomicFU.Jvm",
+              "resolvedVersion": "0.26.1.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.Coroutines.Android",
+              "resolvedVersion": "1.10.2.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.Coroutines.Core",
+              "resolvedVersion": "1.10.2.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.Coroutines.Core.Jvm",
+              "resolvedVersion": "1.10.2.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.Coroutines.Play.Services",
+              "resolvedVersion": "1.9.0.4"
+            },
+            {
+              "id": "Xamarin.KotlinX.Serialization.Core",
+              "resolvedVersion": "1.9.0.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.Serialization.Core.Jvm",
+              "resolvedVersion": "1.9.0.1"
+            },
+            {
+              "id": "Xamarin.KotlinX.Serialization.Protobuf",
+              "resolvedVersion": "1.6.3.3"
+            },
+            {
+              "id": "Xamarin.KotlinX.Serialization.Protobuf.Jvm",
+              "resolvedVersion": "1.6.3.3"
+            },
+            {
+              "id": "Xamarin.Protobuf.JavaLite",
+              "resolvedVersion": "4.26.1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

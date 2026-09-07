@@ -1622,6 +1622,7 @@ SenderUid =
                     BuildOptionalQuery("branchId", branchId) +
                     BuildOptionalQuery("regionId", regionId) +
                     BuildOptionalQuery("districtId", districtId) +
+                    BuildOptionalDateQuery("newerThan", newerThan) +
                     $"&limit={safeLimit}";
 
                 var messages =
@@ -1838,6 +1839,15 @@ SenderUid =
         {
             return int.TryParse(value, out var parsed) && parsed > 0
                 ? $"&{name}={parsed}"
+                : string.Empty;
+        }
+
+        private static string BuildOptionalDateQuery(
+            string name,
+            DateTime? value)
+        {
+            return value.HasValue
+                ? $"&{name}={Uri.EscapeDataString(EnsureUtc(value.Value).ToString("O"))}"
                 : string.Empty;
         }
 
