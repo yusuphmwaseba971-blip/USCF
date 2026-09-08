@@ -19,6 +19,13 @@ public partial class ChurchAnnouncementPage : ContentPage
     {
         try
         {
+            await FirebaseInit.Initialized;
+            if (MauiProgram.CurrentUser is null)
+            {
+                var currentUser = await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+                if (currentUser is not null)
+                    MauiProgram.SetCurrentUser(currentUser);
+            }
             var options = await _service.GetOptionsAsync();
             LeadershipLabel.Text = $"Leadership: {options.LeadershipLevel}";
             OrganizationLabel.Text = $"Organization: {options.Organization}";
@@ -26,9 +33,15 @@ public partial class ChurchAnnouncementPage : ContentPage
             AudiencePicker.ItemsSource = _targets.ToList();
             AudiencePicker.SelectedIndex = _targets.Count > 0 ? 0 : -1;
             SendButton.IsEnabled = _targets.Count > 0;
-            if (_targets.Count == 0) StatusLabel.Text = "Your organization profile is incomplete.";
+            StatusLabel.Text = _targets.Count == 0
+                ? "Assign a branch in your church profile before sending."
+                : "Choose an audience, then enter your message.";
         }
-        catch (Exception ex) { StatusLabel.Text = ex.Message; SendButton.IsEnabled = false; }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = ex.Message;
+            SendButton.IsEnabled = false;
+        }
     }
 
     private async void OnSendClicked(object? sender, EventArgs e)

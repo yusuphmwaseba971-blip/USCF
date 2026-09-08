@@ -17,4 +17,13 @@ namespace CCT_USCF;
         ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+    protected override void OnCreate(Bundle? savedInstanceState)
+    {
+        base.OnCreate(savedInstanceState);
+        if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&
+            CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
+        {
+            RequestPermissions(new[] { Android.Manifest.Permission.PostNotifications }, 1001);
+        }
+    }
 }

@@ -144,15 +144,18 @@ const COMMUNITY_MESSAGES_COLLECTION_ID =
 
 const CHURCH_ANNOUNCEMENTS_COLLECTION_ID =
   process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID ||
-  "church_announcements";
+  process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID ||
+  "announcements";
 
 const CHURCH_NOTIFICATIONS_COLLECTION_ID =
   process.env.APPWRITE_CHURCH_NOTIFICATIONS_COLLECTION_ID ||
-  "church_notifications";
+  process.env.APPWRITE_NOTIFICATIONS_COLLECTION_ID ||
+  "notifications";
 
 const CHURCH_DEVICE_TOKENS_COLLECTION_ID =
   process.env.APPWRITE_CHURCH_DEVICE_TOKENS_COLLECTION_ID ||
-  "church_device_tokens";
+  process.env.APPWRITE_DEVICE_TOKENS_COLLECTION_ID ||
+  "device_tokens";
 
 const firebaseDb = getFirestore(firebaseApp);
 const firebaseMessaging = getMessaging(firebaseApp);
@@ -623,25 +626,28 @@ async function verifyFirebaseRequest(
 
   log("[CCT_FIREBASE_AUTH] Authorization header found: YES");
 
-  const match =
-    authorization.match(
-      /^Bearer[ \t]+(.+)$/i
-    );
+  const normalizedAuthorization = authorization.trim();
+  let idToken = "";
 
-  if (!match) {
+  const bearerMatch = normalizedAuthorization.match(/^Bearer\s+(.+)$/i);
+
+  if (bearerMatch) {
+    idToken = bearerMatch[1].trim();
+    log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer");
+  } else if (/^[A-Za-z0-9-_\.]+\.[A-Za-z0-9-_\.]+\.[A-Za-z0-9-_\.=]+$/.test(normalizedAuthorization)) {
+    idToken = normalizedAuthorization;
+    log("[CCT_FIREBASE_AUTH] Authorization scheme = raw-token");
+  } else {
     log("[CCT_FIREBASE_AUTH] Authorization scheme = invalid");
     const error = new Error(
-      "Invalid Authorization header."
+      "Invalid Authorization header. Expected 'Bearer <token>' or a raw Firebase ID token."
     );
     error.statusCode = 401;
     throw error;
   }
 
-  const idToken =
-    match[1].trim();
-
   if (!idToken) {
-    log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer, token present: NO");
+    log("[CCT_FIREBASE_AUTH] Authorization token present: NO");
     const error = new Error(
       "Missing Firebase ID token."
     );
@@ -649,14 +655,9 @@ async function verifyFirebaseRequest(
     throw error;
   }
 
-  log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer");
   log("[CCT_FIREBASE_AUTH] Firebase token present: YES");
   log(
     "[CCT_FIREBASE_AUTH] Authorization header found: YES"
-  );
-
-  log(
-    "[CCT_FIREBASE_AUTH] Authorization scheme = Bearer"
   );
 
   log(
@@ -844,6 +845,114 @@ async function appwriteCollectionRequest(collectionId, method, path = "", body, 
   return result;
 }
 
+async function appwriteDatabaseRequest(path, method, body) {
+  const response = await fetch(
+    `${appwriteEndpoint}${path}`,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": appwriteProjectId,
+        "X-Appwrite-Key": appwriteApiKey
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }
+  );
+
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`Appwrite database request failed (${response.status}): ${text}`);
+  }
+
+  return result;
+}
+
+async function ensureChurchAnnouncementCollections() {
+  const compatibilityCollections = {
+    [CHURCH_ANNOUNCEMENTS_COLLECTION_ID]: {
+      string: [["title", 255], ["message", 2000], ["sender_uid", 255], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    "church_announcements": {
+      string: [["title", 255], ["message", 2000], ["sender_uid", 255], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    [CHURCH_NOTIFICATIONS_COLLECTION_ID]: {
+      string: [["announcement_id", 64], ["user_uid", 255], ["title", 255], ["message", 2000], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: [],
+      boolean: ["is_read"]
+    },
+    "church_notifications": {
+      string: [["announcement_id", 64], ["user_uid", 255], ["title", 255], ["message", 2000], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: [],
+      boolean: ["is_read"]
+    },
+    [CHURCH_DEVICE_TOKENS_COLLECTION_ID]: {
+      string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    "church_device_tokens": {
+      string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    }
+  };
+
+  const collectionSchemas = Object.fromEntries(
+    Object.entries(compatibilityCollections).filter(([collectionId]) => collectionId && collectionId !== "undefined")
+  );
+
+  const collectionsResponse = await appwriteDatabaseRequest(
+    `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections?queries[]=${encodeURIComponent(JSON.stringify({ method: "limit", values: [250] }))}`,
+    "GET"
+  );
+
+  const existingIds = new Set((collectionsResponse.collections || []).map(collection => collection.$id || collection.id).filter(Boolean));
+
+  for (const [collectionId, schema] of Object.entries(collectionSchemas)) {
+    if (!existingIds.has(collectionId)) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections`,
+        "POST",
+        {
+          collectionId,
+          name: collectionId,
+          documentSecurity: false,
+          permissions: []
+        }
+      );
+      existingIds.add(collectionId);
+    }
+
+    for (const [attributeId, size] of schema.string || []) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/string`,
+        "POST",
+        { key: attributeId, size, required: false }
+      );
+    }
+
+    for (const attributeId of schema.integer || []) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/integer`,
+        "POST",
+        { key: attributeId, required: false }
+      );
+    }
+
+    for (const attributeId of schema.boolean || []) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/boolean`,
+        "POST",
+        { key: attributeId, required: false, default: false }
+      );
+    }
+  }
+}
+
 async function getAnnouncementProfile(firebaseUser) {
   const snapshot = await firebaseDb.collection(
     process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
@@ -870,8 +979,15 @@ function isAnnouncementLeader(profile) {
   );
 }
 
+function canSendBranchAnnouncement(profile) {
+  return profile.branchId !== null && profile.branchId > 0;
+}
+
 function announcementTargets(profile) {
-  const targets = [{ level: "National", id: 0, name: "All church members", regionId: null, districtId: null }];
+  const targets = [];
+  if (isAnnouncementLeader(profile)) {
+    targets.push({ level: "National", id: 0, name: "All church members", regionId: null, districtId: null });
+  }
   if (profile.regionId) {
     targets.push({ level: "Region", id: profile.regionId, name: "My region", regionId: profile.regionId, districtId: null });
   }
@@ -897,6 +1013,7 @@ function targetMatchesToken(announcement, token) {
 function mapAnnouncement(document) {
   return {
     id: document.$id || document.id || "",
+    announcementId: document.announcement_id || document.$id || document.id || "",
     title: document.title || "",
     message: document.message || "",
     senderName: document.sender_name || "",
@@ -940,7 +1057,10 @@ async function upsertDeviceToken(req, log) {
 
 async function getAnnouncementOptions(req, log) {
   const profile = await getAnnouncementProfile(await verifyFirebaseRequest(req, log));
-  if (!isAnnouncementLeader(profile)) throw announcementError("Only church leaders can send announcements.", 403);
+  if (!isAnnouncementLeader(profile) && !canSendBranchAnnouncement(profile)) {
+    throw announcementError("Your profile must have a branch assigned before sending announcements.", 403);
+  }
+  log(`[CCT_ANNOUNCEMENT_OPTIONS] uid=${profile.uid} role=${profile.role || "none"} branchId=${profile.branchId ?? "none"}`);
   return {
     leadershipLevel: profile.leadershipLevel || profile.role,
     organization: profile.organization,
@@ -951,7 +1071,6 @@ async function getAnnouncementOptions(req, log) {
 async function createChurchAnnouncement(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const profile = await getAnnouncementProfile(firebaseUser);
-  if (!isAnnouncementLeader(profile)) throw announcementError("Only church leaders can send announcements.", 403);
   const body = getRequestBody(req);
   const title = normalizeString(body.title);
   const message = normalizeString(body.message);
@@ -963,6 +1082,12 @@ async function createChurchAnnouncement(req, log) {
   const regionId = parseOptionalInt(body.regionId);
   const districtId = parseOptionalInt(body.districtId);
   const branchId = parseOptionalInt(body.branchId);
+  const canSendRequestedAudience =
+    isAnnouncementLeader(profile) ||
+    (targetLevel === "Branch" && canSendBranchAnnouncement(profile));
+  if (!canSendRequestedAudience) {
+    throw announcementError("Members can send announcements only to their assigned branch.", 403);
+  }
   if ((targetLevel === "Region" && regionId !== profile.regionId) ||
       (targetLevel === "District" && districtId !== profile.districtId) ||
       (targetLevel === "Branch" && branchId !== profile.branchId)) {
@@ -979,6 +1104,7 @@ async function createChurchAnnouncement(req, log) {
     branch_id: branchId,
     created_at: new Date().toISOString()
   };
+  log(`[CCT_ANNOUNCEMENT_CREATE] uid=${profile.uid} target=${targetLevel} branchId=${branchId ?? "none"}`);
   const announcementId = randomUUID().replace(/-/g, "");
   await appwriteCollectionRequest(CHURCH_ANNOUNCEMENTS_COLLECTION_ID, "POST", "", {
     documentId: announcementId,
@@ -1010,17 +1136,25 @@ async function createChurchAnnouncement(req, log) {
     appwriteCollectionRequest(CHURCH_NOTIFICATIONS_COLLECTION_ID, "POST", "", item)
   ));
   if (tokens.length > 0) {
-    await firebaseMessaging.sendEachForMulticast({
+    const delivery = await firebaseMessaging.sendEachForMulticast({
       tokens: tokens.map(token => token.token),
       notification: { title, body: message },
       data: { announcementId, targetLevel }
     });
+    if (delivery.failureCount > 0) {
+      log(`[CCT_ANNOUNCEMENT_FCM] success=${delivery.successCount} failed=${delivery.failureCount}`);
+      throw announcementError(
+        `Announcement was stored, but FCM delivery failed for ${delivery.failureCount} device(s).`,
+        502
+      );
+    }
   }
   return { success: true, announcementId, delivered: tokens.length };
 }
 
 async function listChurchNotifications(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
+  const since = parseRequestDate(getQueryValue(req, "since"));
   const page = await appwriteCollectionRequest(
     CHURCH_NOTIFICATIONS_COLLECTION_ID,
     "GET",
@@ -1030,6 +1164,7 @@ async function listChurchNotifications(req, log) {
   );
   return (page.documents || [])
     .filter(document => document.user_uid === firebaseUser.uid)
+    .filter(document => !since || new Date(document.created_at || 0) > since)
     .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
     .map(mapAnnouncement);
 }
@@ -1824,6 +1959,8 @@ export default async ({
     log(
       `CCT request path: ${req.path || ""}`
     );
+
+    await ensureChurchAnnouncementCollections();
 
     if (route === "/api/church-announcements/options" ||
         route === "api/church-announcements/options") {

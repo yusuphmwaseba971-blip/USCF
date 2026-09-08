@@ -49,6 +49,10 @@
     <JavaSdkDirectory>
       C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot
     </JavaSdkDirectory>
+
+    <!-- Keep D8/R8 below the available build-machine memory. -->
+    <JavaMaximumHeapSize>512M</JavaMaximumHeapSize>
+    <JavaOptions>-XX:ActiveProcessorCount=2 -XX:+UseSerialGC</JavaOptions>
   </PropertyGroup>
 
 

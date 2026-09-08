@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "main": "src/index.js",
+  "scripts": {
+    "setup:announcements": "node setup-announcements.js",
+    "deploy:function": "pwsh -ExecutionPolicy Bypass -File ../deploy-appwrite-function.ps1"
+  },
   "dependencies": {
     "firebase-admin": "13.5.0",
     "node-appwrite": "20.3.0"
