@@ -54,6 +54,13 @@ public partial class HomePage : ContentPage
     {
         try
         {
+            await CCT_USCF.Services.FirebaseInit.Initialized;
+            if (MauiProgram.CurrentUser is null)
+            {
+                var currentUser = await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+                if (currentUser is not null)
+                    MauiProgram.SetCurrentUser(currentUser);
+            }
             var token = await CrossFirebaseCloudMessaging.Current.GetTokenAsync();
             if (!string.IsNullOrWhiteSpace(token))
                 await MauiProgram.Services.GetRequiredService<CCT_USCF.Services.ChurchAnnouncementService>()

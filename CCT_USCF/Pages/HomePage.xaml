@@ -674,6 +674,9 @@
                         Stroke="#F4D59A"
                         StrokeThickness="1"
                         StrokeShape="RoundRectangle 20">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OpenNotifications" />
+                        </Border.GestureRecognizers>
 
                         <VerticalStackLayout Spacing="7">
 

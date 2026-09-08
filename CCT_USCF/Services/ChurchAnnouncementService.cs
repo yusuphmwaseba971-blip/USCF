@@ -37,11 +37,22 @@ public sealed class ChurchAnnouncementService
     public Task MarkReadAsync(Guid id, CancellationToken ct = default)
         => SendAsync<object>(HttpMethod.Post, $"api/church-announcements/notifications/{id}/read", new { }, ct);
 
-    public Task RegisterTokenAsync(string token, CancellationToken ct = default)
-        => SendAsync<object>(HttpMethod.Post, "api/church-announcements/token", new { token }, ct);
+    public async Task RegisterTokenAsync(string token, CancellationToken ct = default)
+    {
+        var user = MauiProgram.CurrentUser;
+        await SendAsync<object>(HttpMethod.Post, "api/church-announcements/token", new
+        {
+            token,
+            regionId = user?.RegionId,
+            districtId = user?.DistrictId,
+            branchId = user?.BranchId,
+            userName = user?.FullName
+        }, ct);
+    }
 
     private async Task<T?> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {
+        await FirebaseInit.Initialized;
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
         if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
