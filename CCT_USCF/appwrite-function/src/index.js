@@ -851,10 +851,13 @@ async function appwriteCollectionRequest(collectionId, method, path = "", body, 
   return result;
 }
 
-async function appwriteTableRowRequest(tableId, method, path = "", body) {
+async function appwriteTableRowRequest(tableId, method, path = "", body, queries = []) {
+  const queryString = queries.length > 0
+    ? `?${queries.map(query => `queries[]=${encodeURIComponent(JSON.stringify(query))}`).join("&")}`
+    : "";
   const response = await fetch(
     `${appwriteEndpoint}/tablesdb/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
-    `/tables/${encodeURIComponent(tableId)}/rows${path}`,
+    `/tables/${encodeURIComponent(tableId)}/rows${path}${queryString}`,
     {
       method,
       headers: {
@@ -1053,12 +1056,28 @@ function mapAnnouncement(document) {
     id: document.$id || document.id || "",
     announcementId: document.announcement_id || document.$id || document.id || "",
     title: document.title || "",
-    message: document.message || "",
+    message: document.content || document.message || "",
     senderName: document.sender_name || "",
     targetLevel: document.target_level || "",
     createdAtUtc: safeIsoDate(document.created_at),
     isRead: document.is_read === true || document.is_read === "true"
   };
+}
+
+function toGuidString(value) {
+  const compact = normalizeString(value).replace(/-/g, "");
+  return /^[0-9a-f]{32}$/i.test(compact)
+    ? `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`
+    : randomUUID();
+}
+
+function announcementVisibleToProfile(announcement, profile) {
+  const scope = normalizeString(announcement.scope_type).toLowerCase();
+  if (scope === "national") return true;
+  if (scope === "region") return String(announcement.region_id ?? "") === String(profile.regionId ?? "");
+  if (scope === "district") return String(announcement.district_id ?? "") === String(profile.districtId ?? "");
+  if (scope === "branch") return String(announcement.branch_id ?? "") === String(profile.branchId ?? "");
+  return false;
 }
 
 async function upsertDeviceToken(req, log) {
@@ -1232,19 +1251,39 @@ async function createChurchAnnouncement(req, log) {
 
 async function listChurchNotifications(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
   const since = parseRequestDate(getQueryValue(req, "since"));
-  const page = await appwriteCollectionRequest(
-    CHURCH_NOTIFICATIONS_COLLECTION_ID,
+  log(
+    `[ANNOUNCEMENT_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} ` +
+    `table=${ANNOUNCEMENTS_TABLE_ID} scope=authorized-user`
+  );
+  const page = await appwriteTableRowRequest(
+    ANNOUNCEMENTS_TABLE_ID,
     "GET",
     "",
     undefined,
     [{ method: "limit", values: [500] }]
   );
-  return (page.documents || [])
-    .filter(document => document.user_uid === firebaseUser.uid)
-    .filter(document => !since || new Date(document.created_at || 0) > since)
-    .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
-    .map(mapAnnouncement);
+  const rows = page.rows || [];
+  const visibleRows = rows
+    .filter(row => row.is_active !== false)
+    .filter(row => announcementVisibleToProfile(row, profile))
+    .filter(row => !since || new Date(row.$createdAt || 0) > since)
+    .sort((left, right) => new Date(right.$createdAt || 0) - new Date(left.$createdAt || 0));
+  log(
+    `[ANNOUNCEMENT_FETCH_RESULT] database=${DEFAULT_DATABASE_ID} ` +
+    `table=${ANNOUNCEMENTS_TABLE_ID} rows=${rows.length} visible=${visibleRows.length}`
+  );
+  return visibleRows.map(row => ({
+    id: toGuidString(row.$id || row.announcement_id),
+    announcementId: toGuidString(row.announcement_id || row.$id),
+    title: row.title || "",
+    message: row.content || "",
+    senderName: row.sender_name || "",
+    targetLevel: row.scope_type || "",
+    createdAtUtc: safeIsoDate(row.$createdAt),
+    isRead: false
+  }));
 }
 
 async function markChurchNotificationRead(req, log, notificationId) {

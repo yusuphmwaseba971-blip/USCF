@@ -70,26 +70,16 @@ public sealed class ChurchAnnouncementService
 
     public async Task<IReadOnlyList<ChurchNotification>> GetNotificationsAsync(CancellationToken ct = default)
     {
-        var cached = await AnnouncementCache.GetAllAsync();
-        try
-        {
-            DateTime? newest = cached.Count == 0 ? null : cached.Max(x => x.CreatedAtUtc);
-            var path = "api/church-announcements/notifications";
-            if (newest is not null)
-                path += $"?since={Uri.EscapeDataString(newest.Value.ToUniversalTime().ToString("O"))}";
-
-            var remote = await SendAsync<List<ChurchNotification>>(HttpMethod.Get, path, null, ct) ?? [];
-            await AnnouncementCache.MergeAsync(remote);
-            cached = await AnnouncementCache.GetAllAsync();
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
-        {
-            System.Diagnostics.Debug.WriteLine($"Announcement sync unavailable; using SQLite cache: {ex.Message}");
-        }
-
-        return cached
+        System.Diagnostics.Debug.WriteLine(
+            $"[ANNOUNCEMENT_FETCH_START] timestamp={DateTimeOffset.UtcNow:O} " +
+            "database=cct-uscf-db table=announcements");
+        var remote = await SendAsync<List<ChurchNotification>>(
+            HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
+        await AnnouncementCache.MergeAsync(remote);
+        System.Diagnostics.Debug.WriteLine(
+            $"[ANNOUNCEMENT_FETCH_RESULT] rows={remote.Count} visible={remote.Count}");
+        return remote
             .OrderByDescending(x => x.CreatedAtUtc)
-            .Select(x => x.ToNotification())
             .ToList();
     }
 
@@ -146,8 +136,10 @@ public sealed class ChurchAnnouncementService
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
         if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
+        var isFetch = path.StartsWith("api/church-announcements/notifications", StringComparison.Ordinal);
+        var prefix = isFetch ? "ANNOUNCEMENT_FETCH" : "ANNOUNCEMENT_SEND";
         System.Diagnostics.Debug.WriteLine(
-            $"[ANNOUNCEMENT_SEND_REQUEST] timestamp={DateTimeOffset.UtcNow:O} " +
+            $"[{prefix}_REQUEST] timestamp={DateTimeOffset.UtcNow:O} " +
             $"method={method} url={_http.BaseAddress}{path} " +
             $"database=cct-uscf-db table=announcements");
 
@@ -160,7 +152,7 @@ public sealed class ChurchAnnouncementService
         {
             var diagnostic = AnnouncementDiagnostic.FromException(
                 ex, method, new Uri(_http.BaseAddress!, path));
-            LogDiagnostic("[ANNOUNCEMENT_SEND_ERROR]", diagnostic);
+            LogDiagnostic($"[{prefix}_ERROR]", diagnostic);
             throw new InvalidOperationException(diagnostic.ToDisplayMessage(), ex);
         }
 
@@ -168,7 +160,7 @@ public sealed class ChurchAnnouncementService
         {
             var responseBody = await response.Content.ReadAsStringAsync(ct);
             System.Diagnostics.Debug.WriteLine(
-                $"[ANNOUNCEMENT_SEND_RESPONSE] timestamp={DateTimeOffset.UtcNow:O} " +
+                $"[{prefix}_RESPONSE] timestamp={DateTimeOffset.UtcNow:O} " +
                 $"status={(int)response.StatusCode} url={_http.BaseAddress}{path} " +
                 $"body={Sanitize(responseBody)}");
 
@@ -185,7 +177,7 @@ public sealed class ChurchAnnouncementService
                     var diagnostic = AnnouncementDiagnostic.FromResponse(
                         ex, method, new Uri(_http.BaseAddress!, path),
                         (int)response.StatusCode, responseBody);
-                    LogDiagnostic("[ANNOUNCEMENT_SEND_ERROR]", diagnostic);
+                    LogDiagnostic($"[{prefix}_ERROR]", diagnostic);
                     throw new InvalidOperationException(diagnostic.ToDisplayMessage(), ex);
                 }
             }
@@ -196,7 +188,7 @@ public sealed class ChurchAnnouncementService
                 new InvalidOperationException(message),
                 method, new Uri(_http.BaseAddress!, path),
                 (int)response.StatusCode, responseBody, error?.Code);
-            LogDiagnostic("[ANNOUNCEMENT_SEND_ERROR]", diagnosticError);
+            LogDiagnostic($"[{prefix}_ERROR]", diagnosticError);
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
