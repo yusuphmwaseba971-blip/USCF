@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 
 using CCT_USCF.Models;
@@ -13,13 +15,19 @@ public class PrayerService
 {
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
+    private readonly HttpClient _http;
+    private readonly AuthService _authService;
 
     public PrayerService(
         IFirebaseAuth auth,
-        IFirebaseFirestore firestore)
+        IFirebaseFirestore firestore,
+        HttpClient http,
+        AuthService authService)
     {
         _auth = auth;
         _firestore = firestore;
+        _http = http;
+        _authService = authService;
     }
 
     public async Task<PrayerRequest> CreatePrayerAsync(
@@ -29,9 +37,11 @@ public class PrayerService
         PrayerVisibility visibility,
         PrayerNameVisibility nameVisibility)
     {
+        System.Diagnostics.Debug.WriteLine("[PRAYER_REQUEST_START]");
         var currentUser = _auth.CurrentUser;
         if (currentUser == null)
             throw new InvalidOperationException("You must be signed in to create a prayer request.");
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_REQUEST_AUTH] uid={currentUser.Uid}");
 
         var profile = MauiProgram.CurrentUser;
         var prayerId = Guid.NewGuid().ToString("N");
@@ -62,11 +72,44 @@ public class PrayerService
             IsOwnerVisible = nameVisibility == PrayerNameVisibility.ShowMyName
         };
 
-        var document = ToFirestoreDocument(prayer);
-        await _firestore
-            .GetCollection("prayers")
-            .GetDocument(prayerId)
-            .SetDataAsync(document);
+        var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
+
+        var isPrivate = visibility == PrayerVisibility.Private;
+        var payload = new
+        {
+            content = prayer.Content,
+            leader_id = (string?)null,
+            is_private = isPrivate
+        };
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_REQUEST_PAYLOAD] contentLength={prayer.Content.Length} isPrivate={isPrivate} leaderId=none");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/prayers")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        System.Diagnostics.Debug.WriteLine("[PRAYER_REQUEST_APPWRITE_CREATE] route=api/prayers database=cct-uscf-db table=cct_prayers");
+        using var response = await _http.SendAsync(request);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[PRAYER_REQUEST_ERROR] status={(int)response.StatusCode} body={responseBody}");
+            throw new HttpRequestException($"Prayer request could not be saved ({(int)response.StatusCode}).");
+        }
+
+        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerCreateResponse>(
+            responseBody,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (result is null || !result.Success || string.IsNullOrWhiteSpace(result.RowId))
+            throw new InvalidOperationException("Appwrite did not confirm creation of the prayer request.");
+
+        prayer.PrayerId = result.RowId;
+        prayer.Status = PrayerStatus.Active;
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_REQUEST_SUCCESS] rowId={result.RowId}");
 
         return prayer;
     }
@@ -274,6 +317,12 @@ public class PrayerService
         return string.IsNullOrWhiteSpace(content)
             ? string.Empty
             : content.Trim();
+    }
+
+    private sealed class PrayerCreateResponse
+    {
+        public bool Success { get; set; }
+        public string RowId { get; set; } = string.Empty;
     }
 
     private static PrayerFirestoreDocument ToFirestoreDocument(PrayerRequest prayer)

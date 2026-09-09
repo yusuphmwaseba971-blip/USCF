@@ -143,6 +143,7 @@ const ANNOUNCEMENTS_TABLE_ID =
   process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID ||
   process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID ||
   "announcements";
+const PRAYERS_TABLE_ID = "cct_prayers";
 
 const COMMUNITY_MESSAGES_COLLECTION_ID =
   process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
@@ -1125,6 +1126,39 @@ async function getAnnouncementOptions(req, log) {
   };
 }
 
+async function createPrayerRequest(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+  const content = normalizeString(body.content);
+  if (!content) throw announcementError("Prayer request content is required.");
+  const isPrivate = body.is_private === true || body.isPrivate === true;
+  const leaderId = normalizeString(body.leader_id || body.leaderId);
+  const rowId = randomUUID().replace(/-/g, "");
+  const data = {
+    user_id: firebaseUser.uid,
+    content,
+    leader_id: leaderId || null,
+    is_private: isPrivate,
+    status: "pending"
+  };
+  log(`[PRAYER_REQUEST_APPWRITE_CREATE] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} uid=${firebaseUser.uid} private=${isPrivate}`);
+  const row = await appwriteTableRowRequest(
+    PRAYERS_TABLE_ID,
+    "POST",
+    "",
+    { rowId, data }
+  );
+  log(`[PRAYER_REQUEST_SUCCESS] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} row=${row.$id || rowId}`);
+  return {
+    success: true,
+    rowId: row.$id || rowId,
+    userId: firebaseUser.uid,
+    content: row.content || content,
+    isPrivate: row.is_private ?? isPrivate,
+    status: row.status || "pending"
+  };
+}
+
 async function createChurchAnnouncement(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const profile = await getAnnouncementProfile(firebaseUser);
@@ -2086,6 +2120,12 @@ export default async ({
       if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
       currentStage = "GET church announcement options";
       return jsonResponse(res, await getAnnouncementOptions(req, log), 200);
+    }
+
+    if (route === "/api/prayers" || route === "api/prayers") {
+      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+      currentStage = "POST prayer request";
+      return jsonResponse(res, await createPrayerRequest(req, log), 201);
     }
 
     if (route === "/api/church-announcements" ||

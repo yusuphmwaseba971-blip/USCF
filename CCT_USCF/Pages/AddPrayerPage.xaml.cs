@@ -63,8 +63,9 @@ public partial class AddPrayerPage : ContentPage
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[PRAYER] Create error: {ex}");
-            await DisplayAlert("Prayer request", "We couldn't submit your prayer request right now. Please try again.", "OK");
+            System.Diagnostics.Debug.WriteLine(
+                $"[PRAYER_REQUEST_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message}");
+            await DisplayAlert("Prayer request", $"We couldn't submit your prayer request.\n{ex.Message}", "OK");
         }
         finally
         {
