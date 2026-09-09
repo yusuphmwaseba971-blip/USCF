@@ -67,6 +67,11 @@ public class PrayerRequest
     public bool IsAnswered { get; set; }
     public DateTime? AnsweredAtUtc { get; set; }
     public bool IsOwnerVisible { get; set; }
+    public bool IsPrayed { get; set; }
+    public string StatusLabelText => string.IsNullOrWhiteSpace(Status.ToString()) ? "Pending" : Status.ToString();
+    public string RelativeCreatedAt => CreatedAtUtc == default
+        ? "Recently"
+        : CreatedAtUtc.ToLocalTime().ToString("g");
     public string CategoryLabel => Enum.GetName(typeof(PrayerCategory), Category) ?? "Other";
     public string ReachLabel => Enum.GetName(typeof(PrayerReach), Reach) ?? "National USCF";
     public string VisibilityLabel => Enum.GetName(typeof(PrayerVisibility), Visibility) ?? "National Prayer Wall";

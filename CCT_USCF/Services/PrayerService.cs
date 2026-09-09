@@ -116,19 +116,67 @@ public class PrayerService
 
     public async Task<IReadOnlyList<PrayerRequest>> GetPrayerWallAsync(int limit = 25)
     {
-        var query = _firestore
-            .GetCollection("prayers")
-            .WhereEqualsTo("status", PrayerStatus.Active.ToString())
-            .WhereEqualsTo("visibility", PrayerVisibility.NationalPrayerWall.ToString())
-            .OrderBy("createdAtUtc", true)
-            .LimitedTo(limit);
+        System.Diagnostics.Debug.WriteLine("[PRAYER_FETCH_START]");
+        var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_AUTH] uid={_auth.CurrentUser?.Uid ?? "none"}");
 
-        var snapshot = await query.GetDocumentsAsync<PrayerFirestoreDocument>(Source.Default);
-        return snapshot.Documents
-            .Select(doc => MapFromDocument(doc.Data))
-            .Where(item => item != null)
-            .Cast<PrayerRequest>()
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"api/prayers?limit={Math.Clamp(limit, 1, 100)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        System.Diagnostics.Debug.WriteLine("[PRAYER_FETCH_REQUEST] database=cct-uscf-db table=cct_prayers");
+        using var response = await _http.SendAsync(request);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_FETCH_RESPONSE] status={(int)response.StatusCode} bodyLength={responseBody.Length}");
+        if (!response.IsSuccessStatusCode)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_ERROR] status={(int)response.StatusCode}");
+            throw new HttpRequestException($"Prayer requests could not be loaded ({(int)response.StatusCode}).");
+        }
+
+        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerListResponse>(
+            responseBody,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        var items = (result?.Rows ?? [])
+            .Where(row => !string.IsNullOrWhiteSpace(row.Content))
+            .Select(row => new PrayerRequest
+            {
+                PrayerId = row.Id,
+                AuthorUid = row.UserId,
+                AuthorDisplayName = row.UserId == _auth.CurrentUser?.Uid ? "You" : "Prayer member",
+                IsAnonymous = true,
+                Content = row.Content,
+                Visibility = row.IsPrivate ? PrayerVisibility.Private : PrayerVisibility.NationalPrayerWall,
+                Status = ParseStatus(row.Status),
+                CreatedAtUtc = row.CreatedAtUtc,
+                UpdatedAtUtc = row.UpdatedAtUtc,
+                IsOwnerVisible = row.UserId == _auth.CurrentUser?.Uid
+            })
+            .OrderByDescending(item => item.CreatedAtUtc)
             .ToList();
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_RESULT] rows={result?.Rows?.Count ?? 0} displayed={items.Count}");
+        return items;
+    }
+
+    private static PrayerStatus ParseStatus(string? value) =>
+        Enum.TryParse<PrayerStatus>(value, true, out var status) ? status : PrayerStatus.Active;
+
+    private sealed class PrayerListResponse
+    {
+        public List<PrayerRow> Rows { get; set; } = [];
+    }
+
+    private sealed class PrayerRow
+    {
+        public string Id { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public bool IsPrivate { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime UpdatedAtUtc { get; set; }
     }
 
     public async Task<IReadOnlyList<PrayerRequest>> GetMyPrayersAsync()

@@ -31,6 +31,8 @@ public partial class PrayerPage : ContentPage
 
     private async Task LoadPrayerWallAsync()
     {
+        PrayerLoadingIndicator.IsVisible = true;
+        PrayerErrorState.IsVisible = false;
         try
         {
             var items = await _prayerService.GetPrayerWallAsync(25);
@@ -39,12 +41,17 @@ public partial class PrayerPage : ContentPage
                 _items.Add(item);
 
             PrayerCollectionView.ItemsSource = _items.OrderByDescending(x => x.CreatedAtUtc).ToList();
-            PrayerRefreshView.IsRefreshing = false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[PRAYER] Load wall error: {ex}");
-            PrayerCollectionView.ItemsSource = new List<PrayerRequest>();
+            System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message}");
+            PrayerCollectionView.ItemsSource = null;
+            PrayerErrorMessage.Text = "Unable to load prayer requests.";
+            PrayerErrorState.IsVisible = true;
+        }
+        finally
+        {
+            PrayerLoadingIndicator.IsVisible = false;
             PrayerRefreshView.IsRefreshing = false;
         }
     }
@@ -67,15 +74,13 @@ public partial class PrayerPage : ContentPage
 
         try
         {
-            var success = await _prayerService.PrayForRequestAsync(prayerId);
-            if (!success)
+            if (button.BindingContext is PrayerRequest prayer)
             {
-                await DisplayAlert("Prayer", "You have already prayed for this request.", "OK");
-                return;
+                prayer.IsPrayed = true;
+                button.Text = "I PRAYED 🙏";
+                button.IsEnabled = false;
+                System.Diagnostics.Debug.WriteLine($"[PRAYER] Local prayer response recorded row={prayerId}");
             }
-
-            await DisplayAlert("Someone prayed for this request.", "🙏", "OK");
-            await LoadPrayerWallAsync();
         }
         catch (Exception ex)
         {
@@ -88,6 +93,8 @@ public partial class PrayerPage : ContentPage
     {
         _ = LoadPrayerWallAsync();
     }
+
+    private async void OnRetryFetchClicked(object sender, EventArgs e) => await LoadPrayerWallAsync();
 
     private void OnIntroDismissed(object sender, EventArgs e)
     {

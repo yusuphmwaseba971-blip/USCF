@@ -30,6 +30,7 @@
         </Border>
 
         <RefreshView Grid.Row="1" x:Name="PrayerRefreshView">
+            <Grid>
             <CollectionView x:Name="PrayerCollectionView" SelectionMode="None" Margin="0,12,0,0">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout Padding="32" Spacing="12" HorizontalOptions="Center" VerticalOptions="Center">
@@ -63,10 +64,10 @@
                                 <Label Text="{Binding ReachLabel}" FontSize="12" TextColor="#64748B" />
 
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <Label Grid.Column="0" Text="🙏 {Binding PrayerCount} people prayed" FontSize="12" TextColor="#475569" VerticalOptions="Center" />
+                                    <Label Grid.Column="0" Text="{Binding StatusLabelText}" FontSize="12" TextColor="#166534" VerticalOptions="Center" />
                                     <Button
                                         Grid.Column="1"
-                                        Text="🙏 I PRAYED"
+                                        Text="I PRAY 🙏"
                                         Padding="10,8"
                                         BackgroundColor="#E8F5E9"
                                         TextColor="#166534"
@@ -80,6 +81,15 @@
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
+            <VerticalStackLayout x:Name="PrayerLoadingIndicator" IsVisible="False" BackgroundColor="#F8FAFC" HorizontalOptions="Center" VerticalOptions="Center" Spacing="8">
+                <ActivityIndicator IsRunning="True" Color="#009E2C" />
+                <Label Text="Loading prayer requests..." TextColor="#475569" />
+            </VerticalStackLayout>
+            <VerticalStackLayout x:Name="PrayerErrorState" IsVisible="False" BackgroundColor="#F8FAFC" HorizontalOptions="Center" VerticalOptions="Center" Spacing="10">
+                <Label x:Name="PrayerErrorMessage" Text="Unable to load prayer requests." TextColor="#991B1B" HorizontalTextAlignment="Center" />
+                <Button Text="Try Again" Clicked="OnRetryFetchClicked" BackgroundColor="#009E2C" TextColor="White" />
+            </VerticalStackLayout>
+            </Grid>
         </RefreshView>
 
         <Grid x:Name="IntroOverlay" IsVisible="False" BackgroundColor="#0F172A" Opacity="0.6" Padding="0">
