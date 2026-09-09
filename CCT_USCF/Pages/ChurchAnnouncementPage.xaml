@@ -12,7 +12,7 @@
             <Entry x:Name="TitleEntry" Placeholder="Announcement title" />
             <Editor x:Name="MessageEditor" Placeholder="Announcement message" AutoSize="TextChanges" MinimumHeightRequest="140" />
             <Button x:Name="SendButton" Text="Send announcement" Clicked="OnSendClicked" />
-            <Label x:Name="StatusLabel" TextColor="#B45309" />
+            <Label x:Name="StatusLabel" TextColor="#B45309" LineBreakMode="WordWrap" />
             <Button Text="Announcement activity" Clicked="OnActivityClicked" />
         </VerticalStackLayout>
     </ScrollView>

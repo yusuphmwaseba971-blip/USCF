@@ -107,7 +107,11 @@ public sealed class ChurchAnnouncementService
             districtId = target.DistrictId,
             branchId = target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase) ? (int?)target.Id : null
         };
-        await SendAsync<object>(HttpMethod.Post, "api/church-announcements", payload, ct);
+        var result = await SendAsync<AnnouncementCreateResponse>(
+            HttpMethod.Post, "api/church-announcements", payload, ct);
+        if (result?.Success != true || string.IsNullOrWhiteSpace(result.AnnouncementId))
+            throw new InvalidOperationException(
+                "The announcement service did not confirm storage with success=true and an announcement ID.");
     }
 
     public async Task MarkReadAsync(Guid id, CancellationToken ct = default)
@@ -142,39 +146,71 @@ public sealed class ChurchAnnouncementService
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
         if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
-        using var response = await _http.SendAsync(request, ct);
+        System.Diagnostics.Debug.WriteLine(
+            $"[ANNOUNCEMENT_SEND_REQUEST] timestamp={DateTimeOffset.UtcNow:O} " +
+            $"method={method} url={_http.BaseAddress}{path} " +
+            $"database=cct-uscf-db table=announcements");
 
-        if (response.IsSuccessStatusCode)
+        HttpResponseMessage response;
+        try
         {
-            var text = await response.Content.ReadAsStringAsync(ct);
-            if (string.IsNullOrWhiteSpace(text)) return default;
-
-            try
-            {
-                return JsonSerializer.Deserialize<T>(text, JsonOptions);
-            }
-            catch (JsonException)
-            {
-                throw new InvalidOperationException("The announcement service returned an invalid response.");
-            }
+            response = await _http.SendAsync(request, ct);
+        }
+        catch (Exception ex)
+        {
+            var diagnostic = AnnouncementDiagnostic.FromException(
+                ex, method, new Uri(_http.BaseAddress!, path));
+            LogDiagnostic("[ANNOUNCEMENT_SEND_ERROR]", diagnostic);
+            throw new InvalidOperationException(diagnostic.ToDisplayMessage(), ex);
         }
 
-        var payload = await response.Content.ReadAsStringAsync(ct);
-        var error = TryReadError(payload);
-        var message = error?.Error ?? error?.Message ?? payload;
+        using (response)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            System.Diagnostics.Debug.WriteLine(
+                $"[ANNOUNCEMENT_SEND_RESPONSE] timestamp={DateTimeOffset.UtcNow:O} " +
+                $"status={(int)response.StatusCode} url={_http.BaseAddress}{path} " +
+                $"body={Sanitize(responseBody)}");
 
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
-                ? "Please sign in to use church announcements."
-                : message);
-        if (response.StatusCode == HttpStatusCode.Forbidden)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
-                ? "You are not authorized for that announcement audience."
-                : message);
+            if (response.IsSuccessStatusCode)
+            {
+                if (string.IsNullOrWhiteSpace(responseBody)) return default;
 
-        throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
-            ? "The announcement service is unavailable."
-            : message);
+                try
+                {
+                    return JsonSerializer.Deserialize<T>(responseBody, JsonOptions);
+                }
+                catch (JsonException ex)
+                {
+                    var diagnostic = AnnouncementDiagnostic.FromResponse(
+                        ex, method, new Uri(_http.BaseAddress!, path),
+                        (int)response.StatusCode, responseBody);
+                    LogDiagnostic("[ANNOUNCEMENT_SEND_ERROR]", diagnostic);
+                    throw new InvalidOperationException(diagnostic.ToDisplayMessage(), ex);
+                }
+            }
+
+            var error = TryReadError(responseBody);
+            var message = error?.Error ?? error?.Message ?? responseBody;
+            var diagnosticError = AnnouncementDiagnostic.FromResponse(
+                new InvalidOperationException(message),
+                method, new Uri(_http.BaseAddress!, path),
+                (int)response.StatusCode, responseBody, error?.Code);
+            LogDiagnostic("[ANNOUNCEMENT_SEND_ERROR]", diagnosticError);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
+                    ? "Please sign in to use church announcements."
+                    : diagnosticError.ToDisplayMessage());
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
+                    ? "You are not authorized for that announcement audience."
+                    : diagnosticError.ToDisplayMessage());
+
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
+                ? "The announcement service is unavailable."
+                : diagnosticError.ToDisplayMessage());
+        }
     }
 
     private static ApiError? TryReadError(string payload)
@@ -191,7 +227,52 @@ public sealed class ChurchAnnouncementService
         }
     }
 
-    private sealed record ApiError(string? Error, string? Message);
+    private sealed record ApiError(string? Error, string? Message, int? Code);
+
+    private sealed record AnnouncementCreateResponse(bool Success, string? AnnouncementId);
+
+    private static void LogDiagnostic(string prefix, AnnouncementDiagnostic diagnostic) =>
+        System.Diagnostics.Debug.WriteLine($"{prefix} {diagnostic.ToLogMessage()}");
+
+    private static string Sanitize(string value) =>
+        value.Replace("Bearer ", "Bearer [REDACTED] ", StringComparison.OrdinalIgnoreCase)
+            .Replace("token", "[REDACTED_FIELD]", StringComparison.OrdinalIgnoreCase)
+            .Replace("apiKey", "[REDACTED_FIELD]", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record AnnouncementDiagnostic(
+        DateTimeOffset Timestamp,
+        string ExceptionType,
+        string Message,
+        string? InnerException,
+        int? HttpStatusCode,
+        string? ResponseBody,
+        string RequestUrl,
+        string Database,
+        string Table,
+        int? AppwriteCode)
+    {
+        public static AnnouncementDiagnostic FromResponse(
+            Exception exception, HttpMethod method, Uri url, int statusCode,
+            string responseBody, int? appwriteCode = null) =>
+            new(DateTimeOffset.UtcNow, exception.GetType().FullName ?? exception.GetType().Name,
+                exception.Message, exception.InnerException?.Message, statusCode,
+                Sanitize(responseBody), url.ToString(), "cct-uscf-db", "announcements", appwriteCode);
+
+        public static AnnouncementDiagnostic FromException(Exception exception, HttpMethod method, Uri url) =>
+            new(DateTimeOffset.UtcNow, exception.GetType().FullName ?? exception.GetType().Name,
+                exception.Message, exception.InnerException?.Message, null, null,
+                url.ToString(), "cct-uscf-db", "announcements", null);
+
+        public string ToLogMessage() =>
+            $"timestamp={Timestamp:O} exceptionType={ExceptionType} message={Message} " +
+            $"inner={InnerException ?? "<none>"} status={HttpStatusCode?.ToString() ?? "<none>"} " +
+            $"url={RequestUrl} database={Database} table={Table} " +
+            $"appwriteCode={AppwriteCode?.ToString() ?? "<none>"} " +
+            $"response={ResponseBody ?? "<none>"}";
+
+        public string ToDisplayMessage() =>
+            $"Announcement send diagnostic:\n{ToLogMessage()}";
+    }
 }
 
 internal static class AnnouncementCache

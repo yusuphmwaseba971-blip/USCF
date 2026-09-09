@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+
 namespace CCT_USCF.Models;
 
 public sealed class AnnouncementResponse

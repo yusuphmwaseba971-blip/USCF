@@ -138,6 +138,12 @@ const DEFAULT_DATABASE_ID =
   process.env.APPWRITE_DATABASE_ID ||
   "cct-uscf-db";
 
+const ANNOUNCEMENTS_TABLE_ID =
+  process.env.APPWRITE_ANNOUNCEMENTS_TABLE_ID ||
+  process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID ||
+  process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID ||
+  "announcements";
+
 const COMMUNITY_MESSAGES_COLLECTION_ID =
   process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
   "community_messages";
@@ -845,6 +851,38 @@ async function appwriteCollectionRequest(collectionId, method, path = "", body, 
   return result;
 }
 
+async function appwriteTableRowRequest(tableId, method, path = "", body) {
+  const response = await fetch(
+    `${appwriteEndpoint}/tablesdb/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
+    `/tables/${encodeURIComponent(tableId)}/rows${path}`,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": appwriteProjectId,
+        "X-Appwrite-Key": appwriteApiKey
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }
+  );
+
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+  if (!response.ok) {
+    const error = new Error(
+      `Appwrite TablesDB request failed (${response.status}) ` +
+      `database=${DEFAULT_DATABASE_ID} table=${tableId}: ${text}`
+    );
+    error.statusCode = response.status;
+    error.appwriteCode = result.code ?? null;
+    error.appwriteMessage = result.message ?? null;
+    throw error;
+  }
+  return result;
+}
+
 async function appwriteDatabaseRequest(path, method, body) {
   const response = await fetch(
     `${appwriteEndpoint}${path}`,
@@ -1106,50 +1144,90 @@ async function createChurchAnnouncement(req, log) {
   };
   log(`[CCT_ANNOUNCEMENT_CREATE] uid=${profile.uid} target=${targetLevel} branchId=${branchId ?? "none"}`);
   const announcementId = randomUUID().replace(/-/g, "");
-  await appwriteCollectionRequest(CHURCH_ANNOUNCEMENTS_COLLECTION_ID, "POST", "", {
-    documentId: announcementId,
-    data: announcement
-  });
+  const tableData = {
+    announcement_id: announcementId,
+    title,
+    content: message,
+    sender_uid: profile.uid,
+    sender_name: profile.name,
+    scope_type: targetLevel,
+    region_id: regionId === null ? null : String(regionId),
+    district_id: districtId === null ? null : String(districtId),
+    branch_id: branchId === null ? null : String(branchId),
+    is_active: true
+  };
 
-  const tokenPage = await appwriteCollectionRequest(
-    CHURCH_DEVICE_TOKENS_COLLECTION_ID,
-    "GET",
-    "",
-    undefined,
-    [{ method: "limit", values: [500] }]
+  log(
+    `[CCT_ANNOUNCEMENT_STORAGE] database=${DEFAULT_DATABASE_ID} ` +
+    `table=${ANNOUNCEMENTS_TABLE_ID} row=${announcementId}`
   );
-  const tokens = (tokenPage.documents || []).filter(token => targetMatchesToken(announcement, token));
-  const messages = tokens.map(token => ({
-    documentId: randomUUID().replace(/-/g, ""),
-    data: {
-      announcement_id: announcementId,
-      user_uid: token.user_uid,
-      title,
-      message,
-      sender_name: profile.name,
-      target_level: targetLevel,
-      is_read: false,
-      created_at: announcement.created_at
-    }
-  }));
-  await Promise.all(messages.map(item =>
-    appwriteCollectionRequest(CHURCH_NOTIFICATIONS_COLLECTION_ID, "POST", "", item)
-  ));
-  if (tokens.length > 0) {
-    const delivery = await firebaseMessaging.sendEachForMulticast({
-      tokens: tokens.map(token => token.token),
-      notification: { title, body: message },
-      data: { announcementId, targetLevel }
+
+  if (process.env.APPWRITE_LEGACY_COLLECTIONS === "true") {
+    await appwriteCollectionRequest(CHURCH_ANNOUNCEMENTS_COLLECTION_ID, "POST", "", {
+      documentId: announcementId,
+      data: announcement
     });
-    if (delivery.failureCount > 0) {
-      log(`[CCT_ANNOUNCEMENT_FCM] success=${delivery.successCount} failed=${delivery.failureCount}`);
-      throw announcementError(
-        `Announcement was stored, but FCM delivery failed for ${delivery.failureCount} device(s).`,
-        502
-      );
-    }
+  } else {
+    await appwriteTableRowRequest(
+      ANNOUNCEMENTS_TABLE_ID,
+      "POST",
+      "",
+      { rowId: announcementId, data: tableData }
+    );
   }
-  return { success: true, announcementId, delivered: tokens.length };
+
+  let delivered = 0;
+  let notificationError = null;
+  try {
+    const tokenPage = await appwriteCollectionRequest(
+      CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+      "GET",
+      "",
+      undefined,
+      [{ method: "limit", values: [500] }]
+    );
+    const tokens = (tokenPage.documents || []).filter(token => targetMatchesToken(announcement, token));
+    const messages = tokens.map(token => ({
+      documentId: randomUUID().replace(/-/g, ""),
+      data: {
+        announcement_id: announcementId,
+        user_uid: token.user_uid,
+        title,
+        message,
+        sender_name: profile.name,
+        target_level: targetLevel,
+        is_read: false,
+        created_at: announcement.created_at
+      }
+    }));
+    await Promise.all(messages.map(item =>
+      appwriteCollectionRequest(CHURCH_NOTIFICATIONS_COLLECTION_ID, "POST", "", item)
+    ));
+    delivered = tokens.length;
+    if (tokens.length > 0) {
+      const delivery = await firebaseMessaging.sendEachForMulticast({
+        tokens: tokens.map(token => token.token),
+        notification: { title, body: message },
+        data: { announcementId, targetLevel }
+      });
+      delivered = delivery.successCount;
+      if (delivery.failureCount > 0) {
+        notificationError = `FCM delivery failed for ${delivery.failureCount} device(s).`;
+        log(`[CCT_ANNOUNCEMENT_FCM] success=${delivery.successCount} failed=${delivery.failureCount}`);
+      }
+    }
+  } catch (error) {
+    notificationError = error instanceof Error ? error.message : String(error);
+    log(`[CCT_ANNOUNCEMENT_NOTIFICATION_ERROR] ${notificationError}`);
+  }
+
+  return {
+    success: true,
+    announcementId,
+    delivered,
+    stored: true,
+    notificationError
+  };
 }
 
 async function listChurchNotifications(req, log) {
@@ -1960,7 +2038,9 @@ export default async ({
       `CCT request path: ${req.path || ""}`
     );
 
-    await ensureChurchAnnouncementCollections();
+      if (process.env.APPWRITE_BOOTSTRAP_COLLECTIONS === "true") {
+        await ensureChurchAnnouncementCollections();
+      }
 
     if (route === "/api/church-announcements/options" ||
         route === "api/church-announcements/options") {
@@ -2170,7 +2250,9 @@ export default async ({
 
         error:
           details.message ||
-          "Internal server error."
+          "Internal server error.",
+        appwriteCode: e?.appwriteCode ?? null,
+        appwriteMessage: e?.appwriteMessage ?? null
       },
       statusCode
     );

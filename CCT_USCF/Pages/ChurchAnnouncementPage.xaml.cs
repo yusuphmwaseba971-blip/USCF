@@ -53,11 +53,31 @@ public partial class ChurchAnnouncementPage : ContentPage
         try
         {
             await _service.CreateAsync(TitleEntry.Text, MessageEditor.Text, target);
-            await DisplayAlert("Announcement", "Announcement sent.", "OK");
+            StatusLabel.Text = "Announcement sent and stored.";
+            await DisplayAlert("Announcement", "Announcement sent and stored.", "OK");
             TitleEntry.Text = MessageEditor.Text = string.Empty;
         }
-        catch (Exception ex) { StatusLabel.Text = ex.Message; }
+        catch (Exception ex)
+        {
+            var diagnostic = BuildDiagnostic(ex);
+            System.Diagnostics.Debug.WriteLine($"[ANNOUNCEMENT_SEND_ERROR] {diagnostic}");
+#if DEBUG
+            StatusLabel.Text = diagnostic;
+#else
+            StatusLabel.Text = "Announcement was not stored. Please try again.";
+#endif
+        }
         finally { SendButton.IsEnabled = true; }
+    }
+
+    private static string BuildDiagnostic(Exception exception)
+    {
+        var inner = exception.InnerException is null
+            ? "<none>"
+            : $"{exception.InnerException.GetType().FullName}: {exception.InnerException.Message}";
+        return $"timestamp={DateTimeOffset.UtcNow:O} " +
+               $"exceptionType={exception.GetType().FullName} " +
+               $"message={exception.Message} inner={inner}";
     }
 
     private async void OnActivityClicked(object? sender, EventArgs e)

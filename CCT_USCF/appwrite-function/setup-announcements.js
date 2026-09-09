@@ -7,7 +7,7 @@ const projectId =
   process.env.APPWRITE_PROJECT_ID || "project-sgp-cct-uscf";
 
 const databaseId =
-  process.env.APPWRITE_DATABASE_ID || "database-cct-uscf-db";
+  process.env.APPWRITE_DATABASE_ID || "cct-uscf-db";
 
 const apiKey = process.env.APPWRITE_API_KEY;
 
@@ -201,17 +201,24 @@ const deviceTokenTables = Array.from(new Set([preferredDeviceTokenTable, "church
 for (const tableId of announcementTables) {
   await ensureTable(tableId, "Church Announcements");
   for (const [key, size] of [
+    ["announcement_id", 64],
     ["title", 255],
     ["sender_uid", 255],
     ["sender_name", 255],
+    ["scope_type", 32],
     ["target_level", 32],
+    ["image_url", 2048],
+    ["attachment_url", 2048],
+    ["expires_at", 64],
     ["created_at", 64]
   ]) {
     await ensureVarchar(tableId, key, size);
   }
+  await ensureText(tableId, "content");
   await ensureText(tableId, "message");
+  await ensureBoolean(tableId, "is_active", false, true);
   for (const key of ["region_id", "district_id", "branch_id"]) {
-    await ensureInteger(tableId, key);
+    await ensureVarchar(tableId, key, 128);
   }
 }
 
