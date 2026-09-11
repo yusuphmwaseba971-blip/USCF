@@ -83,19 +83,90 @@ public partial class ChurchGroupSelectionPage : ContentPage
             StatusLabel.Text = $"{level} groups";
             foreach (var group in groups)
             {
-                var panel = new Border
+                var accent = level switch
                 {
-                    Padding = new Thickness(14),
-                    Margin = new Thickness(0, 0, 0, 8),
-                    BackgroundColor = Colors.White,
-                    StrokeThickness = 0,
-                    StrokeShape = new RoundRectangle { CornerRadius = 12 }
+                    "National" => Color.FromArgb("#2A7F8E"),
+                    "Regional" => Color.FromArgb("#6657A6"),
+                    "District" => Color.FromArgb("#B7791F"),
+                    _ => Color.FromArgb("#2F7D52")
                 };
 
-                var stack = new VerticalStackLayout { Spacing = 6 };
-                stack.Children.Add(new Label { Text = group.Name, FontAttributes = FontAttributes.Bold, FontSize = 18, TextColor = Colors.DarkSlateBlue });
-                stack.Children.Add(new Label { Text = await BuildGroupMetaAsync(group, user), FontSize = 12, TextColor = Colors.Gray });
-                panel.Content = stack;
+                var accentBorder = level switch
+                {
+                    "National" => Color.FromArgb("#B9DDE0"),
+                    "Regional" => Color.FromArgb("#D2CBEA"),
+                    "District" => Color.FromArgb("#EAD5AE"),
+                    _ => Color.FromArgb("#BFD8C8")
+                };
+
+                var panel = new Border
+                {
+                    Padding = new Thickness(16, 14),
+                    Margin = new Thickness(0, 0, 0, 2),
+                    BackgroundColor = Colors.White,
+                    Stroke = accentBorder,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = 16 },
+                    Shadow = new Shadow
+                    {
+                        Brush = new SolidColorBrush(Color.FromArgb("#180F2418")),
+                        Offset = new Point(0, 2),
+                        Radius = 8,
+                        Opacity = 0.18f
+                    }
+                };
+
+                var icon = level switch
+                {
+                    "National" => "◎",
+                    "Regional" => "⌖",
+                    "District" => "⌂",
+                    _ => "✝"
+                };
+
+                var layout = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitionCollection
+                    {
+                        new ColumnDefinition { Width = 48 },
+                        new ColumnDefinition { Width = GridLength.Star },
+                        new ColumnDefinition { Width = 28 }
+                    },
+                    ColumnSpacing = 12
+                };
+
+                layout.Add(new Label
+                {
+                    Text = icon,
+                    FontSize = 28,
+                    TextColor = accent,
+                    HorizontalTextAlignment = TextAlignment.Center,
+                    VerticalTextAlignment = TextAlignment.Center
+                }, 0, 0);
+
+                var stack = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center };
+                stack.Children.Add(new Label
+                {
+                    Text = group.Name,
+                    FontAttributes = FontAttributes.Bold,
+                    FontSize = 16,
+                    TextColor = Color.FromArgb("#26362E")
+                });
+                stack.Children.Add(new Label
+                {
+                    Text = await BuildGroupMetaAsync(group, user),
+                    FontSize = 12,
+                    TextColor = Color.FromArgb("#7A8981")
+                });
+                layout.Add(stack, 1, 0);
+                layout.Add(new Label
+                {
+                    Text = "›",
+                    FontSize = 26,
+                    TextColor = Color.FromArgb("#B8986B"),
+                    VerticalTextAlignment = TextAlignment.Center
+                }, 2, 0);
+                panel.Content = layout;
 
                 var tap = new TapGestureRecognizer();
                 tap.Tapped += async (_, _) => await SelectGroupAsync(group, user);
