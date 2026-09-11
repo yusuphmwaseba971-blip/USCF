@@ -5,6 +5,7 @@ namespace CCT_USCF.Pages;
 public partial class HomePage : ContentPage
 {
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
+    private bool _shortcutsOpen;
 
     public HomePage()
     {
@@ -155,5 +156,30 @@ public partial class HomePage : ContentPage
     private async void OpenProfile(object? sender, TappedEventArgs e)
     {
         await Shell.Current.GoToAsync(nameof(ProfilePage));
+    }
+
+    private async void OpenNotificationsButton(object? sender, EventArgs e)
+        => await OpenNotificationsAsync();
+
+    private async void OpenEventsButton(object? sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(EventsPage));
+
+    private async void OpenSermonsButton(object? sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(SermonsPage));
+
+    private async void OpenGivingButton(object? sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(GivingPage));
+
+    private async Task OpenNotificationsAsync()
+        => await Shell.Current.GoToAsync(nameof(AnnouncementActivityPage));
+
+    private void ToggleShortcuts(object? sender, EventArgs e)
+    {
+        _shortcutsOpen = !_shortcutsOpen;
+        ShortcutPanel.IsVisible = _shortcutsOpen;
+        ShortcutButton.Text = _shortcutsOpen ? "×" : "＋";
+        SemanticProperties.SetDescription(
+            ShortcutButton,
+            _shortcutsOpen ? "Close quick shortcuts" : "Open quick shortcuts");
     }
 }
