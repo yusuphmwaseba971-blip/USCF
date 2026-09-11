@@ -6,7 +6,7 @@
       {
         "functionId": "6a9ade08000d0a17360d",
         "name": "CCT API",
-        "runtime": "node-22.0",
+        "runtime": "node-26",
         "execute": ["any"],
         "events": [],
         "schedule": "",

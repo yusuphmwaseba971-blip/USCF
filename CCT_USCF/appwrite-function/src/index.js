@@ -1162,15 +1162,31 @@ async function createPrayerRequest(req, log) {
 async function listPrayerRequests(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const profile = await getAnnouncementProfile(firebaseUser);
-  const limit = Math.min(Math.max(Number(getQueryValue(req, "limit") || 25), 1), 100);
-  log(`[PRAYER_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} limit=${limit}`);
+  let limit = Math.min(Math.max(Number(getQueryValue(req, "limit") || 25), 1), 100);
+  const cursorAfter = getQueryValue(req, "cursorAfter") || getQueryValue(req, "cursor_after");
+  const newerThan = getQueryValue(req, "newerThan") || getQueryValue(req, "newer_than");
+  log(`[PRAYER_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} limit=${limit} cursorAfter=${cursorAfter || "none"} newerThan=${newerThan || "none"}`);
+
+  // Build Appwrite TablesDB queries honoring the requested limit and optional cursor
+  const queries = [
+    { method: "orderDesc", attribute: "$createdAt" },
+    { method: "limit", values: [limit] }
+  ];
+  if (cursorAfter) {
+    queries.push({ method: "cursorAfter", values: [cursorAfter] });
+  }
+  if (newerThan) {
+    queries.push({ method: "greaterThan", attribute: "$updatedAt", values: [newerThan] });
+  }
+
   const page = await appwriteTableRowRequest(
     PRAYERS_TABLE_ID,
     "GET",
     "",
     undefined,
-    [{ method: "limit", values: [100] }]
+    queries
   );
+
   const isLeader = isAnnouncementLeader(profile);
   const rows = (page.rows || [])
     .filter(row => normalizeString(row.status).toLowerCase() !== "archived")
@@ -1180,7 +1196,6 @@ async function listPrayerRequests(req, log) {
       isLeader
     )
     .sort((left, right) => new Date(right.$createdAt || 0) - new Date(left.$createdAt || 0))
-    .slice(0, limit)
     .map(row => ({
       id: row.$id || "",
       userId: row.user_id || "",
@@ -1190,7 +1205,8 @@ async function listPrayerRequests(req, log) {
       createdAtUtc: safeIsoDate(row.$createdAt),
       updatedAtUtc: safeIsoDate(row.$updatedAt || row.$createdAt)
     }));
-  log(`[PRAYER_FETCH_RESULT] rows=${page.rows?.length || 0} visible=${rows.length}`);
+
+  log(`[PRAYER_FETCH_RESULT] rows=${page.rows?.length || 0} visible=${rows.length} requestedLimit=${limit}`);
   return { rows };
 }
 

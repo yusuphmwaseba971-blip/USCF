@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using CCT_USCF.Models;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
+using Microsoft.Maui.Networking;
+using SQLite;
 
 namespace CCT_USCF.Services;
 
@@ -111,10 +113,11 @@ public class PrayerService
         prayer.Status = PrayerStatus.Active;
         System.Diagnostics.Debug.WriteLine($"[PRAYER_REQUEST_SUCCESS] rowId={result.RowId}");
 
+        await SaveOrUpdateCachedPrayersAsync([prayer]);
         return prayer;
     }
 
-    public async Task<IReadOnlyList<PrayerRequest>> GetPrayerWallAsync(int limit = 25)
+    public async Task<IReadOnlyList<PrayerRequest>> GetPrayerWallAsync(int limit = 5)
     {
         System.Diagnostics.Debug.WriteLine("[PRAYER_FETCH_START]");
         var token = await _authService.GetCurrentFirebaseIdTokenAsync();
@@ -123,7 +126,7 @@ public class PrayerService
         System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_AUTH] uid={_auth.CurrentUser?.Uid ?? "none"}");
 
         using var request = new HttpRequestMessage(
-            HttpMethod.Get, $"api/prayers?limit={Math.Clamp(limit, 1, 100)}");
+            HttpMethod.Get, $"api/prayers?limit={Math.Clamp(limit, 1, 5)}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         System.Diagnostics.Debug.WriteLine("[PRAYER_FETCH_REQUEST] database=cct-uscf-db table=cct_prayers");
         using var response = await _http.SendAsync(request);
@@ -158,6 +161,274 @@ public class PrayerService
             .ToList();
         System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_RESULT] rows={result?.Rows?.Count ?? 0} displayed={items.Count}");
         return items;
+    }
+
+    [Table("prayer_cache")]
+    private sealed class CachedPrayer
+    {
+        [PrimaryKey]
+        public string PrayerId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public bool IsPrivate { get; set; }
+        public string Status { get; set; } = "active";
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime UpdatedAtUtc { get; set; }
+        public DateTime CachedAtUtc { get; set; }
+    }
+
+    private readonly SemaphoreSlim _cacheInitializationLock = new(1, 1);
+    private SQLiteAsyncConnection? _cacheDatabase;
+    private bool _cacheInitialized;
+    private const string CacheDatabaseName = "cct-uscf-prayer-cache.db3";
+    private const string LastPrayerCursorKey = "PrayerCache_LastCursor";
+    private const string LastPrayerSyncKey = "PrayerCache_LastSyncAt";
+
+    private async Task<SQLiteAsyncConnection> GetCacheDatabaseAsync()
+    {
+        if (_cacheDatabase == null)
+        {
+            var databasePath = Path.Combine(FileSystem.AppDataDirectory, CacheDatabaseName);
+            _cacheDatabase = new SQLiteAsyncConnection(databasePath);
+        }
+
+        if (_cacheInitialized)
+            return _cacheDatabase;
+
+        await _cacheInitializationLock.WaitAsync();
+        try
+        {
+            if (!_cacheInitialized)
+            {
+                await _cacheDatabase.CreateTableAsync<CachedPrayer>();
+                _cacheInitialized = true;
+                System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE] SQLite initialized");
+            }
+        }
+        finally
+        {
+            _cacheInitializationLock.Release();
+        }
+
+        return _cacheDatabase;
+    }
+
+    private static PrayerRequest ToPrayerRequest(CachedPrayer cached, string? currentUserId)
+    {
+        return new PrayerRequest
+        {
+            PrayerId = cached.PrayerId,
+            AuthorUid = cached.UserId,
+            AuthorDisplayName = cached.UserId == currentUserId ? "You" : "Prayer member",
+            IsAnonymous = true,
+            Content = cached.Content,
+            Visibility = cached.IsPrivate
+                ? PrayerVisibility.Private
+                : PrayerVisibility.NationalPrayerWall,
+            Status = ParseStatus(cached.Status),
+            CreatedAtUtc = cached.CreatedAtUtc,
+            UpdatedAtUtc = cached.UpdatedAtUtc,
+            IsOwnerVisible = cached.UserId == currentUserId
+        };
+    }
+
+    private static CachedPrayer ToCachedPrayer(PrayerRequest prayer)
+    {
+        return new CachedPrayer
+        {
+            PrayerId = prayer.PrayerId,
+            UserId = prayer.AuthorUid,
+            Content = prayer.Content,
+            IsPrivate = prayer.Visibility == PrayerVisibility.Private,
+            Status = prayer.Status.ToString(),
+            CreatedAtUtc = prayer.CreatedAtUtc,
+            UpdatedAtUtc = prayer.UpdatedAtUtc,
+            CachedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    public async Task<List<PrayerRequest>> LoadCachedPrayersAsync(int limit = 50)
+    {
+        System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE_LOAD_START]");
+        var database = await GetCacheDatabaseAsync();
+        var cached = await database.Table<CachedPrayer>()
+            .OrderByDescending(row => row.CreatedAtUtc)
+            .Take(limit)
+            .ToListAsync();
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_CACHE_LOAD_RESULT] count={cached.Count}");
+        return cached
+            .Select(row => ToPrayerRequest(row, _auth.CurrentUser?.Uid))
+            .ToList();
+    }
+
+    private async Task SaveOrUpdateCachedPrayersAsync(IEnumerable<PrayerRequest> prayers)
+    {
+        var database = await GetCacheDatabaseAsync();
+        var inserted = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var prayer in prayers.Where(item => !string.IsNullOrWhiteSpace(item.PrayerId)))
+        {
+            var incoming = ToCachedPrayer(prayer);
+            var existing = await database.FindAsync<CachedPrayer>(incoming.PrayerId);
+            if (existing == null)
+            {
+                await database.InsertAsync(incoming);
+                inserted++;
+            }
+            else if (existing.UpdatedAtUtc != incoming.UpdatedAtUtc ||
+                     existing.Content != incoming.Content ||
+                     existing.Status != incoming.Status ||
+                     existing.IsPrivate != incoming.IsPrivate)
+            {
+                await database.UpdateAsync(incoming);
+                updated++;
+            }
+            else
+            {
+                skipped++;
+            }
+        }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_CACHE_SAVE] inserted={inserted} updated={updated} skipped={skipped}");
+    }
+
+    private async Task<(List<PrayerRequest> Rows, string? LastCursor)> FetchPagedPrayersAsync(
+        int limit,
+        string? cursorAfter = null,
+        string? newerThan = null)
+    {
+        var boundedLimit = Math.Clamp(limit, 1, 5);
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_SYNC_REQUEST] limit={boundedLimit} cursorAfter={cursorAfter ?? "none"} newerThan={newerThan ?? "none"}");
+
+        var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
+
+        var query = $"api/prayers?limit={boundedLimit}";
+        if (!string.IsNullOrWhiteSpace(cursorAfter))
+            query += $"&cursorAfter={Uri.EscapeDataString(cursorAfter)}";
+        if (!string.IsNullOrWhiteSpace(newerThan))
+            query += $"&newerThan={Uri.EscapeDataString(newerThan)}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, query);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await _http.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_SYNC_RESPONSE] status={(int)response.StatusCode} requestedLimit={boundedLimit} bodyLength={body.Length}");
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Prayer requests could not be loaded ({(int)response.StatusCode}).");
+
+        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerListResponse>(
+            body,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        var rows = (result?.Rows ?? [])
+            .Where(row => !string.IsNullOrWhiteSpace(row.Content))
+            .Select(row => new PrayerRequest
+            {
+                PrayerId = row.Id,
+                AuthorUid = row.UserId,
+                AuthorDisplayName = row.UserId == _auth.CurrentUser?.Uid ? "You" : "Prayer member",
+                IsAnonymous = true,
+                Content = row.Content,
+                Visibility = row.IsPrivate ? PrayerVisibility.Private : PrayerVisibility.NationalPrayerWall,
+                Status = ParseStatus(row.Status),
+                CreatedAtUtc = row.CreatedAtUtc,
+                UpdatedAtUtc = row.UpdatedAtUtc,
+                IsOwnerVisible = row.UserId == _auth.CurrentUser?.Uid
+            })
+            .OrderByDescending(row => row.CreatedAtUtc)
+            .ToList();
+
+        var lastCursor = rows.Count == 0 ? null : rows[^1].PrayerId;
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_SYNC_RESULT] returned={rows.Count} lastCursor={lastCursor ?? "none"}");
+        return (rows, lastCursor);
+    }
+
+    public async Task<List<PrayerRequest>> GetInitialPrayersAsync()
+    {
+        var cached = await LoadCachedPrayersAsync();
+        if (cached.Count > 0)
+        {
+            var lastSyncText = Preferences.Default.Get(LastPrayerSyncKey, string.Empty);
+            var isStale = !DateTime.TryParse(lastSyncText, out var lastSync) ||
+                          DateTime.UtcNow - lastSync.ToUniversalTime() >= TimeSpan.FromHours(48);
+            System.Diagnostics.Debug.WriteLine(
+                $"[PRAYER_CACHE_FRESHNESS] stale={isStale} ageHours={(DateTime.TryParse(lastSyncText, out lastSync) ? (DateTime.UtcNow - lastSync.ToUniversalTime()).TotalHours : -1):F1}");
+            _ = SyncNewAndChangedPrayersAsync();
+            return cached;
+        }
+
+        System.Diagnostics.Debug.WriteLine("[PRAYER_SYNC_START] initialFetch limit=5");
+        var (rows, cursor) = await FetchPagedPrayersAsync(5);
+        await SaveOrUpdateCachedPrayersAsync(rows);
+        if (!string.IsNullOrWhiteSpace(cursor))
+            Preferences.Default.Set(LastPrayerCursorKey, cursor);
+        Preferences.Default.Set(LastPrayerSyncKey, DateTime.UtcNow.ToString("O"));
+        return rows;
+    }
+
+    public async Task SyncNewAndChangedPrayersAsync()
+    {
+        try
+        {
+            if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+            {
+                System.Diagnostics.Debug.WriteLine("[PRAYER_OFFLINE] cached feed remains available");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine("[PRAYER_SYNC_START] detecting new/changed");
+            var database = await GetCacheDatabaseAsync();
+            var newest = await database.Table<CachedPrayer>()
+                .OrderByDescending(row => row.UpdatedAtUtc)
+                .FirstOrDefaultAsync();
+            var newerThan = newest?.UpdatedAtUtc.ToString("O");
+            var (rows, _) = await FetchPagedPrayersAsync(5, newerThan: newerThan);
+            await SaveOrUpdateCachedPrayersAsync(rows);
+            Preferences.Default.Set(LastPrayerSyncKey, DateTime.UtcNow.ToString("O"));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PRAYER_SYNC_ERROR] {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    public async Task<List<PrayerRequest>> LoadMorePrayersAsync(int pageSize = 3)
+    {
+        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+        {
+            System.Diagnostics.Debug.WriteLine("[PRAYER_OFFLINE] load-more skipped");
+            return [];
+        }
+
+        var cursor = Preferences.Default.Get(LastPrayerCursorKey, string.Empty);
+        if (string.IsNullOrWhiteSpace(cursor))
+        {
+            var database = await GetCacheDatabaseAsync();
+            var oldest = await database.Table<CachedPrayer>()
+                .OrderBy(row => row.CreatedAtUtc)
+                .FirstOrDefaultAsync();
+            cursor = oldest?.PrayerId ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(cursor))
+            return [];
+
+        var boundedPageSize = Math.Clamp(pageSize, 1, 3);
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_LOAD_MORE_START] limit={boundedPageSize} cursorAfter={cursor}");
+        var (rows, nextCursor) = await FetchPagedPrayersAsync(boundedPageSize, cursorAfter: cursor);
+        await SaveOrUpdateCachedPrayersAsync(rows);
+        if (!string.IsNullOrWhiteSpace(nextCursor))
+            Preferences.Default.Set(LastPrayerCursorKey, nextCursor);
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_LOAD_MORE_RESULT] returned={rows.Count}");
+        return rows;
     }
 
     private static PrayerStatus ParseStatus(string? value) =>
