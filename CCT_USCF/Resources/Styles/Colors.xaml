@@ -21,6 +21,20 @@
     <Color x:Key="UscfTextDark">#FFFFFF</Color>
     <Color x:Key="UscfMuted">#5F6368</Color>
     <Color x:Key="UscfBorder">#E5E7EB</Color>
+    <Color x:Key="BrandDeepGreen">#075E36</Color>
+    <Color x:Key="BrandGreen">#009E2C</Color>
+    <Color x:Key="BrandGreenLight">#35B96A</Color>
+    <Color x:Key="SoftMint">#E4F4E9</Color>
+    <Color x:Key="PageBackground">#F4F8F5</Color>
+    <Color x:Key="SurfaceWhite">#FFFFFF</Color>
+    <Color x:Key="TextPrimary">#102A20</Color>
+    <Color x:Key="TextSecondary">#64748B</Color>
+    <Color x:Key="AccentBlue">#1769AA</Color>
+    <Color x:Key="AccentBlueTint">#EAF5FF</Color>
+    <Color x:Key="AccentPurple">#6B46C1</Color>
+    <Color x:Key="AccentPurpleTint">#F3EDFF</Color>
+    <Color x:Key="AccentGold">#A16207</Color>
+    <Color x:Key="AccentGoldTint">#FFF7D6</Color>
 
     <Color x:Key="White">#FFFFFF</Color>
     <Color x:Key="Black">#121212</Color>

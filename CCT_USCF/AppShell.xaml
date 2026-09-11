@@ -6,12 +6,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:CCT_USCF.Pages"
     Title="USCF"
-    Shell.BackgroundColor="{AppThemeBinding Light={StaticResource UscfGreen}, Dark={StaticResource UscfBackgroundDark}}"
+    Shell.BackgroundColor="{AppThemeBinding Light={StaticResource BrandGreen}, Dark={StaticResource UscfBackgroundDark}}"
     Shell.ForegroundColor="{StaticResource White}"
     Shell.TitleColor="{StaticResource White}"
     TabBarBackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource UscfBackgroundDark}}"
-    TabBarForegroundColor="{StaticResource UscfGreen}"
-    TabBarTitleColor="{StaticResource UscfGreen}"
+    TabBarForegroundColor="{StaticResource BrandGreen}"
+    TabBarTitleColor="{StaticResource BrandGreen}"
     TabBarUnselectedColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}">
 
     <TabBar>

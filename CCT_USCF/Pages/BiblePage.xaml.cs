@@ -16,6 +16,7 @@ public partial class BiblePage : ContentPage
     private int _chapter = 3;
     private double _fontSize = 22;
     private string _background = "CCT-USCF";
+    private Task? _loadTask;
 
     public BiblePage()
     {
@@ -23,7 +24,7 @@ public partial class BiblePage : ContentPage
         _bible = MauiProgram.Services.GetRequiredService<BibleService>();
         VerseList.ItemsSource = _verses;
         SearchResults.ItemsSource = _results;
-        Loaded += async (_, _) => await LoadAsync();
+        Loaded += (_, _) => _loadTask ??= LoadAsync();
     }
 
     private async Task LoadAsync()

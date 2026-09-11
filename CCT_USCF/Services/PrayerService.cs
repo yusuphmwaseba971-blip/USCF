@@ -168,6 +168,8 @@ public class PrayerService
     {
         [PrimaryKey]
         public string PrayerId { get; set; } = string.Empty;
+        [Indexed]
+        public string CacheOwnerUid { get; set; } = string.Empty;
         public string UserId { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public bool IsPrivate { get; set; }
@@ -177,12 +179,21 @@ public class PrayerService
         public DateTime CachedAtUtc { get; set; }
     }
 
+    private sealed class SqliteColumnInfo
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
     private readonly SemaphoreSlim _cacheInitializationLock = new(1, 1);
     private SQLiteAsyncConnection? _cacheDatabase;
     private bool _cacheInitialized;
     private const string CacheDatabaseName = "cct-uscf-prayer-cache.db3";
     private const string LastPrayerCursorKey = "PrayerCache_LastCursor";
     private const string LastPrayerSyncKey = "PrayerCache_LastSyncAt";
+    private const string CacheOwnerColumn = "CacheOwnerUid";
+
+    private string UserCacheKey(string key) =>
+        $"{key}_{_auth.CurrentUser?.Uid ?? "anonymous"}";
 
     private async Task<SQLiteAsyncConnection> GetCacheDatabaseAsync()
     {
@@ -201,6 +212,15 @@ public class PrayerService
             if (!_cacheInitialized)
             {
                 await _cacheDatabase.CreateTableAsync<CachedPrayer>();
+                var columns = await _cacheDatabase.QueryAsync<SqliteColumnInfo>(
+                    "PRAGMA table_info('prayer_cache');");
+                if (!columns.Any(column => column.Name.Equals(CacheOwnerColumn, StringComparison.OrdinalIgnoreCase)))
+                {
+                    await _cacheDatabase.ExecuteAsync(
+                        "ALTER TABLE prayer_cache ADD COLUMN CacheOwnerUid TEXT NOT NULL DEFAULT '';");
+                    await _cacheDatabase.ExecuteAsync(
+                        "DELETE FROM prayer_cache WHERE CacheOwnerUid = '';");
+                }
                 _cacheInitialized = true;
                 System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE] SQLite initialized");
             }
@@ -232,11 +252,12 @@ public class PrayerService
         };
     }
 
-    private static CachedPrayer ToCachedPrayer(PrayerRequest prayer)
+    private CachedPrayer ToCachedPrayer(PrayerRequest prayer, string ownerUid)
     {
         return new CachedPrayer
         {
             PrayerId = prayer.PrayerId,
+            CacheOwnerUid = ownerUid,
             UserId = prayer.AuthorUid,
             Content = prayer.Content,
             IsPrivate = prayer.Visibility == PrayerVisibility.Private,
@@ -250,8 +271,15 @@ public class PrayerService
     public async Task<List<PrayerRequest>> LoadCachedPrayersAsync(int limit = 50)
     {
         System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE_LOAD_START]");
+        var ownerUid = _auth.CurrentUser?.Uid;
+        if (string.IsNullOrWhiteSpace(ownerUid))
+        {
+            System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE_LOAD_SKIPPED] authenticated user unavailable");
+            return [];
+        }
         var database = await GetCacheDatabaseAsync();
         var cached = await database.Table<CachedPrayer>()
+            .Where(row => row.CacheOwnerUid == ownerUid)
             .OrderByDescending(row => row.CreatedAtUtc)
             .Take(limit)
             .ToListAsync();
@@ -270,7 +298,10 @@ public class PrayerService
 
         foreach (var prayer in prayers.Where(item => !string.IsNullOrWhiteSpace(item.PrayerId)))
         {
-            var incoming = ToCachedPrayer(prayer);
+            var ownerUid = _auth.CurrentUser?.Uid;
+            if (string.IsNullOrWhiteSpace(ownerUid))
+                throw new InvalidOperationException("Cannot cache prayer requests without an authenticated user.");
+            var incoming = ToCachedPrayer(prayer, ownerUid);
             var existing = await database.FindAsync<CachedPrayer>(incoming.PrayerId);
             if (existing == null)
             {
@@ -352,10 +383,15 @@ public class PrayerService
 
     public async Task<List<PrayerRequest>> GetInitialPrayersAsync()
     {
+        if (_auth.CurrentUser == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[PRAYER_INITIAL_LOAD_SKIPPED] authenticated user unavailable");
+            return [];
+        }
         var cached = await LoadCachedPrayersAsync();
         if (cached.Count > 0)
         {
-            var lastSyncText = Preferences.Default.Get(LastPrayerSyncKey, string.Empty);
+            var lastSyncText = Preferences.Default.Get(UserCacheKey(LastPrayerSyncKey), string.Empty);
             var isStale = !DateTime.TryParse(lastSyncText, out var lastSync) ||
                           DateTime.UtcNow - lastSync.ToUniversalTime() >= TimeSpan.FromHours(48);
             System.Diagnostics.Debug.WriteLine(
@@ -368,8 +404,8 @@ public class PrayerService
         var (rows, cursor) = await FetchPagedPrayersAsync(5);
         await SaveOrUpdateCachedPrayersAsync(rows);
         if (!string.IsNullOrWhiteSpace(cursor))
-            Preferences.Default.Set(LastPrayerCursorKey, cursor);
-        Preferences.Default.Set(LastPrayerSyncKey, DateTime.UtcNow.ToString("O"));
+            Preferences.Default.Set(UserCacheKey(LastPrayerCursorKey), cursor);
+        Preferences.Default.Set(UserCacheKey(LastPrayerSyncKey), DateTime.UtcNow.ToString("O"));
         return rows;
     }
 
@@ -386,12 +422,13 @@ public class PrayerService
             System.Diagnostics.Debug.WriteLine("[PRAYER_SYNC_START] detecting new/changed");
             var database = await GetCacheDatabaseAsync();
             var newest = await database.Table<CachedPrayer>()
+                .Where(row => row.CacheOwnerUid == _auth.CurrentUser!.Uid)
                 .OrderByDescending(row => row.UpdatedAtUtc)
                 .FirstOrDefaultAsync();
             var newerThan = newest?.UpdatedAtUtc.ToString("O");
             var (rows, _) = await FetchPagedPrayersAsync(5, newerThan: newerThan);
             await SaveOrUpdateCachedPrayersAsync(rows);
-            Preferences.Default.Set(LastPrayerSyncKey, DateTime.UtcNow.ToString("O"));
+            Preferences.Default.Set(UserCacheKey(LastPrayerSyncKey), DateTime.UtcNow.ToString("O"));
         }
         catch (Exception ex)
         {
@@ -407,11 +444,12 @@ public class PrayerService
             return [];
         }
 
-        var cursor = Preferences.Default.Get(LastPrayerCursorKey, string.Empty);
+        var cursor = Preferences.Default.Get(UserCacheKey(LastPrayerCursorKey), string.Empty);
         if (string.IsNullOrWhiteSpace(cursor))
         {
             var database = await GetCacheDatabaseAsync();
             var oldest = await database.Table<CachedPrayer>()
+                .Where(row => row.CacheOwnerUid == _auth.CurrentUser!.Uid)
                 .OrderBy(row => row.CreatedAtUtc)
                 .FirstOrDefaultAsync();
             cursor = oldest?.PrayerId ?? string.Empty;
@@ -426,7 +464,7 @@ public class PrayerService
         var (rows, nextCursor) = await FetchPagedPrayersAsync(boundedPageSize, cursorAfter: cursor);
         await SaveOrUpdateCachedPrayersAsync(rows);
         if (!string.IsNullOrWhiteSpace(nextCursor))
-            Preferences.Default.Set(LastPrayerCursorKey, nextCursor);
+            Preferences.Default.Set(UserCacheKey(LastPrayerCursorKey), nextCursor);
         System.Diagnostics.Debug.WriteLine($"[PRAYER_LOAD_MORE_RESULT] returned={rows.Count}");
         return rows;
     }

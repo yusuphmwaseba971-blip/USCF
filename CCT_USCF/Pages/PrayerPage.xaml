@@ -4,15 +4,15 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.PrayerPage"
     Title="Prayer"
-    BackgroundColor="#F4F8F5">
+    BackgroundColor="{StaticResource PageBackground}">
 
     <Grid RowDefinitions="Auto,*">
         <Border Grid.Row="0" StrokeThickness="0" Padding="24,26,24,28">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#075E36" Offset="0" />
-                    <GradientStop Color="#009E2C" Offset="0.62" />
-                    <GradientStop Color="#35B96A" Offset="1" />
+                    <GradientStop Color="{StaticResource BrandDeepGreen}" Offset="0" />
+                    <GradientStop Color="{StaticResource BrandGreen}" Offset="0.62" />
+                    <GradientStop Color="{StaticResource BrandGreenLight}" Offset="1" />
                 </LinearGradientBrush>
             </Border.Background>
             <Grid>
@@ -40,24 +40,24 @@
                     <CollectionView.Header>
                         <VerticalStackLayout Spacing="14" Padding="16,16,16,8">
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <Border Grid.Column="0" Padding="14,11" BackgroundColor="#E4F4E9"
+                                <Border Grid.Column="0" Padding="14,11" BackgroundColor="{StaticResource SoftMint}"
                                         StrokeThickness="0" StrokeShape="RoundRectangle 16">
                                     <HorizontalStackLayout Spacing="8">
-                                        <Label Text="🙏" FontSize="18" TextColor="#087A32" />
+                                        <Label Text="🙏" FontSize="18" TextColor="{StaticResource BrandGreen}" />
                                         <Label Text="Prayer Wall" FontSize="14" FontAttributes="Bold"
-                                               TextColor="#087A32" VerticalOptions="Center" />
+                                               TextColor="{StaticResource BrandGreen}" VerticalOptions="Center" />
                                     </HorizontalStackLayout>
                                 </Border>
                                 <Button Grid.Column="1" Text="My Requests" Clicked="OnMyRequestsClicked"
-                                        BackgroundColor="Transparent" TextColor="#64748B"
+                                        BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}"
                                         FontSize="13" Padding="8,0" />
                                 <Button Grid.Column="2" Text="Community" Clicked="OnCommunityClicked"
-                                        BackgroundColor="Transparent" TextColor="#64748B"
+                                        BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}"
                                         FontSize="13" Padding="8,0" />
                             </Grid>
 
                             <Button x:Name="AddPrayerButton" Text="＋  Add Prayer Request"
-                                    BackgroundColor="#009E2C" TextColor="White"
+                                    BackgroundColor="{StaticResource BrandGreen}" TextColor="White"
                                     CornerRadius="18" HeightRequest="54" FontSize="16"
                                     FontAttributes="Bold" Clicked="OnAddPrayerClicked"
                                     SemanticProperties.Description="Open the prayer request form" />
@@ -69,12 +69,12 @@
                                              HorizontalOptions="Center" VerticalOptions="Center">
                             <Label Text="🙏" FontSize="42" HorizontalOptions="Center" />
                             <Label Text="No prayer requests yet" FontSize="22"
-                                   FontAttributes="Bold" TextColor="#102A20"
+                                   FontAttributes="Bold" TextColor="{StaticResource TextPrimary}"
                                    HorizontalOptions="Center" />
                             <Label Text="Be the first to share a prayer request with the community."
                                    FontSize="15" TextColor="#64748B"
                                    HorizontalTextAlignment="Center" />
-                            <Button Text="＋  Add Prayer Request" BackgroundColor="#009E2C"
+                            <Button Text="＋  Add Prayer Request"                             BackgroundColor="{StaticResource BrandGreen}"
                                     TextColor="White" CornerRadius="16"
                                     Clicked="OnAddPrayerClicked" />
                         </VerticalStackLayout>
@@ -90,7 +90,7 @@
                                 <VerticalStackLayout Spacing="14">
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                         <Border Grid.Column="0" WidthRequest="42" HeightRequest="42"
-                                                BackgroundColor="#E4F4E9" StrokeThickness="0"
+                                                BackgroundColor="{StaticResource SoftMint}" StrokeThickness="0"
                                                 StrokeShape="RoundRectangle 21">
                                             <Label Text="👤" FontSize="20"
                                                    HorizontalOptions="Center" VerticalOptions="Center" />
@@ -99,7 +99,7 @@
                                                              VerticalOptions="Center">
                                             <Label Text="{Binding AuthorDisplayName}"
                                                    FontAttributes="Bold" FontSize="15"
-                                                   TextColor="#102A20" />
+                                                   TextColor="{StaticResource TextPrimary}" />
                                             <Label Text="(Anonymous)" IsVisible="{Binding IsAnonymous}"
                                                    FontSize="12" TextColor="#718096" />
                                         </VerticalStackLayout>
@@ -123,8 +123,8 @@
                                                FontSize="12" TextColor="#718096"
                                                VerticalOptions="Center" />
                                         <Button Grid.Column="1" Text="🙏  I PRAY"
-                                                Padding="14,9" BackgroundColor="#E4F4E9"
-                                                TextColor="#18723B" CornerRadius="16"
+                                                Padding="14,9" BackgroundColor="{StaticResource SoftMint}"
+                                                TextColor="{StaticResource BrandGreen}" CornerRadius="16"
                                                 FontAttributes="Bold" FontSize="13"
                                                 CommandParameter="{Binding PrayerId}"
                                                 Clicked="OnPrayClicked"
@@ -141,7 +141,7 @@
                 <VerticalStackLayout x:Name="PrayerLoadingIndicator" IsVisible="False"
                                      BackgroundColor="#F4F8F5" HorizontalOptions="Center"
                                      VerticalOptions="Center" Spacing="8">
-                    <ActivityIndicator IsRunning="True" Color="#009E2C" />
+                    <ActivityIndicator IsRunning="True" Color="{StaticResource BrandGreen}" />
                     <Label Text="Loading prayer requests..." TextColor="#475569" />
                 </VerticalStackLayout>
                 <VerticalStackLayout x:Name="PrayerErrorState" IsVisible="False"
@@ -150,7 +150,7 @@
                     <Label x:Name="PrayerErrorMessage" Text="Couldn't load prayer requests."
                            TextColor="#991B1B" HorizontalTextAlignment="Center" />
                     <Button Text="Try Again" Clicked="OnRetryFetchClicked"
-                            BackgroundColor="#009E2C" TextColor="White" CornerRadius="16" />
+                            BackgroundColor="{StaticResource BrandGreen}" TextColor="White" CornerRadius="16" />
                 </VerticalStackLayout>
             </Grid>
         </RefreshView>

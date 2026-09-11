@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.BiblePage"
              Title="Bible"
-             BackgroundColor="#F4F8F5">
+             BackgroundColor="{StaticResource PageBackground}">
     <Grid x:Name="RootGrid" RowDefinitions="Auto,*">
         <ScrollView Grid.Row="0" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
             <HorizontalStackLayout Padding="16,12,16,4" Spacing="8">
@@ -18,7 +18,7 @@
 
         <ScrollView Grid.Row="1">
             <VerticalStackLayout Padding="16,8,16,24" Spacing="14">
-                <Border BackgroundColor="#167A4A" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
+                <Border BackgroundColor="{StaticResource BrandDeepGreen}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                     <VerticalStackLayout Spacing="4">
                         <Label Text="BIBLE" FontSize="13" CharacterSpacing="2" TextColor="#D8F3E4" />
                         <Label x:Name="TranslationLabel" Text="King James Version" FontSize="24" FontAttributes="Bold" TextColor="White" />
@@ -39,17 +39,17 @@
                     <CollectionView.ItemTemplate>
                         <DataTemplate>
                             <Grid Padding="8,6" ColumnDefinitions="Auto,*">
-                                <Label Text="{Binding Reference}" FontAttributes="Bold" TextColor="#167A4A" />
+                                <Label Text="{Binding Reference}" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
                                 <Label Grid.Column="1" Text="{Binding Text}" LineBreakMode="TailTruncation" Margin="10,0,0,0" />
                             </Grid>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
 
-                <Border BackgroundColor="#FFFFFF" Stroke="#D5E5DA" Padding="16" StrokeShape="RoundRectangle 20">
+                <Border BackgroundColor="{StaticResource SurfaceWhite}" Stroke="#D5E5DA" Padding="16" StrokeShape="RoundRectangle 20">
                     <VerticalStackLayout Spacing="10">
                         <Grid ColumnDefinitions="*,Auto">
-                            <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold" TextColor="#123B2A" />
+                            <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                             <Label x:Name="StatusLabel" Grid.Column="1" Text="Offline" TextColor="#4F6F5C" VerticalOptions="Center" />
                         </Grid>
                         <CollectionView x:Name="VerseList" SelectionMode="None">
@@ -57,8 +57,8 @@
                                 <DataTemplate>
                                     <Border Padding="10" Margin="0,3" StrokeThickness="0" BackgroundColor="{Binding Background}">
                                         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-                                            <Label Text="{Binding Number}" FontAttributes="Bold" TextColor="#167A4A" FontSize="16" />
-                                            <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}" TextColor="#17251D" LineHeight="1.35" Margin="10,0,0,0" />
+                                            <Label Text="{Binding Number}" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" FontSize="16" />
+                                            <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}" TextColor="{StaticResource TextPrimary}" LineHeight="1.35" Margin="10,0,0,0" />
                                             <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,6,0,0">
                                                 <Button Text="Copy" FontSize="12" Padding="8,4" Clicked="OnCopyVerseClicked" CommandParameter="{Binding .}" />
                                                 <Button Text="Note" FontSize="12" Padding="8,4" Clicked="OnNoteVerseClicked" CommandParameter="{Binding .}" />

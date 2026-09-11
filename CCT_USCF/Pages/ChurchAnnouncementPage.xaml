@@ -2,12 +2,12 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.ChurchAnnouncementPage"
-             Title="Church Announcement" BackgroundColor="#F8FAFC">
+             Title="Church Announcement" BackgroundColor="{StaticResource PageBackground}">
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="14">
-            <Label Text="Church Announcement" FontSize="28" FontAttributes="Bold" TextColor="#123B73" />
+            <Label Text="Church Announcement" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource AccentPurple}" />
             <Label x:Name="LeadershipLabel" FontSize="16" />
-            <Label x:Name="OrganizationLabel" FontSize="14" TextColor="#64748B" />
+            <Label x:Name="OrganizationLabel" FontSize="14" TextColor="{StaticResource TextSecondary}" />
             <Picker x:Name="AudiencePicker" Title="Audience" ItemDisplayBinding="{Binding .}" />
             <Entry x:Name="TitleEntry" Placeholder="Announcement title" />
             <Editor x:Name="MessageEditor" Placeholder="Announcement message" AutoSize="TextChanges" MinimumHeightRequest="140" />

@@ -211,9 +211,9 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase))
         {
-            return (user.BranchId.HasValue && group.BranchId.HasValue && group.BranchId.Value == user.BranchId.Value) ||
-                   group.Name.Contains("Branch", StringComparison.OrdinalIgnoreCase) ||
-                   group.Level.Contains("Branch", StringComparison.OrdinalIgnoreCase);
+            return user.BranchId.HasValue &&
+                   group.BranchId.HasValue &&
+                   group.BranchId.Value == user.BranchId.Value;
         }
 
         return false;
@@ -330,6 +330,11 @@ public partial class ChurchGroupSelectionPage : ContentPage
             group.Name.Contains("Branch", StringComparison.OrdinalIgnoreCase))
         {
             var branchId = group.BranchId ?? user.BranchId ?? 0;
+            if (branchId <= 0)
+            {
+                await DisplayAlert("Branch unavailable", "Your branch assignment could not be verified.", "OK");
+                return;
+            }
             var branchName = !string.IsNullOrWhiteSpace(group.Name) ? group.Name : (user.Branch ?? "Branch Group");
             await Shell.Current.GoToAsync($"{nameof(BranchChatPage)}?branchId={branchId}&branchName={Uri.EscapeDataString(branchName)}");
             return;

@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.CommunityPage"
     Title="Community"
-    BackgroundColor="#F4F8F5">
+    BackgroundColor="{StaticResource PageBackground}">
 
     <Grid RowDefinitions="*,Auto">
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
@@ -13,9 +13,9 @@
                 <Border Padding="22,26,22,28" StrokeThickness="0" StrokeShape="RoundRectangle 0,0,30,30">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#075E36" Offset="0" />
-                            <GradientStop Color="#009E2C" Offset="0.65" />
-                            <GradientStop Color="#36B96A" Offset="1" />
+                            <GradientStop Color="{StaticResource BrandDeepGreen}" Offset="0" />
+                            <GradientStop Color="{StaticResource BrandGreen}" Offset="0.65" />
+                            <GradientStop Color="{StaticResource BrandGreenLight}" Offset="1" />
                         </LinearGradientBrush>
                     </Border.Background>
                     <Grid>
@@ -42,13 +42,13 @@
                         <TapGestureRecognizer Tapped="OnCreatePostClicked" />
                     </Border.GestureRecognizers>
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
-                        <Border WidthRequest="48" HeightRequest="48" BackgroundColor="#E2F5E8"
+                        <Border WidthRequest="48" HeightRequest="48" BackgroundColor="{StaticResource SoftMint}"
                                 StrokeThickness="0" StrokeShape="RoundRectangle 24">
-                            <Label Text="＋" FontSize="28" TextColor="#087A32"
+                            <Label Text="＋" FontSize="28" TextColor="{StaticResource BrandGreen}"
                                    HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
-                            <Label Text="Create Post" FontSize="18" FontAttributes="Bold" TextColor="#102A20" />
+                            <Label Text="Create Post" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                             <Label Text="Share your thoughts, prayers or testimony" FontSize="12" TextColor="#718096" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="30" TextColor="#087A32"
@@ -67,13 +67,13 @@
                     </Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="12">
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
-                            <Border WidthRequest="54" HeightRequest="54" BackgroundColor="#E4F4E9"
+                            <Border WidthRequest="54" HeightRequest="54" BackgroundColor="{StaticResource SoftMint}"
                                     StrokeThickness="0" StrokeShape="RoundRectangle 27">
-                                <Label Text="♧" FontSize="32" TextColor="#087A32"
+                                <Label Text="♧" FontSize="32" TextColor="{StaticResource BrandGreen}"
                                        HorizontalOptions="Center" VerticalOptions="Center" />
                             </Border>
                             <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                                <Label Text="Church Community" FontSize="21" FontAttributes="Bold" TextColor="#102A20" />
+                                <Label Text="Church Community" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                                 <Label Text="A place to share and belong" FontSize="13" TextColor="#718096" />
                             </VerticalStackLayout>
                         </Grid>
@@ -86,10 +86,10 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <Label Text="Discover" FontSize="21" FontAttributes="Bold" TextColor="#102A20"
+                <Label Text="Discover" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}"
                        Margin="2,3,0,0" />
 
-                <Border Padding="16" BackgroundColor="#EAF5FF" StrokeThickness="0"
+                <Border Padding="16" BackgroundColor="{StaticResource AccentBlueTint}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
                         SemanticProperties.Description="Open Prayer Requests">
                     <Border.GestureRecognizers>
@@ -98,7 +98,7 @@
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
                         <Border WidthRequest="50" HeightRequest="50" BackgroundColor="#D7ECFF"
                                 StrokeThickness="0" StrokeShape="RoundRectangle 25">
-                            <Label Text="♡" FontSize="31" TextColor="#1769AA"
+                            <Label Text="♡" FontSize="31" TextColor="{StaticResource AccentBlue}"
                                    HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
@@ -110,7 +110,7 @@
                     </Grid>
                 </Border>
 
-                <Border Padding="16" BackgroundColor="#F3EDFF" StrokeThickness="0"
+                <Border Padding="16" BackgroundColor="{StaticResource AccentPurpleTint}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
                         SemanticProperties.Description="Open Church Announcements">
                     <Border.GestureRecognizers>

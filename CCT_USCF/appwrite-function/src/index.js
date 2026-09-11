@@ -1822,6 +1822,15 @@ async function createGroupMessage(
       "Branch"
     ) || "Branch";
 
+  if (organizationalLevel.toLowerCase() === "branch") {
+    const profile = await getAnnouncementProfile(firebaseUser);
+    if (!profile.branchId || profile.branchId !== branchId) {
+      const authorizationError = new Error("You are not assigned to this branch.");
+      authorizationError.statusCode = 403;
+      throw authorizationError;
+    }
+  }
+
   const thumbnailUrl =
     normalizeString(
       body.thumbnailUrl ??

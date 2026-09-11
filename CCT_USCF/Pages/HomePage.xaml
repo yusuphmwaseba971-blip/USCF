@@ -5,15 +5,15 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.HomePage"
     Title="Home"
-    BackgroundColor="#F4FAF6">
+    BackgroundColor="{StaticResource PageBackground}">
 
     <Grid RowDefinitions="*,Auto">
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
             <VerticalStackLayout Padding="18,14,18,28" Spacing="18">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                    <Border WidthRequest="44" HeightRequest="44" BackgroundColor="#E2F4E8"
+                    <Border WidthRequest="44" HeightRequest="44" BackgroundColor="{StaticResource SoftMint}"
                             StrokeThickness="0" StrokeShape="RoundRectangle 14">
-                        <Label Text="☰" FontSize="22" TextColor="#087A30"
+                        <Label Text="☰" FontSize="22" TextColor="{StaticResource BrandGreen}"
                                HorizontalOptions="Center" VerticalOptions="Center">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OpenSettings" />
@@ -21,7 +21,7 @@
                         </Label>
                     </Border>
                     <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
-                        <Label Text="USCF" FontSize="25" FontAttributes="Bold" TextColor="#075D27" />
+                        <Label Text="USCF" FontSize="25" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
                         <Label Text="Christian Community &amp; Fellowship" FontSize="11" TextColor="#688074" />
                     </VerticalStackLayout>
                     <Border Grid.Column="2" WidthRequest="44" HeightRequest="44" BackgroundColor="White"
@@ -44,7 +44,7 @@
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                    <Border Padding="16" BackgroundColor="#087A30" StrokeThickness="0"
+                    <Border Padding="16" BackgroundColor="{StaticResource BrandDeepGreen}" StrokeThickness="0"
                             StrokeShape="RoundRectangle 22">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OpenWelcome" />
@@ -55,13 +55,13 @@
                             <Label Text="Connect, serve and walk together in Christ." FontSize="12" TextColor="#E3F8E9" />
                         </VerticalStackLayout>
                     </Border>
-                    <Border Grid.Column="1" Padding="16" BackgroundColor="#DDF3E4" StrokeThickness="0"
+                    <Border Grid.Column="1" Padding="16" BackgroundColor="{StaticResource SoftMint}" StrokeThickness="0"
                             StrokeShape="RoundRectangle 22">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OpenBible" />
                         </Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="5">
-                            <Label Text="TODAY'S WORD" FontSize="11" FontAttributes="Bold" TextColor="#087A30" />
+                            <Label Text="TODAY'S WORD" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
                             <Label Text="Your word is a lamp to my feet" FontSize="16" FontAttributes="Bold"
                                    TextColor="#123B25" LineBreakMode="TailTruncation" MaxLines="2" />
                             <Label Text="Psalm 119:105  ›" FontSize="12" TextColor="#537160" />
@@ -81,9 +81,9 @@
                                     StrokeShape="RoundRectangle 20">
                                 <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenBible" /></Border.GestureRecognizers>
                                 <VerticalStackLayout Spacing="8">
-                                    <Border WidthRequest="48" HeightRequest="48" BackgroundColor="#E4F6E9"
+                                    <Border WidthRequest="48" HeightRequest="48" BackgroundColor="{StaticResource SoftMint}"
                                             StrokeThickness="0" StrokeShape="RoundRectangle 24">
-                                        <Label Text="▤" FontSize="25" TextColor="#087A30" HorizontalOptions="Center" VerticalOptions="Center" />
+                                        <Label Text="▤" FontSize="25" TextColor="{StaticResource BrandGreen}" HorizontalOptions="Center" VerticalOptions="Center" />
                                     </Border>
                                     <Label Text="Bible" FontAttributes="Bold" TextColor="#173323" />
                                     <Label Text="Read &amp; reflect" FontSize="11" TextColor="#718178" />
@@ -95,7 +95,7 @@
                                 <VerticalStackLayout Spacing="8">
                                     <Border WidthRequest="48" HeightRequest="48" BackgroundColor="#E4F6E9"
                                             StrokeThickness="0" StrokeShape="RoundRectangle 24">
-                                        <Label Text="♡" FontSize="28" TextColor="#087A30" HorizontalOptions="Center" VerticalOptions="Center" />
+                                        <Label Text="♡" FontSize="28" TextColor="{StaticResource BrandGreen}" HorizontalOptions="Center" VerticalOptions="Center" />
                                     </Border>
                                     <Label Text="Prayer" FontAttributes="Bold" TextColor="#173323" />
                                     <Label Text="Share a request" FontSize="11" TextColor="#718178" />
@@ -148,29 +148,29 @@
                         <Border Padding="14" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenSermons" /></Border.GestureRecognizers>
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <Label Text="▶" FontSize="25" TextColor="#087A30" VerticalOptions="Center" />
-                                <VerticalStackLayout Grid.Column="1"><Label Text="Sermons" FontAttributes="Bold" /><Label Text="Watch messages" FontSize="11" TextColor="#718178" /></VerticalStackLayout>
+                                <Label Text="▶" FontSize="25" TextColor="{StaticResource AccentBlue}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1"><Label Text="Sermons" FontAttributes="Bold" /><Label Text="Watch messages" FontSize="11" TextColor="{StaticResource TextSecondary}" /></VerticalStackLayout>
                             </Grid>
                         </Border>
                         <Border Grid.Column="1" Padding="14" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenGiving" /></Border.GestureRecognizers>
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <Label Text="＋" FontSize="25" TextColor="#087A30" VerticalOptions="Center" />
-                                <VerticalStackLayout Grid.Column="1"><Label Text="Giving" FontAttributes="Bold" /><Label Text="Support ministry" FontSize="11" TextColor="#718178" /></VerticalStackLayout>
+                                <Label Text="＋" FontSize="25" TextColor="{StaticResource AccentGold}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1"><Label Text="Giving" FontAttributes="Bold" /><Label Text="Support ministry" FontSize="11" TextColor="{StaticResource TextSecondary}" /></VerticalStackLayout>
                             </Grid>
                         </Border>
                         <Border Grid.Row="1" Padding="14" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenEvents" /></Border.GestureRecognizers>
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <Label Text="□" FontSize="25" TextColor="#087A30" VerticalOptions="Center" />
-                                <VerticalStackLayout Grid.Column="1"><Label Text="Events" FontAttributes="Bold" /><Label Text="Stay involved" FontSize="11" TextColor="#718178" /></VerticalStackLayout>
+                                <Label Text="□" FontSize="25" TextColor="{StaticResource AccentBlue}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1"><Label Text="Events" FontAttributes="Bold" /><Label Text="Stay involved" FontSize="11" TextColor="{StaticResource TextSecondary}" /></VerticalStackLayout>
                             </Grid>
                         </Border>
                         <Border Grid.Row="1" Grid.Column="1" Padding="14" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenNotifications" /></Border.GestureRecognizers>
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <Label Text="!" FontSize="25" TextColor="#087A30" VerticalOptions="Center" />
-                                <VerticalStackLayout Grid.Column="1"><Label Text="Announcements" FontAttributes="Bold" /><Label Text="What's new" FontSize="11" TextColor="#718178" /></VerticalStackLayout>
+                                <Label Text="!" FontSize="25" TextColor="{StaticResource AccentPurple}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1"><Label Text="Announcements" FontAttributes="Bold" /><Label Text="What's new" FontSize="11" TextColor="{StaticResource TextSecondary}" /></VerticalStackLayout>
                             </Grid>
                         </Border>
                     </Grid>

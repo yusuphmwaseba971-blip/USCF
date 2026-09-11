@@ -35,10 +35,28 @@ public sealed class BibleService
         try
         {
             if (_initialized) return;
-            _translations[KjvId] = await LoadJsonAsync("kjv.json", KjvBookNames, "English", "King James Version");
-            _translations[NenoId] = await LoadJsonAsync("swahili_neno.json", NenoBookNames, "Kiswahili", "Biblica Open Kiswahili Contemporary Version (Neno) 2015");
             await LoadStateAsync();
             _initialized = true;
+        }
+        finally { _gate.Release(); }
+    }
+
+    private async Task<BibleTranslation> EnsureTranslationLoadedAsync(string language)
+    {
+        if (_translations.TryGetValue(language, out var translation))
+            return translation;
+
+        await _gate.WaitAsync();
+        try
+        {
+            if (_translations.TryGetValue(language, out translation))
+                return translation;
+
+            translation = language.Equals(NenoId, StringComparison.OrdinalIgnoreCase)
+                ? await LoadJsonAsync("swahili_neno.json", NenoBookNames, "Kiswahili", "Biblica Open Kiswahili Contemporary Version (Neno) 2015")
+                : await LoadJsonAsync("kjv.json", KjvBookNames, "English", "King James Version");
+            _translations[language] = translation;
+            return translation;
         }
         finally { _gate.Release(); }
     }
@@ -46,7 +64,14 @@ public sealed class BibleService
     private static async Task<BibleTranslation> LoadJsonAsync(string assetName, IReadOnlyList<string> bookNames, string language, string translationName)
     {
         using var stream = await FileSystem.OpenAppPackageFileAsync(assetName);
-        using var document = await JsonDocument.ParseAsync(stream);
+        using var reader = new StreamReader(stream);
+        var json = await reader.ReadToEndAsync();
+        return await Task.Run(() => ParseJson(json, bookNames, language, translationName));
+    }
+
+    private static BibleTranslation ParseJson(string json, IReadOnlyList<string> bookNames, string language, string translationName)
+    {
+        using var document = JsonDocument.Parse(json);
         var books = new List<BibleBook>();
         var index = 0;
         foreach (var element in document.RootElement.EnumerateArray())
@@ -88,7 +113,7 @@ public sealed class BibleService
     public async Task<IReadOnlyList<BibleBook>> GetBooksAsync(string language = KjvId)
     {
         await InitializeAsync();
-        return _translations.TryGetValue(language, out var t) ? t.Books : Array.Empty<BibleBook>();
+        return (await EnsureTranslationLoadedAsync(language)).Books;
     }
     public async Task<IReadOnlyList<int>> GetChaptersAsync(string book, string language = KjvId)
     {
