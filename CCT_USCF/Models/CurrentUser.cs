@@ -19,4 +19,5 @@ public class CurrentUser
     public string? District { get; set; }
     public int? BranchId { get; set; }
     public string? Branch { get; set; }
+    public DateTime RegisteredAtUtc { get; set; }
 }

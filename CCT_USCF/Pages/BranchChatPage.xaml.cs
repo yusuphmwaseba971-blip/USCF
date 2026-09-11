@@ -843,6 +843,19 @@ DateTime? updatedAt =
     {
         try
         {
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+
+            if (currentUser?.BranchId != _branchId ||
+                (currentUser.RegisteredAtUtc > DateTime.UnixEpoch &&
+                 message.CreatedAt < currentUser.RegisteredAtUtc))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[COMMUNITY_REALTIME] Ignored ineligible message branch={message.BranchId} createdAt={message.CreatedAt:O}");
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(message.MessageId))
             {
                 System.Diagnostics.Debug.WriteLine(
@@ -1597,17 +1610,20 @@ DateTime? updatedAt =
 
                 BackgroundColor =
                     isCurrentUser
-                        ? Color.FromArgb("#DBEAFE")
+                        ? Color.FromArgb("#E8E4DA")
                         : Colors.White,
 
+                Stroke =
+                    Color.FromArgb("#E4DED4"),
+
                 StrokeThickness =
-                    0,
+                    1,
 
                 StrokeShape =
                     new RoundRectangle
                     {
                         CornerRadius =
-                            12
+                            16
                     },
 
                 Margin =
@@ -1615,10 +1631,10 @@ DateTime? updatedAt =
                         isCurrentUser ? 24 : 0,
                         0,
                         isCurrentUser ? 0 : 24,
-                        8),
+                        10),
 
                 WidthRequest =
-                    290,
+                    300,
 
                 HorizontalOptions =
                     isCurrentUser
@@ -1642,12 +1658,10 @@ DateTime? updatedAt =
                     FontAttributes.Bold,
 
                 FontSize =
-                    12,
+                    12.5,
 
                 TextColor =
-                    isCurrentUser
-                        ? Color.FromArgb("#1D4ED8")
-                        : Colors.DarkSlateBlue
+                    Color.FromArgb("#405149")
             });
 
         AddMessageContent(
@@ -1686,7 +1700,7 @@ DateTime? updatedAt =
                     11,
 
                 TextColor =
-                    Colors.Gray,
+                    Color.FromArgb("#84918A"),
 
                 HorizontalOptions =
                     LayoutOptions.End
@@ -1777,7 +1791,7 @@ DateTime? updatedAt =
                         14,
 
                     TextColor =
-                        Colors.Black
+                        Color.FromArgb("#26362E")
                 });
         }
     }
@@ -1833,7 +1847,7 @@ DateTime? updatedAt =
                     15,
 
                 TextColor =
-                    Colors.Black,
+                    Color.FromArgb("#26362E"),
 
                 LineBreakMode =
                     LineBreakMode.WordWrap

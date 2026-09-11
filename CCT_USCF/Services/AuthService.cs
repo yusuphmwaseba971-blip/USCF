@@ -228,6 +228,14 @@ public class AuthService
     {
         try
         {
+            if (_auth.CurrentUser != null &&
+                MauiProgram.Services.GetService<CommunityService>() is { } communityService)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[COMMUNITY_LOGOUT_CACHE_CLEAR_START]");
+                await communityService.ClearCurrentUserCommunityCacheAsync();
+            }
+
             await _auth.SignOutAsync();
 
             MauiProgram.SetCurrentUser(null, notify: true);
@@ -556,7 +564,8 @@ public class AuthService
                     Organization = !string.IsNullOrWhiteSpace(profile.Organization) ? profile.Organization : string.Empty,
                     RegionId = profile.RegionId > 0 ? profile.RegionId : null,
                     DistrictId = profile.DistrictId > 0 ? profile.DistrictId : null,
-                    BranchId = profile.BranchId > 0 ? profile.BranchId : null
+                    BranchId = profile.BranchId > 0 ? profile.BranchId : null,
+                    RegisteredAtUtc = ParseRegisteredAtUtc(profile.CreatedAt)
                 };
 
             if (currentUser.RegionId.HasValue)
@@ -579,6 +588,7 @@ public class AuthService
 
             return currentUser;
         }
+
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
@@ -586,6 +596,17 @@ public class AuthService
 
             return null;
         }
+    }
+
+    private static DateTime ParseRegisteredAtUtc(string value)
+    {
+        return DateTime.TryParse(
+                value,
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out var parsed)
+            ? parsed.ToUniversalTime()
+            : DateTime.UnixEpoch;
     }
 
     private async Task<FirestoreUserProfileDocument?> FindUserByUsernameAsync(string username)

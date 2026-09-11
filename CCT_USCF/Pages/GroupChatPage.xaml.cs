@@ -662,6 +662,23 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
+            var currentUser =
+                MauiProgram.CurrentUser
+                ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+
+            if (string.Equals(
+                    NormalizeLevel(OrganizationalLevel),
+                    "Branch",
+                    StringComparison.OrdinalIgnoreCase) &&
+                (currentUser?.BranchId != _branchId ||
+                 (currentUser.RegisteredAtUtc > DateTime.UnixEpoch &&
+                  message.CreatedAt < currentUser.RegisteredAtUtc)))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[COMMUNITY_REALTIME] Ignored ineligible group message group={_groupId} createdAt={message.CreatedAt:O}");
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(message.MessageId))
             {
                 System.Diagnostics.Debug.WriteLine(

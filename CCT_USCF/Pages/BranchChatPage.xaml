@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.BranchChatPage"
     Title="Branch Group"
-    BackgroundColor="#F8FAFC">
+    BackgroundColor="#FAF8F5">
 
     <Grid
         RowDefinitions="Auto,Auto,*,Auto"
@@ -16,25 +16,25 @@
 
         <Border
             Grid.Row="0"
-            BackgroundColor="#EEF2FF"
-            Padding="18,16"
+            BackgroundColor="#1A4D3A"
+            Padding="18,14,18,16"
             StrokeThickness="0">
 
             <VerticalStackLayout
-                Spacing="4">
+                Spacing="3">
 
                 <Label
                     x:Name="BranchTitleLabel"
                     Text="Branch Group"
                     FontSize="22"
                     FontAttributes="Bold"
-                    TextColor="#1E40AF" />
+                    TextColor="#B8986B" />
 
                 <Label
                     x:Name="BranchStatusLabel"
                     Text="Loading Branch Group..."
                     FontSize="12"
-                    TextColor="#475569" />
+                    TextColor="#DCE8E1" />
 
             </VerticalStackLayout>
 
@@ -54,14 +54,17 @@
             <Border
                 Grid.Column="0"
                 BackgroundColor="White"
-                Padding="12"
-                StrokeThickness="0">
+                Padding="14,11"
+                Stroke="#E7E1D8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 14">
 
                 <Label
                     x:Name="MembersLabel"
                     Text="Members"
-                    FontSize="12"
-                    TextColor="#475569" />
+                    FontSize="13"
+                    FontAttributes="Bold"
+                    TextColor="#33443C" />
 
             </Border>
 
@@ -69,11 +72,12 @@
                 x:Name="AddMemberButton"
                 Grid.Column="1"
                 Text="+ Add Member"
-                Padding="12,8"
+                Padding="14,9"
                 FontSize="12"
-                BackgroundColor="#2563EB"
+                BackgroundColor="#1A4D3A"
                 TextColor="White"
-                CornerRadius="10" />
+                CornerRadius="12"
+                HeightRequest="44" />
 
         </Grid>
 
@@ -88,11 +92,11 @@
             Refreshing="OnMessagesRefreshing">
 
             <ScrollView
-                Padding="12,12,12,0">
+                Padding="14,14,14,4">
 
                 <VerticalStackLayout
                     x:Name="MessagesLayout"
-                    Spacing="10" />
+                    Spacing="12" />
 
             </ScrollView>
 
@@ -106,8 +110,11 @@
         <Border
             Grid.Row="3"
             BackgroundColor="White"
-            Padding="12,10"
-            StrokeThickness="0">
+            Margin="10,6,10,10"
+            Padding="10,10"
+            Stroke="#E7E1D8"
+            StrokeThickness="1"
+            StrokeShape="RoundRectangle 18">
 
             <VerticalStackLayout Spacing="8">
 
@@ -128,7 +135,7 @@
                         x:Name="PendingAttachmentLabel"
                         Grid.Column="1"
                         VerticalOptions="Center"
-                        TextColor="#1E40AF"
+                        TextColor="#1A4D3A"
                         LineBreakMode="TailTruncation" />
 
                     <Button
@@ -156,7 +163,7 @@
                     HeightRequest="48"
                     Padding="0"
                     BackgroundColor="Transparent"
-                    TextColor="#1E40AF"
+                    TextColor="#64746C"
                     Clicked="OnAttachmentClicked"
                     VerticalOptions="Center" />
 
@@ -165,9 +172,10 @@
                 <Entry
                     x:Name="MessageEntry"
                     Grid.Column="1"
-                    Placeholder="Type a message..."
-                    BackgroundColor="#F8FAFC"
-                    TextColor="#0F172A"
+                    Placeholder="Message this Branch..."
+                    PlaceholderColor="#94A39A"
+                    BackgroundColor="#FAF8F5"
+                    TextColor="#26362E"
                     VerticalOptions="Center" />
 
                 <!-- SEND BUTTON -->
@@ -176,8 +184,11 @@
                     Grid.Column="2"
                     Text="Send"
                     Clicked="OnSendClicked"
-                    Padding="14,8"
-                    CornerRadius="10"
+                    Padding="16,9"
+                    BackgroundColor="#1A4D3A"
+                    TextColor="White"
+                    CornerRadius="12"
+                    HeightRequest="44"
                     VerticalOptions="Center" />
 
                 </Grid>

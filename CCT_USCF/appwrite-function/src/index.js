@@ -1009,7 +1009,10 @@ async function getAnnouncementProfile(firebaseUser) {
     organization: normalizeString(profile.organization || ""),
     regionId: parseOptionalInt(profile.regionId),
     districtId: parseOptionalInt(profile.districtId),
-    branchId: parseOptionalInt(profile.branchId)
+    branchId: parseOptionalInt(profile.branchId),
+    createdAt: typeof (profile.createdAt || profile.created_at) === "string"
+      ? (profile.createdAt || profile.created_at)
+      : profile.createdAt?.toDate?.()?.toISOString?.() || null
   };
 }
 
@@ -1412,6 +1415,8 @@ async function listGroupMessages(
       log
     );
 
+  const profile = await getAnnouncementProfile(firebaseUser);
+
   const body =
     getRequestBody(req);
 
@@ -1479,6 +1484,26 @@ async function listGroupMessages(
       ? newerThan.getTime()
       : null;
 
+  const membershipSince =
+    parseRequestDate(
+      getQueryValue(req, "membershipSince") ??
+      getQueryValue(req, "membership_since") ??
+      body.membershipSince ??
+      body.membership_since ??
+      profile.createdAt
+    );
+
+  if (
+    organizationalLevel.toLowerCase() === "branch" &&
+    (!profile.branchId || profile.branchId !== branchId)
+  ) {
+    const authorizationError = new Error(
+      "You are not assigned to this branch."
+    );
+    authorizationError.statusCode = 403;
+    throw authorizationError;
+  }
+
   let limit =
     parseOptionalInt(
       req.query?.limit ??
@@ -1502,96 +1527,50 @@ async function listGroupMessages(
     `newerThan=${newerThan?.toISOString() ?? "none"}`
   );
 
-  log(
-    "[CCT_MESSAGE_LIST] Appwrite listDocuments START"
+  const cursor = normalizeString(
+    getQueryValue(req, "cursor") ??
+    body.cursor ??
+    ""
   );
 
-  const documents = [];
-  let cursorAfter = null;
-  let pageCount = 0;
+  const queries = [
+    { method: "equal", attribute: "community_id", values: [communityId] },
+    { method: "equal", attribute: "organization_type", values: [organizationalLevel || "Branch"] },
+    { method: "limit", values: [Math.min(limit, 50)] },
+    { method: "orderDesc", attribute: "created_at" }
+  ];
 
-  try {
-    do {
-      pageCount += 1;
-
-      const queries = [
-        JSON.stringify({
-          method: "limit",
-          values: [100]
-        })
-      ];
-
-      if (cursorAfter) {
-        queries.push(
-          JSON.stringify({
-            method: "cursorAfter",
-            values: [cursorAfter]
-          })
-        );
-      }
-
-      const pageUrl =
-        `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
-        `/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents?` +
-        queries
-          .map(query => `queries[]=${encodeURIComponent(query)}`)
-          .join("&");
-
-      const appwriteResponse =
-        await fetch(
-          pageUrl,
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-              "X-Appwrite-Project": appwriteProjectId,
-              "X-Appwrite-Key": appwriteApiKey
-            }
-          }
-        );
-
-      const responseText =
-        await appwriteResponse.text();
-
-      if (!appwriteResponse.ok) {
-        throw new Error(
-          `Appwrite list failed (${appwriteResponse.status}): ${responseText}`
-        );
-      }
-
-      const page =
-        JSON.parse(responseText);
-      const pageDocuments =
-        Array.isArray(page.documents)
-          ? page.documents
-          : [];
-
-      documents.push(...pageDocuments);
-      cursorAfter =
-        pageDocuments.length === 100
-          ? pageDocuments[pageDocuments.length - 1].$id
-          : null;
-
-      log(
-        `[CCT_MESSAGE_LIST] Appwrite REST page=${pageCount} ` +
-        `count=${pageDocuments.length} total=${documents.length}`
-      );
-    } while (cursorAfter && pageCount < 100);
-
-    if (cursorAfter) {
-      throw new Error(
-        "Appwrite message pagination exceeded the safety limit."
-      );
-    }
-  } catch (error) {
-    logErrorDetails(
-      log,
-      error,
-      "Appwrite REST list"
-    );
-
-    throw error;
+  if (branchId !== null) queries.push({ method: "equal", attribute: "branch_id", values: [String(branchId)] });
+  if (regionId !== null) queries.push({ method: "equal", attribute: "region_id", values: [String(regionId)] });
+  if (districtId !== null) queries.push({ method: "equal", attribute: "district_id", values: [String(districtId)] });
+  if (membershipSince && !Number.isNaN(membershipSince.getTime())) {
+    queries.push({ method: "greaterThanEqual", attribute: "created_at", values: [membershipSince.toISOString()] });
   }
+  if (newerThan && !Number.isNaN(newerThan.getTime())) {
+    queries.push({ method: "greaterThan", attribute: "created_at", values: [newerThan.toISOString()] });
+  }
+  if (cursor) queries.push({ method: "cursorAfter", values: [cursor] });
+
+  log(
+    `[CCT_MESSAGE_LIST] Appwrite TablesDB query ` +
+    `communityId=${communityId} branchId=${branchId ?? "none"} ` +
+    `membershipSince=${membershipSince?.toISOString() ?? "none"} ` +
+    `limit=${Math.min(limit, 50)} cursor=${cursor || "none"}`
+  );
+
+  const page = await appwriteTableRowRequest(
+    COMMUNITY_MESSAGES_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    queries
+  );
+  const documents = Array.isArray(page.rows)
+    ? page.rows
+    : (Array.isArray(page.documents) ? page.documents : []);
+  const nextCursor = documents.length === Math.min(limit, 50)
+    ? documents[documents.length - 1].$id
+    : null;
 
   const items =
     documents
@@ -1666,13 +1645,13 @@ async function listGroupMessages(
 
   log(
     `[CCT_MESSAGE_LIST] Filtered response count=${items.length} ` +
-    `newerThanApplied=${newerThanMs !== null} ` +
-    `pages=${pageCount}`
+    `membershipSinceApplied=${membershipSince !== null} cursor=${nextCursor ?? "none"}`
   );
 
-  return buildListResponse(
-    items
-  );
+  return {
+    ...buildListResponse(items),
+    nextCursor
+  };
 }
 
 
@@ -1982,42 +1961,18 @@ async function createGroupMessage(
   let document;
 
   try {
-    const appwriteCreateUrl =
-      `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
-      `/collections/${encodeURIComponent(COMMUNITY_MESSAGES_COLLECTION_ID)}/documents`;
-
-    const appwriteResponse =
-      await fetch(
-        appwriteCreateUrl,
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            "X-Appwrite-Project": appwriteProjectId,
-            "X-Appwrite-Key": appwriteApiKey
-          },
-          body: JSON.stringify({
-            documentId: messageId,
-            data: documentData
-          })
-        }
-      );
-
-    const responseText =
-      await appwriteResponse.text();
-
-    if (!appwriteResponse.ok) {
-      throw new Error(
-        `Appwrite create failed (${appwriteResponse.status}): ${responseText}`
-      );
-    }
-
-    document =
-      JSON.parse(responseText);
+    document = await appwriteTableRowRequest(
+      COMMUNITY_MESSAGES_COLLECTION_ID,
+      "POST",
+      "",
+      {
+        rowId: messageId,
+        data: documentData
+      }
+    );
 
     log(
-      `[CCT_MESSAGE_CREATE] Appwrite REST create SUCCESS documentId=${document.$id || document.id || ""}`
+      `[CCT_MESSAGE_CREATE] Appwrite TablesDB create SUCCESS rowId=${document.$id || document.id || ""}`
     );
 
   } catch (error) {

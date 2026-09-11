@@ -61,7 +61,10 @@ namespace CCT_USCF.Services
             [Indexed]
 public string CommunityId { get; set; } = string.Empty;
 
-public string OrganizationalLevel { get; set; } = string.Empty;
+            [Indexed]
+            public string UserUid { get; set; } = string.Empty;
+
+            public string OrganizationalLevel { get; set; } = string.Empty;
 
 public string BranchId { get; set; } = string.Empty;
 
@@ -248,7 +251,11 @@ var migrations = new Dictionary<string, string>
 
     ["ClientMessageId"] =
         "ALTER TABLE community_message_cache " +
-        "ADD COLUMN ClientMessageId TEXT NOT NULL DEFAULT '';"
+        "ADD COLUMN ClientMessageId TEXT NOT NULL DEFAULT '';",
+
+    ["UserUid"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN UserUid TEXT NOT NULL DEFAULT '';"
 };
 
                 foreach (var migration in migrations)
@@ -405,6 +412,7 @@ MessageType =
                 ClientMessageId =
                     message.ClientMessageId?.Trim()
                     ?? string.Empty,
+
 CommunityId =
     communityId,
 
@@ -467,6 +475,13 @@ SenderUid =
             };
         }
 
+        private string GetCacheUserUid()
+        {
+            return _authService.GetCurrentFirebaseUid()?.Trim()
+                ?? throw new InvalidOperationException(
+                    "An authenticated Firebase user is required for the community cache.");
+        }
+
         // ============================================================
         // CACHE ONE COMMUNITY MESSAGE
         // ============================================================
@@ -505,6 +520,7 @@ SenderUid =
 
             var cachedMessage =
                 MapToCachedCommunityMessage(message);
+            cachedMessage.UserUid = GetCacheUserUid();
 
             await database.InsertOrReplaceAsync(
                 cachedMessage);
@@ -560,8 +576,11 @@ SenderUid =
                     continue;
                 }
 
-                await database.InsertOrReplaceAsync(
-                    MapToCachedCommunityMessage(message));
+                var cachedMessage =
+                    MapToCachedCommunityMessage(message);
+                cachedMessage.UserUid = GetCacheUserUid();
+
+                await database.InsertOrReplaceAsync(cachedMessage);
 
                 count++;
             }
@@ -569,6 +588,19 @@ SenderUid =
             System.Diagnostics.Debug.WriteLine(
                 "[COMMUNITY_CACHE] Batch cache completed: " +
                 $"count={count}");
+        }
+
+        public async Task ClearCurrentUserCommunityCacheAsync()
+        {
+            var uid = GetCacheUserUid();
+            var database = await GetMessageCacheDatabaseAsync();
+
+            await database.ExecuteAsync(
+                "DELETE FROM community_message_cache WHERE UserUid = ?",
+                uid);
+
+            Debug.WriteLine(
+                $"[COMMUNITY_LOGOUT_CACHE_CLEAR_RESULT] userUid={uid}, cleared=true");
         }
 
         // ============================================================
@@ -620,12 +652,16 @@ SenderUid =
             var database =
                 await GetMessageCacheDatabaseAsync();
 
+            var cacheUserUid =
+                GetCacheUserUid();
+
             var cachedRows =
                 await database
                     .Table<CachedCommunityMessage>()
                     .Where(row =>
                         row.CommunityId ==
-                        normalizedCommunityId)
+                        normalizedCommunityId &&
+                        row.UserUid == cacheUserUid)
                     .OrderByDescending(row =>
                         row.CreatedAt)
                     .Take(safeLimit)
@@ -717,12 +753,16 @@ SenderUid =
             var database =
                 await GetMessageCacheDatabaseAsync();
 
+            var cacheUserUid =
+                GetCacheUserUid();
+
             var newestCached =
                 await database
                     .Table<CachedCommunityMessage>()
                     .Where(row =>
                         row.CommunityId ==
-                        normalizedGroupId)
+                        normalizedGroupId &&
+                        row.UserUid == cacheUserUid)
                     .OrderByDescending(row =>
                         row.CreatedAt)
                     .FirstOrDefaultAsync();
@@ -773,7 +813,8 @@ SenderUid =
                     .Table<CachedCommunityMessage>()
                     .Where(row =>
                         row.CommunityId ==
-                        normalizedGroupId)
+                        normalizedGroupId &&
+                        row.UserUid == cacheUserUid)
                     .ToListAsync())
                 .Select(row => row.MessageId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -1636,6 +1677,10 @@ SenderUid =
             var normalizedCommunityId =
                 communityId.Trim();
 
+            var currentUser = await _authService.GetCurrentUserAsync()
+                ?? throw new InvalidOperationException(
+                    "The current user profile is not available.");
+
             var safeLimit =
                 Math.Clamp(limit, 1, 100);
 
@@ -1670,6 +1715,11 @@ SenderUid =
                     BuildOptionalQuery("regionId", regionId) +
                     BuildOptionalQuery("districtId", districtId) +
                     BuildOptionalDateQuery("newerThan", newerThan) +
+                    BuildOptionalDateQuery(
+                        "membershipSince",
+                        currentUser.RegisteredAtUtc > DateTime.UnixEpoch
+                            ? currentUser.RegisteredAtUtc
+                            : null) +
                     $"&limit={safeLimit}";
 
                 var messages =
@@ -1807,16 +1857,21 @@ SenderUid =
                    $"[APPWRITE_COMMUNITY] RAW RESPONSE: {rawJson}");
 
                if (response.StatusCode ==
-                   System.Net.HttpStatusCode.Unauthorized ||
-                   response.StatusCode ==
-                   System.Net.HttpStatusCode.Forbidden)
+                   System.Net.HttpStatusCode.Unauthorized)
                {
                    System.Diagnostics.Debug.WriteLine(
-                       $"[APPWRITE_COMMUNITY] API authorization failed: " +
+                       $"[APPWRITE_COMMUNITY] Firebase authentication failed: " +
                        $"status={(int)response.StatusCode}, uri={requestUri}");
 
                    throw new UnauthorizedAccessException(
-                       "You are not authorized for this community group.");
+                       "Firebase authentication was rejected by the Community service.");
+               }
+
+               if (response.StatusCode ==
+                   System.Net.HttpStatusCode.Forbidden)
+               {
+                   throw new UnauthorizedAccessException(
+                       $"Community authorization failed: {rawJson}");
                }
 
                if (!response.IsSuccessStatusCode)
