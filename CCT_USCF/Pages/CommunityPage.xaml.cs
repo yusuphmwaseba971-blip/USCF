@@ -45,6 +45,16 @@ public partial class CommunityPage : ContentPage
         await Shell.Current.GoToAsync(nameof(Pages.ChurchGroupSelectionPage));
     }
 
+    private async void OnPrayerRequestsClicked(object? sender, TappedEventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(Pages.PrayerPage));
+    }
+
+    private async void OnFullCommunityClicked(object? sender, TappedEventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(Pages.FullCommunityPage));
+    }
+
     private async void OnChurchAnnouncementsClicked(object sender, EventArgs e)
         => await Shell.Current.GoToAsync(nameof(Pages.ChurchAnnouncementPage));
 
