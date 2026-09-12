@@ -28,7 +28,7 @@ public partial class CctAssistantPage : ContentPage
                 {
                     Text = action,
                     FontSize = 14,
-                    TextColor = Color.FromArgb("#075E36"),
+                    TextColor = Colors.White,
                     VerticalOptions = LayoutOptions.Center
                 }
             };
@@ -86,6 +86,9 @@ public partial class CctAssistantPage : ContentPage
             {
                 ActionButton.Text = _pendingAction;
                 ActionLayout.IsVisible = true;
+
+                if (IsDirectNavigationRequest(prompt, _pendingAction))
+                    await ExecuteActionAsync(_pendingAction);
             }
         }
         finally
@@ -97,9 +100,12 @@ public partial class CctAssistantPage : ContentPage
 
     private async void OnActionClicked(object? sender, EventArgs e)
     {
-        var action = _pendingAction;
-        if (string.IsNullOrWhiteSpace(action))
-            return;
+        if (!string.IsNullOrWhiteSpace(_pendingAction))
+            await ExecuteActionAsync(_pendingAction);
+    }
+
+    private async Task ExecuteActionAsync(string action)
+    {
         if (action.Equals("Settings", StringComparison.OrdinalIgnoreCase))
             await Shell.Current.GoToAsync(nameof(SettingsPage));
         else if (action.Equals("Home", StringComparison.OrdinalIgnoreCase))
@@ -120,6 +126,12 @@ public partial class CctAssistantPage : ContentPage
             return;
         await Navigation.PopModalAsync();
     }
+
+    private static bool IsDirectNavigationRequest(string prompt, string action) =>
+        action is "Community" or "Bible" or "Prayer Requests" or "Church Groups" or "Profile" or "Settings" or "Home"
+        && (prompt.Contains("take me", StringComparison.OrdinalIgnoreCase)
+            || prompt.Contains("go to", StringComparison.OrdinalIgnoreCase)
+            || prompt.Contains("open", StringComparison.OrdinalIgnoreCase));
 
     private void OnDismissActionClicked(object? sender, EventArgs e) =>
         ActionLayout.IsVisible = false;

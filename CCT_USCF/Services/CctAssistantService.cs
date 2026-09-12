@@ -30,13 +30,13 @@ public sealed class CctAssistantService : ICctAssistantService
 
         var actions = page switch
         {
-            "Bible" => new[] { "Search Bible", "Teach me this page", "Explain bookmarks and highlights" },
-            "Prayer Requests" => new[] { "Submit a prayer", "Show today's prayers", "Teach me this page" },
-            "Community" => new[] { "Find my groups", "Explain Community", "What's new today?" },
-            "Church Announcement editor" => new[] { "Improve this announcement", "Shorten this announcement", "Make it clearer" },
-            "Church Groups" => new[] { "Explain groups", "Find my groups", "Open Community" },
-            "Profile" => new[] { "Explain profile and settings", "Open Settings", "Open Home" },
-            _ => new[] { "Guide me", "Teach me this page", "What's new today?", "Find something" }
+            "Bible" => new[] { "Find a Bible passage", "Explain this passage", "Help me bookmark this", "Help me find today's reading", "Teach me this page", "What should I do here?", "Guide me through this page", "What can USCF Assistance do?" },
+            "Prayer Requests" => new[] { "Show me today's prayers", "Help me submit a prayer", "Teach me this page", "Explain the prayer options", "Help me find a prayer", "What should I do here?", "Guide me through this page", "What can USCF Assistance do?" },
+            "Community" => new[] { "What's new today?", "Show me my groups", "Find an announcement", "Teach me this page", "Help me write a post", "What should I do here?", "Guide me through this page", "What can USCF Assistance do?" },
+            "Church Announcement editor" => new[] { "Improve this announcement", "Help me write an announcement", "Shorten this announcement", "Make it clearer", "Teach me this page", "What should I do here?", "Guide me through this page", "What can USCF Assistance do?" },
+            "Church Groups" => new[] { "Explain groups", "Find my groups", "Open Community", "Teach me this page", "What should I do here?", "Guide me through this page", "Help me find something", "What can USCF Assistance do?" },
+            "Profile" => new[] { "Help me update my profile", "Teach me this page", "Where can I change my details?", "Help me understand my account", "Open Settings", "What should I do here?", "Guide me through this page", "What can USCF Assistance do?" },
+            _ => new[] { "What can USCF Assistance do?", "Teach me this page", "What's new today?", "Take me to my groups", "Help me find something", "Help me write", "Guide me through this page", "What should I do here?" }
         };
         return new CctPageContext(page, actions);
     }

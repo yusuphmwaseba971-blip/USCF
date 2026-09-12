@@ -30,8 +30,10 @@ public sealed class FirebaseAiLogicService
                 $"https://firebasevertexai.googleapis.com/v1beta/projects/{ProjectId}/locations/us-central1/publishers/google/models/{Model}:generateContent");
             request.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
-            request.Headers.TryAddWithoutValidation(
-                "X-Firebase-AppCheck", await CrossFirebaseAppCheck.GetTokenAsync());
+            var appCheckToken = await CrossFirebaseAppCheck.GetTokenAsync();
+            if (string.IsNullOrWhiteSpace(appCheckToken))
+                return new("USCF Assistance could not verify this app. Please try again.");
+            request.Headers.TryAddWithoutValidation("X-Firebase-AppCheck", appCheckToken);
             request.Content = JsonContent.Create(new
             {
                 contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
@@ -57,7 +59,7 @@ public sealed class FirebaseAiLogicService
                 ? new("USCF Assistance did not return an answer. Please try again.")
                 : new(text.Trim());
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or Java.Lang.Exception)
         {
             LogDiagnostic($"exceptionType={ex.GetType().FullName} message={ex.Message}");
             return new("USCF Assistance is temporarily unavailable. Please try again.");
