@@ -32,11 +32,11 @@
 
             <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
 
-            <Label Text="CCT Assistant" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Label Text="USCF Assistance" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
             <Frame BackgroundColor="White" Padding="14">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                     <VerticalStackLayout Spacing="3">
-                        <Label Text="CCT Assistant" FontAttributes="Bold" />
+                        <Label Text="USCF Assistance" FontAttributes="Bold" />
                         <Label Text="Get contextual help across CCT-USCF." FontSize="12"
                                TextColor="#64748B" />
                     </VerticalStackLayout>

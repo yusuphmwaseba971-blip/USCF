@@ -48,7 +48,7 @@ public sealed class CctAssistantService : ICctAssistantService
         CancellationToken cancellationToken = default)
     {
         if (!IsEnabled)
-            return new("CCT Assistant is turned off. You can enable it in Settings.");
+            return new("USCF Assistance is turned off. You can enable it in Settings.");
         if (string.IsNullOrWhiteSpace(prompt))
             return new("Tell me what you need help with.");
 
@@ -70,7 +70,7 @@ public sealed class CctAssistantService : ICctAssistantService
             return new("Sharing remains under your control. After publishing, use the normal Android share sheet to choose WhatsApp and the recipient.", "Open Church Announcement");
 
         var promptWithContext = new StringBuilder()
-            .AppendLine("You are CCT Assistant inside the CCT-USCF Android app.")
+            .AppendLine("You are USCF Assistance inside the CCT-USCF Android app.")
             .AppendLine($"Current page: {context.PageName}.")
             .AppendLine("Only explain existing app features. Do not invent data, private content, counts, permissions, or news.")
             .AppendLine("Never claim to have published, sent, deleted, or changed anything.")

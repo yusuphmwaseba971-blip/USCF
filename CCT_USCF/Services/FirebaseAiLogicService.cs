@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Plugin.Firebase.AppCheck;
 
 namespace CCT_USCF.Services;
 
@@ -16,18 +17,21 @@ public sealed class FirebaseAiLogicService
     public async Task<CctAssistantReply> GenerateAsync(string prompt, CancellationToken cancellationToken)
     {
         if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
-            return new("CCT Assistant needs an internet connection for a live answer. You can continue using CCT-USCF normally.");
+            return new("USCF Assistance needs an internet connection for a live answer. You can continue using CCT-USCF normally.");
 
         try
         {
             var apiKey = GetFirebaseApiKey();
             if (string.IsNullOrWhiteSpace(apiKey))
-                return new("CCT Assistant is not configured for this build. You can continue using CCT-USCF normally.");
+                return new("USCF Assistance is not configured for this build. You can continue using CCT-USCF normally.");
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"https://firebasevertexai.googleapis.com/v1beta/projects/{ProjectId}/locations/us-central1/publishers/google/models/{Model}:generateContent?key={Uri.EscapeDataString(apiKey)}");
+                $"https://firebasevertexai.googleapis.com/v1beta/projects/{ProjectId}/locations/us-central1/publishers/google/models/{Model}:generateContent");
+            request.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
+            request.Headers.TryAddWithoutValidation(
+                "X-Firebase-AppCheck", await CrossFirebaseAppCheck.GetTokenAsync());
             request.Content = JsonContent.Create(new
             {
                 contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
@@ -35,10 +39,14 @@ public sealed class FirebaseAiLogicService
             });
 
             using var response = await _http.SendAsync(request, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            LogDiagnostic($"status={(int)response.StatusCode} reason={response.ReasonPhrase} body={Sanitize(responseBody)}");
             if (!response.IsSuccessStatusCode)
-                return new("CCT Assistant is temporarily unavailable. You can continue using CCT-USCF normally.");
+                return new(response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "Please sign in again to use USCF Assistance."
+                    : "USCF Assistance is temporarily unavailable. Please try again.");
 
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            using var document = JsonDocument.Parse(responseBody);
             var text = document.RootElement
                 .GetProperty("candidates")[0]
                 .GetProperty("content")
@@ -46,15 +54,26 @@ public sealed class FirebaseAiLogicService
                 .GetProperty("text")
                 .GetString();
             return string.IsNullOrWhiteSpace(text)
-                ? new("CCT Assistant did not return an answer. Please try again.")
+                ? new("USCF Assistance did not return an answer. Please try again.")
                 : new(text.Trim());
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
-            System.Diagnostics.Debug.WriteLine($"[CCT_ASSISTANT_AI_ERROR] {ex}");
-            return new("CCT Assistant is temporarily unavailable. You can continue using CCT-USCF normally.");
+            LogDiagnostic($"exceptionType={ex.GetType().FullName} message={ex.Message}");
+            return new("USCF Assistance is temporarily unavailable. Please try again.");
         }
     }
+
+    private static void LogDiagnostic(string message)
+    {
+        System.Diagnostics.Debug.WriteLine($"[USCF_ASSISTANCE_AI] {message}");
+#if ANDROID
+        Android.Util.Log.Error("USCF_ASSISTANCE_AI", message);
+#endif
+    }
+
+    private static string Sanitize(string body) =>
+        body.Length > 800 ? body[..800] : body;
 
     private static string? GetFirebaseApiKey()
     {

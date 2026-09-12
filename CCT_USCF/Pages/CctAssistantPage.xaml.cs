@@ -15,22 +15,52 @@ public partial class CctAssistantPage : ContentPage
         ContextLabel.Text = $"You are viewing {context.PageName}";
         foreach (var action in context.QuickActions)
         {
-            var button = new Button
+            var button = new Border
             {
-                Text = action,
-                FontSize = 13,
-                Padding = new Thickness(12, 8),
-                CornerRadius = 16,
-                BackgroundColor = Color.FromArgb("#E4F4E9"),
-                TextColor = Color.FromArgb("#075E36")
+                HeightRequest = 48,
+                Padding = new Thickness(14, 0),
+                BackgroundColor = Color.FromArgb("#66FFFFFF"),
+                Stroke = Color.FromArgb("#55FFFFFF"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(14) },
+                Content = new Label
+                {
+                    Text = action,
+                    FontSize = 14,
+                    TextColor = Color.FromArgb("#075E36"),
+                    VerticalOptions = LayoutOptions.Center
+                }
             };
-            button.Clicked += async (_, _) =>
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (_, _) =>
             {
                 PromptEditor.Text = action;
                 await AskAsync(action);
             };
+            button.GestureRecognizers.Add(tap);
+            button.GestureRecognizers.Add(CreatePressGesture(button));
             QuickActionsLayout.Children.Add(button);
         }
+        _ = AnimatePanelAsync();
+    }
+
+    private static PanGestureRecognizer CreatePressGesture(Border row)
+    {
+        var gesture = new PanGestureRecognizer();
+        gesture.PanUpdated += async (_, args) =>
+        {
+            if (args.StatusType == GestureStatus.Started)
+                await row.TranslateTo(0, -2, 80, Easing.CubicOut);
+            else if (args.StatusType is GestureStatus.Completed or GestureStatus.Canceled)
+                await row.TranslateTo(0, 0, 100, Easing.CubicIn);
+        };
+        return gesture;
+    }
+
+    private async Task AnimatePanelAsync()
+    {
+        Panel.TranslationX = 380;
+        await Panel.TranslateTo(0, 0, 240, Easing.CubicOut);
     }
 
     private async void OnAskClicked(object? sender, EventArgs e) =>
@@ -93,6 +123,9 @@ public partial class CctAssistantPage : ContentPage
     private void OnDismissActionClicked(object? sender, EventArgs e) =>
         ActionLayout.IsVisible = false;
 
-    private async void OnCloseClicked(object? sender, EventArgs e) =>
+    private async void OnCloseClicked(object? sender, EventArgs e)
+    {
+        await Panel.TranslateTo(380, 0, 180, Easing.CubicIn);
         await Navigation.PopModalAsync();
+    }
 }
