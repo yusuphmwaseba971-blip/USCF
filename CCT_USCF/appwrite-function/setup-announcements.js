@@ -193,6 +193,7 @@ async function ensureBoolean(
 const preferredAnnouncementTable = process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID || process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID || "announcements";
 const preferredNotificationTable = process.env.APPWRITE_CHURCH_NOTIFICATIONS_COLLECTION_ID || process.env.APPWRITE_NOTIFICATIONS_COLLECTION_ID || "notifications";
 const preferredDeviceTokenTable = process.env.APPWRITE_CHURCH_DEVICE_TOKENS_COLLECTION_ID || process.env.APPWRITE_DEVICE_TOKENS_COLLECTION_ID || "device_tokens";
+const prayerActionsTable = process.env.APPWRITE_PRAYER_ACTIONS_TABLE_ID || "cct_prayer_actions";
 
 const announcementTables = Array.from(new Set([preferredAnnouncementTable, "church_announcements"]));
 const notificationTables = Array.from(new Set([preferredNotificationTable, "church_notifications"]));
@@ -260,6 +261,11 @@ for (const tableId of deviceTokenTables) {
   ]) {
     await ensureVarchar(tableId, key, size);
   }
+
+  await ensureTable(prayerActionsTable, "Prayer Actions");
+  await ensureVarchar(prayerActionsTable, "prayer_id", 255, true);
+  await ensureVarchar(prayerActionsTable, "user_uid", 255, true);
+  await ensureVarchar(prayerActionsTable, "created_at", 64, true);
   for (const key of ["region_id", "district_id", "branch_id"]) {
     await ensureInteger(tableId, key);
   }
@@ -280,7 +286,8 @@ for (const tableId of Array.from(new Set([
   preferredNotificationTable,
   ...notificationTables,
   preferredDeviceTokenTable,
-  ...deviceTokenTables
+  ...deviceTokenTables,
+  prayerActionsTable
 ])) ) {
   console.log(`  - ${tableId}`);
 }

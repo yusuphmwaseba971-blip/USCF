@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -144,6 +144,9 @@ const ANNOUNCEMENTS_TABLE_ID =
   process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID ||
   "announcements";
 const PRAYERS_TABLE_ID = "cct_prayers";
+const PRAYER_ACTIONS_TABLE_ID =
+  process.env.APPWRITE_PRAYER_ACTIONS_TABLE_ID ||
+  "cct_prayer_actions";
 
 const COMMUNITY_MESSAGES_COLLECTION_ID =
   process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
@@ -1213,6 +1216,58 @@ async function listPrayerRequests(req, log) {
   return { rows };
 }
 
+async function recordPrayerAction(req, log, prayerId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  if (!prayerId) throw announcementError("Prayer ID is required.");
+  const actionId = createHash("sha256")
+    .update(`${prayerId}:${firebaseUser.uid}`)
+    .digest("hex")
+    .slice(0, 32);
+  const data = {
+    prayer_id: prayerId,
+    user_uid: firebaseUser.uid,
+    created_at: new Date().toISOString()
+  };
+
+  log(`[PRAYER_I_PRAY_REQUEST] prayerId=${prayerId} uid=${firebaseUser.uid}`);
+  try {
+    await appwriteTableRowRequest(
+      PRAYER_ACTIONS_TABLE_ID,
+      "POST",
+      "",
+      { rowId: actionId, data }
+    );
+  } catch (error) {
+    if (error?.statusCode !== 409) throw error;
+    log(`[PRAYER_I_PRAY_DUPLICATE_BLOCK] prayerId=${prayerId} uid=${firebaseUser.uid}`);
+    return { success: true, recorded: false };
+  }
+
+  log(`[PRAYER_I_PRAY_SUCCESS] prayerId=${prayerId} uid=${firebaseUser.uid}`);
+  return { success: true, recorded: true };
+}
+
+async function getPrayerActionSummary(req, log, prayerId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  if (!prayerId) throw announcementError("Prayer ID is required.");
+  const page = await appwriteTableRowRequest(
+    PRAYER_ACTIONS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "prayer_id", values: [prayerId] },
+      { method: "limit", values: [5000] }
+    ]
+  );
+  const rows = page.rows || [];
+  return {
+    prayerId,
+    count: rows.length,
+    hasPrayed: rows.some(row => row.user_uid === firebaseUser.uid)
+  };
+}
+
 async function createChurchAnnouncement(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const profile = await getAnnouncementProfile(firebaseUser);
@@ -2147,6 +2202,21 @@ export default async ({
         return jsonResponse(res, await createPrayerRequest(req, log), 201);
       }
       throw announcementError("Method not allowed.", 405);
+    }
+
+    const prayerActionMatch = route.match(
+      /^\/?api\/prayers\/([^/]+)\/(pray|actions)$/
+    );
+    if (prayerActionMatch) {
+      const prayerId = decodeURIComponent(prayerActionMatch[1]);
+      if (prayerActionMatch[2] === "pray") {
+        if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+        currentStage = "POST prayer action";
+        return jsonResponse(res, await recordPrayerAction(req, log, prayerId), 200);
+      }
+      if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
+      currentStage = "GET prayer action summary";
+      return jsonResponse(res, await getPrayerActionSummary(req, log, prayerId), 200);
     }
 
     if (route === "/api/church-announcements" ||

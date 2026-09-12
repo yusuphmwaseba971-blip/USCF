@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="CCT_USCF.Pages.CctAssistantPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    BackgroundColor="#66000000"
+    Padding="16"
+    Title="CCT Assistant">
+    <Grid VerticalOptions="End">
+        <Border BackgroundColor="{StaticResource SurfaceWhite}"
+                StrokeThickness="0"
+                StrokeShape="RoundRectangle 26"
+                Padding="20"
+                MaximumHeightRequest="620">
+            <Border.Shadow>
+                <Shadow Brush="#000000" Offset="0,3" Radius="18" Opacity="0.22" />
+            </Border.Shadow>
+            <ScrollView>
+                <VerticalStackLayout Spacing="14">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Image Source="uscf_logo.png" WidthRequest="38" HeightRequest="38" />
+                        <VerticalStackLayout Grid.Column="1" Margin="12,0,0,0" Spacing="1">
+                            <Label Text="CCT Assistant" FontSize="20" FontAttributes="Bold"
+                                   TextColor="{StaticResource TextPrimary}" />
+                            <Label x:Name="ContextLabel" FontSize="12"
+                                   TextColor="{StaticResource TextSecondary}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="2" Text="Close" Clicked="OnCloseClicked"
+                                BackgroundColor="Transparent" TextColor="{StaticResource BrandGreen}"
+                                Padding="8,4" />
+                    </Grid>
+                    <Label Text="How can I help you?" FontSize="16"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <FlexLayout x:Name="QuickActionsLayout" Wrap="Wrap" Direction="Row"
+                                JustifyContent="Start" AlignItems="Start" />
+                    <Editor x:Name="PromptEditor" Placeholder="Ask anything about CCT-USCF..."
+                            AutoSize="TextChanges" MinimumHeightRequest="48" />
+                    <Button x:Name="AskButton" Text="Ask CCT Assistant" Clicked="OnAskClicked"
+                            BackgroundColor="{StaticResource BrandGreen}" TextColor="White"
+                            CornerRadius="18" HeightRequest="52" />
+                    <ActivityIndicator x:Name="ThinkingIndicator" IsVisible="False" IsRunning="False"
+                                       HorizontalOptions="Center" Color="{StaticResource BrandGreen}" />
+                    <Label x:Name="ResponseLabel" IsVisible="False" LineBreakMode="WordWrap"
+                           TextColor="{StaticResource TextPrimary}" />
+                    <HorizontalStackLayout x:Name="ActionLayout" IsVisible="False" Spacing="10">
+                        <Button x:Name="ActionButton" Clicked="OnActionClicked"
+                                BackgroundColor="{StaticResource SoftMint}"
+                                TextColor="{StaticResource BrandDeepGreen}" />
+                        <Button Text="Dismiss" Clicked="OnDismissActionClicked"
+                                BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

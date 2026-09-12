@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Maui.Graphics;
 
 namespace CCT_USCF.Models;
 
@@ -68,6 +69,13 @@ public class PrayerRequest
     public DateTime? AnsweredAtUtc { get; set; }
     public bool IsOwnerVisible { get; set; }
     public bool IsPrayed { get; set; }
+    public Color CardBackgroundColor => (Math.Abs(PrayerId.GetHashCode()) % 4) switch
+    {
+        0 => Color.FromArgb("#F1F8F3"),
+        1 => Color.FromArgb("#F3F6FB"),
+        2 => Color.FromArgb("#FFF8ED"),
+        _ => Color.FromArgb("#F8F2FA")
+    };
     public string StatusLabelText => string.IsNullOrWhiteSpace(Status.ToString()) ? "Pending" : Status.ToString();
     public string RelativeCreatedAt => CreatedAtUtc == default
         ? "Recently"

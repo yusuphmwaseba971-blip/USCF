@@ -15,6 +15,7 @@ namespace CCT_USCF.Services;
 
 public class PrayerService
 {
+    public event Action<IReadOnlyList<PrayerRequest>>? PrayersSynchronized;
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
     private readonly HttpClient _http;
@@ -177,6 +178,8 @@ public class PrayerService
         public DateTime CreatedAtUtc { get; set; }
         public DateTime UpdatedAtUtc { get; set; }
         public DateTime CachedAtUtc { get; set; }
+        public int PrayerCount { get; set; }
+        public bool IsPrayed { get; set; }
     }
 
     private sealed class SqliteColumnInfo
@@ -221,6 +224,10 @@ public class PrayerService
                     await _cacheDatabase.ExecuteAsync(
                         "DELETE FROM prayer_cache WHERE CacheOwnerUid = '';");
                 }
+                if (!columns.Any(column => column.Name.Equals(nameof(CachedPrayer.PrayerCount), StringComparison.OrdinalIgnoreCase)))
+                    await _cacheDatabase.ExecuteAsync("ALTER TABLE prayer_cache ADD COLUMN PrayerCount INTEGER NOT NULL DEFAULT 0;");
+                if (!columns.Any(column => column.Name.Equals(nameof(CachedPrayer.IsPrayed), StringComparison.OrdinalIgnoreCase)))
+                    await _cacheDatabase.ExecuteAsync("ALTER TABLE prayer_cache ADD COLUMN IsPrayed INTEGER NOT NULL DEFAULT 0;");
                 _cacheInitialized = true;
                 System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE] SQLite initialized");
             }
@@ -249,6 +256,8 @@ public class PrayerService
             CreatedAtUtc = cached.CreatedAtUtc,
             UpdatedAtUtc = cached.UpdatedAtUtc,
             IsOwnerVisible = cached.UserId == currentUserId
+            ,PrayerCount = cached.PrayerCount
+            ,IsPrayed = cached.IsPrayed
         };
     }
 
@@ -265,6 +274,8 @@ public class PrayerService
             CreatedAtUtc = prayer.CreatedAtUtc,
             UpdatedAtUtc = prayer.UpdatedAtUtc,
             CachedAtUtc = DateTime.UtcNow
+            ,PrayerCount = prayer.PrayerCount
+            ,IsPrayed = prayer.IsPrayed
         };
     }
 
@@ -311,7 +322,9 @@ public class PrayerService
             else if (existing.UpdatedAtUtc != incoming.UpdatedAtUtc ||
                      existing.Content != incoming.Content ||
                      existing.Status != incoming.Status ||
-                     existing.IsPrivate != incoming.IsPrivate)
+                     existing.IsPrivate != incoming.IsPrivate ||
+                     existing.PrayerCount != incoming.PrayerCount ||
+                     existing.IsPrayed != incoming.IsPrayed)
             {
                 await database.UpdateAsync(incoming);
                 updated++;
@@ -396,7 +409,8 @@ public class PrayerService
                           DateTime.UtcNow - lastSync.ToUniversalTime() >= TimeSpan.FromHours(48);
             System.Diagnostics.Debug.WriteLine(
                 $"[PRAYER_CACHE_FRESHNESS] stale={isStale} ageHours={(DateTime.TryParse(lastSyncText, out lastSync) ? (DateTime.UtcNow - lastSync.ToUniversalTime()).TotalHours : -1):F1}");
-            _ = SyncNewAndChangedPrayersAsync();
+            if (isStale)
+                _ = SyncNewAndChangedPrayersAsync();
             return cached;
         }
 
@@ -409,14 +423,14 @@ public class PrayerService
         return rows;
     }
 
-    public async Task SyncNewAndChangedPrayersAsync()
+    public async Task<List<PrayerRequest>> SyncNewAndChangedPrayersAsync()
     {
         try
         {
             if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
             {
                 System.Diagnostics.Debug.WriteLine("[PRAYER_OFFLINE] cached feed remains available");
-                return;
+                return [];
             }
 
             System.Diagnostics.Debug.WriteLine("[PRAYER_SYNC_START] detecting new/changed");
@@ -429,10 +443,13 @@ public class PrayerService
             var (rows, _) = await FetchPagedPrayersAsync(5, newerThan: newerThan);
             await SaveOrUpdateCachedPrayersAsync(rows);
             Preferences.Default.Set(UserCacheKey(LastPrayerSyncKey), DateTime.UtcNow.ToString("O"));
+            PrayersSynchronized?.Invoke(rows);
+            return rows;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[PRAYER_SYNC_ERROR] {ex.GetType().Name}: {ex.Message}");
+            return [];
         }
     }
 
@@ -469,12 +486,63 @@ public class PrayerService
         return rows;
     }
 
+    public async Task<bool> PrayForRequestAsync(string prayerId)
+    {
+        if (string.IsNullOrWhiteSpace(prayerId))
+            return false;
+        var token = await _authService.GetCurrentFirebaseIdTokenAsync()
+            ?? throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_I_PRAY_START] prayerId={prayerId}");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"api/prayers/{Uri.EscapeDataString(prayerId)}/pray");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await _http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Prayer action could not be saved ({(int)response.StatusCode}).");
+        var result = await response.Content.ReadFromJsonAsync<PrayerActionResponse>();
+        var recorded = result?.Recorded == true;
+        var summary = await GetPrayerActionSummaryAsync(prayerId);
+        var cached = await LoadCachedPrayersAsync(100);
+        var prayer = cached.FirstOrDefault(item => item.PrayerId == prayerId);
+        if (prayer != null)
+        {
+            prayer.IsPrayed = summary.HasPrayed;
+            prayer.PrayerCount = summary.Count;
+            await SaveOrUpdateCachedPrayersAsync([prayer]);
+        }
+        return recorded;
+    }
+
+    private async Task<PrayerActionSummary> GetPrayerActionSummaryAsync(string prayerId)
+    {
+        var token = await _authService.GetCurrentFirebaseIdTokenAsync()
+            ?? throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/prayers/{Uri.EscapeDataString(prayerId)}/actions");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await _http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Prayer count could not be loaded ({(int)response.StatusCode}).");
+        return await response.Content.ReadFromJsonAsync<PrayerActionSummary>()
+            ?? throw new InvalidOperationException("Prayer count response was empty.");
+    }
+
     private static PrayerStatus ParseStatus(string? value) =>
         Enum.TryParse<PrayerStatus>(value, true, out var status) ? status : PrayerStatus.Active;
 
     private sealed class PrayerListResponse
     {
         public List<PrayerRow> Rows { get; set; } = [];
+    }
+
+    private sealed class PrayerActionResponse
+    {
+        public bool Recorded { get; set; }
+    }
+
+    private sealed class PrayerActionSummary
+    {
+        public string PrayerId { get; set; } = string.Empty;
+        public int Count { get; set; }
+        public bool HasPrayed { get; set; }
     }
 
     private sealed class PrayerRow
@@ -543,46 +611,6 @@ public class PrayerService
             var prayer = await GetPrayerAsync(prayerId);
             return prayer?.PrayerCount ?? 0;
         }
-    }
-
-    public async Task<bool> PrayForRequestAsync(string prayerId)
-    {
-        if (string.IsNullOrWhiteSpace(prayerId))
-            return false;
-
-        var user = _auth.CurrentUser;
-        if (user == null)
-            throw new InvalidOperationException("You must be signed in to pray for a request.");
-
-        var prayerRef = _firestore
-            .GetCollection("prayers")
-            .GetDocument(prayerId);
-
-        var prayerSnapshot = await prayerRef.GetDocumentSnapshotAsync<PrayerFirestoreDocument>(Source.Default);
-        var prayer = prayerSnapshot?.Data;
-        if (prayer == null)
-            return false;
-
-        var actionRef = prayerRef.GetCollection("prayer_actions").GetDocument(user.Uid);
-        var currentAction = await actionRef.GetDocumentSnapshotAsync<PrayerActionDocument>(Source.Default);
-        if (currentAction?.Data != null)
-            return false;
-
-        var action = new PrayerActionDocument
-        {
-            UserUid = user.Uid,
-            CreatedAtUtc = DateTime.UtcNow,
-            PrayerId = prayerId
-        };
-
-        await actionRef.SetDataAsync(action);
-
-        var count = await GetPrayerCountAsync(prayerId);
-        var prayerRecord = MapFromDocument(prayer) ?? throw new InvalidOperationException("Prayer request could not be loaded for update.");
-        prayerRecord.PrayerCount = count;
-        prayerRecord.UpdatedAtUtc = DateTime.UtcNow;
-        await prayerRef.SetDataAsync(ToFirestoreDocument(prayerRecord));
-        return true;
     }
 
     public async Task<bool> MarkPrayerAnsweredAsync(string prayerId)

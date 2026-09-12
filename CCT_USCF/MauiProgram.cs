@@ -170,6 +170,9 @@ builder.Services.AddSingleton<
     CCT_USCF.Services.BibleService>();
 builder.Services.AddSingleton<ChurchAnnouncementService>();
 builder.Services.AddSingleton<AppAppearanceService>();
+builder.Services.AddSingleton<FirebaseAiLogicService>(serviceProvider =>
+    new FirebaseAiLogicService(new HttpClient(), serviceProvider.GetRequiredService<AuthService>()));
+builder.Services.AddSingleton<ICctAssistantService, CctAssistantService>();
         // =====================================================
         // FIREBASE DATA SEEDERS
         // =====================================================

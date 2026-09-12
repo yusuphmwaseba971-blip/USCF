@@ -82,7 +82,8 @@
 
                     <CollectionView.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="16,6" Padding="18" BackgroundColor="White"
+                            <Border Margin="16,6" Padding="20" MinimumHeightRequest="290"
+                                    BackgroundColor="{Binding CardBackgroundColor}"
                                     StrokeThickness="0" StrokeShape="RoundRectangle 22">
                                 <Border.Shadow>
                                     <Shadow Brush="#173B28" Offset="0,4" Radius="14" Opacity="0.11" />
@@ -90,7 +91,7 @@
                                 <VerticalStackLayout Spacing="14">
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                         <Border Grid.Column="0" WidthRequest="42" HeightRequest="42"
-                                                BackgroundColor="{StaticResource SoftMint}" StrokeThickness="0"
+                                                BackgroundColor="White" StrokeThickness="0"
                                                 StrokeShape="RoundRectangle 21">
                                             <Label Text="👤" FontSize="20"
                                                    HorizontalOptions="Center" VerticalOptions="Center" />
@@ -123,12 +124,19 @@
                                                FontSize="12" TextColor="#718096"
                                                VerticalOptions="Center" />
                                         <Button Grid.Column="1" Text="🙏  I PRAY"
-                                                Padding="14,9" BackgroundColor="{StaticResource SoftMint}"
+                                                Padding="14,9" BackgroundColor="White"
                                                 TextColor="{StaticResource BrandGreen}" CornerRadius="16"
                                                 FontAttributes="Bold" FontSize="13"
                                                 CommandParameter="{Binding PrayerId}"
                                                 Clicked="OnPrayClicked"
-                                                SemanticProperties.Description="Pray for this request" />
+                                                SemanticProperties.Description="Pray for this request">
+                                            <Button.Triggers>
+                                                <DataTrigger TargetType="Button" Binding="{Binding IsPrayed}" Value="True">
+                                                    <Setter Property="Text" Value="🙏  I PRAYED" />
+                                                    <Setter Property="IsEnabled" Value="False" />
+                                                </DataTrigger>
+                                            </Button.Triggers>
+                                        </Button>
                                     </Grid>
                                     <Label Text="{Binding PrayerCount, StringFormat='🙏  {0} people prayed'}"
                                            FontSize="12" TextColor="#718096" />

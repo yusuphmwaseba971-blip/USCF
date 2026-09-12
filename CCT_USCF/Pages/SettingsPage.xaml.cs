@@ -6,12 +6,14 @@ public partial class SettingsPage : ContentPage
 {
     private readonly Services.AuthService _auth;
     private readonly AppAppearanceService _appearance;
+    private readonly ICctAssistantService _assistant;
 
     public SettingsPage()
     {
         InitializeComponent();
         _auth = LoginRegisterHelpers.GetAuthService();
         _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
+        _assistant = MauiProgram.Services.GetRequiredService<ICctAssistantService>();
         LanguagePicker.ItemsSource = AppAppearanceService.Languages.Keys.ToList();
         BackgroundPicker.ItemsSource = AppAppearanceService.Backgrounds.Keys.Concat(["Custom"]).ToList();
     }
@@ -29,8 +31,12 @@ public partial class SettingsPage : ContentPage
         {
             BackgroundColor = _appearance.BackgroundColor;
             BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+            AssistantSwitch.IsToggled = _assistant.IsEnabled;
         });
     }
+
+    private void OnAssistantToggled(object? sender, ToggledEventArgs e) =>
+        _assistant.SetEnabled(e.Value);
 
     protected override void OnDisappearing()
     {

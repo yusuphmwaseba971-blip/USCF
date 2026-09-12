@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Collections.ObjectModel;
 
 using CCT_USCF.Models;
 using CCT_USCF.Services;
@@ -14,7 +15,7 @@ namespace CCT_USCF.Pages;
 public partial class PrayerPage : ContentPage
 {
     private readonly PrayerService _prayerService;
-    private readonly List<PrayerRequest> _items = new();
+    private readonly ObservableCollection<PrayerRequest> _items = new();
     private bool _isLoadingMore = false;
     private bool _initialLoadCompleted;
     private bool _noMoreRemotePrayers;
@@ -25,6 +26,7 @@ public partial class PrayerPage : ContentPage
         InitializeComponent();
         _prayerService = MauiProgram.Services.GetRequiredService<PrayerService>();
         PrayerRefreshView.Refreshing += OnRefreshRequested;
+        _prayerService.PrayersSynchronized += OnPrayersSynchronized;
     }
 
     protected override async void OnAppearing()
@@ -46,10 +48,10 @@ public partial class PrayerPage : ContentPage
             var items = await _prayerService.GetInitialPrayersAsync();
 
             _items.Clear();
-            foreach (var item in items)
+            foreach (var item in StableInitialOrder(items))
                 _items.Add(item);
 
-            PrayerCollectionView.ItemsSource = _items.OrderByDescending(x => x.CreatedAtUtc).ToList();
+            PrayerCollectionView.ItemsSource = _items;
             _initialLoadCompleted = true;
         }
         catch (Exception ex)
@@ -111,16 +113,11 @@ public partial class PrayerPage : ContentPage
             button.IsEnabled = false;
             button.Text = "Saving...";
             var recorded = await _prayerService.PrayForRequestAsync(prayerId);
-            if (!recorded)
-            {
-                button.Text = "🙏  I PRAYED";
-                return;
-            }
-
             if (button.BindingContext is PrayerRequest prayer)
             {
                 prayer.IsPrayed = true;
-                prayer.PrayerCount++;
+                if (recorded)
+                    prayer.PrayerCount++;
             }
 
             button.Text = "🙏  I PRAYED";
@@ -152,9 +149,7 @@ public partial class PrayerPage : ContentPage
                 var cached = await _prayerService.LoadCachedPrayersAsync(50);
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    _items.Clear();
-                    _items.AddRange(cached);
-                    PrayerCollectionView.ItemsSource = _items.OrderByDescending(x => x.CreatedAtUtc).ToList();
+                    AppendOnly(cached);
                     PrayerRefreshView.IsRefreshing = false;
                 });
                 System.Diagnostics.Debug.WriteLine("[PRAYER_REFRESH_COMPLETE]");
@@ -189,13 +184,9 @@ public partial class PrayerPage : ContentPage
             var more = await _prayerService.LoadMorePrayersAsync(3);
             if (more != null && more.Any())
             {
-                // append and update UI
-                foreach (var p in more)
-                {
-                    _items.Add(p);
-                }
-
-                PrayerCollectionView.ItemsSource = _items.OrderByDescending(x => x.CreatedAtUtc).ToList();
+                foreach (var item in more)
+                    if (_items.All(existing => existing.PrayerId != item.PrayerId))
+                        _items.Add(item);
                 System.Diagnostics.Debug.WriteLine($"[PRAYER_LOAD_MORE_COMPLETE] appended={more.Count}");
             }
             else
@@ -203,6 +194,7 @@ public partial class PrayerPage : ContentPage
                 _noMoreRemotePrayers = true;
                 System.Diagnostics.Debug.WriteLine("[PRAYER_LOAD_MORE_COMPLETE] no-more");
             }
+
         }
         catch (Exception ex)
         {
@@ -211,6 +203,30 @@ public partial class PrayerPage : ContentPage
         finally
         {
             _isLoadingMore = false;
+        }
+    }
+
+    private void OnPrayersSynchronized(IReadOnlyList<PrayerRequest> prayers) =>
+        MainThread.BeginInvokeOnMainThread(() => AppendOnly(prayers));
+
+    private void AppendOnly(IEnumerable<PrayerRequest> prayers)
+    {
+        foreach (var prayer in prayers)
+            if (_items.All(existing => existing.PrayerId != prayer.PrayerId))
+                _items.Add(prayer);
+    }
+
+    private static IEnumerable<PrayerRequest> StableInitialOrder(IEnumerable<PrayerRequest> prayers) =>
+        prayers.OrderBy(prayer => StableOrderKey(prayer.PrayerId));
+
+    private static int StableOrderKey(string value)
+    {
+        unchecked
+        {
+            var hash = 17;
+            foreach (var character in value)
+                hash = hash * 31 + character;
+            return hash;
         }
     }
 }

@@ -23,8 +23,17 @@
     </TabBar>
 
     <Shell.TitleView>
-        <Grid Padding="8,0,8,0">
+        <Grid Padding="8,0,8,0" ColumnDefinitions="Auto,*,Auto,Auto">
+            <Image Grid.Column="0" Source="uscf_logo.png" WidthRequest="28" HeightRequest="28"
+                   VerticalOptions="Center" Margin="0,0,6,0" />
+            <Button Grid.Column="2" x:Name="AssistantButton"
+                    Text="CCT Assistant" FontSize="12"
+                    BackgroundColor="{StaticResource SoftMint}"
+                    TextColor="{StaticResource BrandDeepGreen}"
+                    CornerRadius="16" Padding="10,5"
+                    Clicked="OnAssistantClicked" />
             <Button x:Name="SignUpLoginButton"
+                    Grid.Column="3"
                     Text="Sign Up / Login"
                     SemanticProperties.Hint="Open authentication actions"
                     HorizontalOptions="End"
@@ -33,6 +42,7 @@
                     IsVisible="False" />
 
             <Button x:Name="AuthProfileButton"
+                    Grid.Column="3"
                     Text="Profile"
                     HorizontalOptions="End"
                     VerticalOptions="Center"

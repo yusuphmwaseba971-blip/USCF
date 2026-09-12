@@ -32,6 +32,20 @@
 
             <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
 
+            <Label Text="CCT Assistant" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Frame BackgroundColor="White" Padding="14">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <VerticalStackLayout Spacing="3">
+                        <Label Text="CCT Assistant" FontAttributes="Bold" />
+                        <Label Text="Get contextual help across CCT-USCF." FontSize="12"
+                               TextColor="#64748B" />
+                    </VerticalStackLayout>
+                    <Switch x:Name="AssistantSwitch" Grid.Column="1"
+                            Toggled="OnAssistantToggled"
+                            OnColor="{StaticResource BrandGreen}" />
+                </Grid>
+            </Frame>
+
             <Label Text="Language &amp; Appearance" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
             <Frame BackgroundColor="White" Padding="12">
                 <VerticalStackLayout Spacing="12">

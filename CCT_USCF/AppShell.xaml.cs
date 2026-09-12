@@ -81,6 +81,10 @@ public partial class AppShell : Shell
         MauiProgram.AuthStateChanged +=
             OnAuthStateChanged;
 
+        var assistant = MauiProgram.Services.GetRequiredService<ICctAssistantService>();
+        assistant.EnabledChanged += OnAssistantEnabledChanged;
+        UpdateAssistantVisibility();
+
         // Check current Firebase session.
         _ = UpdateAuthUIAsync();
     }
@@ -178,6 +182,22 @@ public partial class AppShell : Shell
             SignUpLoginButton.IsVisible = true;
             AuthProfileButton.IsVisible = false;
         });
+    }
+
+    private void OnAssistantEnabledChanged(object? sender, EventArgs e) =>
+        MainThread.BeginInvokeOnMainThread(UpdateAssistantVisibility);
+
+    private void UpdateAssistantVisibility()
+    {
+        AssistantButton.IsVisible =
+            MauiProgram.Services.GetRequiredService<ICctAssistantService>().IsEnabled;
+    }
+
+    private async void OnAssistantClicked(object? sender, EventArgs e)
+    {
+        if (!MauiProgram.Services.GetRequiredService<ICctAssistantService>().IsEnabled)
+            return;
+        await Navigation.PushModalAsync(new CctAssistantPage());
     }
 
     // =========================================================
