@@ -55,4 +55,16 @@ public class CommunityMessage
     public DateTime? UpdatedAt { get; set; }
 
     public DateTime? ReadAt { get; set; }
+
+    public bool IsDeleted { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+
+    public bool IsEdited { get; set; }
+
+    public string? ReplyToMessageId { get; set; }
+
+    public string? ReplyToSenderName { get; set; }
+
+    public string? ReplyToPreview { get; set; }
 }

@@ -118,6 +118,20 @@
 
             <VerticalStackLayout Spacing="8">
 
+                <Border
+                    x:Name="ReplyPreviewLayout"
+                    IsVisible="False"
+                    BackgroundColor="#F1EEE7"
+                    Padding="10,6"
+                    StrokeThickness="0"
+                    StrokeShape="RoundRectangle 10">
+                    <Label
+                        x:Name="ReplyPreviewLabel"
+                        FontSize="12"
+                        TextColor="#405149"
+                        LineBreakMode="TailTruncation" />
+                </Border>
+
                 <Grid
                     x:Name="PendingAttachmentLayout"
                     ColumnDefinitions="Auto,*,Auto"

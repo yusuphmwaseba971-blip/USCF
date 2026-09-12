@@ -21,7 +21,11 @@ public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
+#if DEBUG
+        CrossFirebaseAppCheck.Configure(AppCheckOptions.Debug);
+#else
         CrossFirebaseAppCheck.Configure(AppCheckOptions.PlayIntegrity);
+#endif
         CrossFirebase.Initialize(this, () => this);
         base.OnCreate(savedInstanceState);
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&

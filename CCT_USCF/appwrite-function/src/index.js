@@ -556,7 +556,28 @@ function mapMessageDocument(
       safeIsoDate(
         document.updated_at ??
         document.$updatedAt
-      )
+      ),
+
+    isDeleted:
+      document.is_deleted === true,
+
+    deletedAt:
+      safeIsoDate(document.deleted_at),
+
+    isEdited:
+      document.is_edited === true,
+
+    replyToMessageId:
+      document.reply_to_message_id ??
+      null,
+
+    replyToSenderName:
+      document.reply_to_sender_name ??
+      null,
+
+    replyToPreview:
+      document.reply_to_preview ??
+      null
   };
 }
 
@@ -2000,7 +2021,22 @@ async function createGroupMessage(
       createdAt,
 
     appwrite_team_id:
-      appwriteTeamId
+      appwriteTeamId,
+
+    is_deleted:
+      false,
+
+    is_edited:
+      false,
+
+    reply_to_message_id:
+      normalizeString(body.replyToMessageId ?? body.reply_to_message_id ?? "") || null,
+
+    reply_to_sender_name:
+      normalizeString(body.replyToSenderName ?? body.reply_to_sender_name ?? "") || null,
+
+    reply_to_preview:
+      normalizeString(body.replyToPreview ?? body.reply_to_preview ?? "") || null
   };
 
   log(
@@ -2072,6 +2108,51 @@ async function createGroupMessage(
   return buildCreateResponse(
     message
   );
+}
+
+async function updateGroupMessage(req, log, messageId, deleted) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const row = await appwriteTableRowRequest(
+    COMMUNITY_MESSAGES_COLLECTION_ID,
+    "GET",
+    `/${encodeURIComponent(messageId)}`
+  );
+
+  if (normalizeString(row.sender_uid) !== firebaseUser.uid) {
+    const authorizationError = new Error(
+      "You are not authorized to change this message."
+    );
+    authorizationError.statusCode = 403;
+    throw authorizationError;
+  }
+
+  const body = getRequestBody(req);
+  const now = new Date().toISOString();
+  const data = deleted
+    ? {
+        content: "Message deleted",
+        is_deleted: true,
+        deleted_at: now,
+        updated_at: now
+      }
+    : {
+        content: normalizeString(body.content ?? ""),
+        is_edited: true,
+        updated_at: now
+      };
+
+  if (!deleted && !data.content) {
+    throw new Error("Message content is required.");
+  }
+
+  const updated = await appwriteTableRowRequest(
+    COMMUNITY_MESSAGES_COLLECTION_ID,
+    "PATCH",
+    `/${encodeURIComponent(messageId)}`,
+    { data }
+  );
+
+  return mapMessageDocument(updated);
 }
 
 
@@ -2339,6 +2420,30 @@ export default async ({
         },
         405
       );
+    }
+
+    const groupMessageMutation = route.match(
+      /^\/?api\/community\/messages\/group\/([^/]+)$/
+    );
+    if (groupMessageMutation) {
+      const messageId = decodeURIComponent(groupMessageMutation[1]);
+      if (req.method === "PATCH" || req.method === "PUT") {
+        currentStage = "PATCH group message";
+        return jsonResponse(
+          res,
+          await updateGroupMessage(req, log, messageId, false),
+          200
+        );
+      }
+      if (req.method === "DELETE") {
+        currentStage = "DELETE group message";
+        return jsonResponse(
+          res,
+          await updateGroupMessage(req, log, messageId, true),
+          200
+        );
+      }
+      return jsonResponse(res, { error: "Method not allowed." }, 405);
     }
 
 

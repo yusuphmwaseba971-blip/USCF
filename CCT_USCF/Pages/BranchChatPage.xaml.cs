@@ -24,6 +24,8 @@ public partial class BranchChatPage : ContentPage
     private readonly CloudinaryService _cloudinaryService;
 
     private readonly List<BranchChatMessageUi> _messages = new();
+    private readonly HashSet<string> _selectedMessageIds = new(StringComparer.Ordinal);
+    private BranchChatMessageUi? _replyingTo;
 
     private bool _isLoading;
     private bool _realtimeEnabled;
@@ -1287,7 +1289,7 @@ DateTime? updatedAt =
                     : message.SenderName,
 
             Text =
-                message.Content,
+                message.IsDeleted ? "Message deleted" : message.Content,
 
             MessageType =
                 string.IsNullOrWhiteSpace(
@@ -1317,7 +1319,13 @@ DateTime? updatedAt =
                     : message.CreatedAt.ToUniversalTime(),
 
             UpdatedAt =
-                message.UpdatedAt
+                message.UpdatedAt,
+
+            IsDeleted = message.IsDeleted,
+            IsEdited = message.IsEdited,
+            ReplyToMessageId = message.ReplyToMessageId,
+            ReplyToSenderName = message.ReplyToSenderName,
+            ReplyToPreview = message.ReplyToPreview
         };
     }
 
@@ -1642,6 +1650,12 @@ DateTime? updatedAt =
                         : LayoutOptions.Start
             };
 
+        if (_selectedMessageIds.Contains(message.MessageId))
+        {
+            container.Stroke = Color.FromArgb("#B8986B");
+            container.StrokeThickness = 3;
+        }
+
         var stack =
             new VerticalStackLayout
             {
@@ -1667,6 +1681,19 @@ DateTime? updatedAt =
         AddMessageContent(
             stack,
             message);
+
+        if (!string.IsNullOrWhiteSpace(message.ReplyToMessageId))
+        {
+            stack.Children.Insert(1, new Label
+            {
+                Text = message.ReplyToPreview == "Message deleted"
+                    ? "Replying to deleted message"
+                    : $"Replying to {message.ReplyToSenderName}: {message.ReplyToPreview}",
+                FontSize = 11,
+                TextColor = Color.FromArgb("#6B786F"),
+                LineBreakMode = LineBreakMode.TailTruncation
+            });
+        }
 
         var timestampText =
             message.CreatedAt
@@ -1709,11 +1736,21 @@ DateTime? updatedAt =
         container.Content =
             stack;
 
+        AttachLongPressGesture(container, message);
+        var pan = new PanGestureRecognizer();
+        pan.PanUpdated += (_, args) =>
+        {
+            if (args.StatusType == GestureStatus.Completed &&
+                args.TotalX >= 80 &&
+                Math.Abs(args.TotalX) > Math.Abs(args.TotalY) * 1.25)
+            {
+                BeginReply(message);
+            }
+        };
+        container.GestureRecognizers.Add(pan);
+
         if (isCurrentUser)
         {
-            AttachLongPressGesture(
-                container,
-                message);
 
             if (string.Equals(message.Status, "failed", StringComparison.OrdinalIgnoreCase))
             {
@@ -2147,16 +2184,23 @@ DateTime? updatedAt =
     {
         try
         {
-            var choice =
-                await DisplayActionSheet(
-                    "Message options",
-                    "Cancel",
-                    null,
-                    "Edit",
-                    "Delete");
+            var actions = new List<string> { "Reply", "Select" };
+            if (string.Equals(message.SenderUid, GetCurrentUserUid(), StringComparison.Ordinal))
+            {
+                actions.Add("Edit");
+                actions.Add("Delete");
+            }
+            var choice = await DisplayActionSheet(
+                "Message options", "Cancel", null, actions.ToArray());
 
             switch (choice)
             {
+                case "Reply":
+                    BeginReply(message);
+                    break;
+                case "Select":
+                    ToggleMessageSelection(message);
+                    break;
                 case "Edit":
                     await EditMessageAsync(
                         message);
@@ -2175,6 +2219,31 @@ DateTime? updatedAt =
         }
     }
 
+    private void BeginReply(BranchChatMessageUi message)
+        {
+            _replyingTo = message;
+            ReplyPreviewLabel.Text =
+                message.IsDeleted
+                    ? "Replying to deleted message"
+                    : $"Replying to {message.SenderName}: {Shorten(message.Text)}";
+            ReplyPreviewLayout.IsVisible = true;
+            MessageEntry.Focus();
+        }
+
+    private void ToggleMessageSelection(BranchChatMessageUi message)
+        {
+            if (!_selectedMessageIds.Add(message.MessageId))
+                _selectedMessageIds.Remove(message.MessageId);
+            BranchStatusLabel.Text = _selectedMessageIds.Count == 0
+                ? "Connected"
+                : $"{_selectedMessageIds.Count} message(s) selected";
+            RenderMessages();
+        }
+
+    private static string Shorten(string value) =>
+            string.IsNullOrWhiteSpace(value)
+                ? "Message"
+                : value.Length <= 80 ? value : value[..77] + "...";
     // ============================================================
     // EDIT MESSAGE
     // ============================================================
@@ -2312,12 +2381,13 @@ DateTime? updatedAt =
                 return;
             }
 
-            _messages.RemoveAll(
-                existing =>
-                    string.Equals(
-                        existing.MessageId,
-                        message.MessageId,
-                        StringComparison.Ordinal));
+            message.IsDeleted = true;
+            message.Text = "Message deleted";
+            message.UpdatedAt = DateTime.UtcNow;
+            var deletedIndex = _messages.FindIndex(
+                existing => string.Equals(existing.MessageId, message.MessageId, StringComparison.Ordinal));
+            if (deletedIndex >= 0)
+                _messages[deletedIndex] = message;
 
             await MainThread.InvokeOnMainThreadAsync(RenderMessages);
         }
@@ -2999,7 +3069,21 @@ DateTime? updatedAt =
                             _branchId.ToString(),
 
                         organizationalLevel:
-                            "Branch");
+                            "Branch",
+
+                        replyToMessageId:
+                            _replyingTo?.MessageId,
+
+                        replyToSenderName:
+                            _replyingTo?.SenderName,
+
+                        replyToPreview:
+                            _replyingTo?.IsDeleted == true
+                                ? "Message deleted"
+                                : Shorten(_replyingTo?.Text ?? string.Empty));
+
+            _replyingTo = null;
+            ReplyPreviewLayout.IsVisible = false;
 
             if (createdMessage == null ||
                 string.IsNullOrWhiteSpace(
@@ -3445,6 +3529,11 @@ DateTime? updatedAt =
         public DateTime? UpdatedAt { get; set; }
 
         public string Status { get; set; } = "sent";
+        public bool IsDeleted { get; set; }
+        public bool IsEdited { get; set; }
+        public string? ReplyToMessageId { get; set; }
+        public string? ReplyToSenderName { get; set; }
+        public string? ReplyToPreview { get; set; }
         public byte[]? LocalPreviewBytes { get; set; }
         public FileResult? PendingFile { get; set; }
     }

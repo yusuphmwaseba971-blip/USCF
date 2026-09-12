@@ -1,4 +1,5 @@
 using Plugin.Firebase.CloudMessaging;
+using CCT_USCF.Models;
 
 namespace CCT_USCF.Pages;
 
@@ -17,9 +18,9 @@ public partial class HomePage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        _ = LoadDashboardAsync();
         _ = LoadBibleFeedAsync();
         _ = LoadNationalFeedAsync();
-        _ = RefreshUnreadCountAsync();
         _ = RegisterMessagingTokenAsync();
         ApplyAppearance();
     }
@@ -33,16 +34,115 @@ public partial class HomePage : ContentPage
         _appearance.AppearanceChanged -= OnAppearanceChanged;
     }
 
-    private async Task RefreshUnreadCountAsync()
+    private async Task LoadDashboardAsync()
+    {
+        await Task.WhenAll(
+            LoadUserContextAsync(),
+            LoadAnnouncementsAsync(),
+            LoadPrayerSummaryAsync(),
+            LoadActivitySummaryAsync());
+    }
+
+    private async Task LoadUserContextAsync()
+    {
+        try
+        {
+            var user = MauiProgram.CurrentUser ??
+                await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
+
+            if (user is null)
+            {
+                GreetingLabel.Text = GetGreeting("WELCOME BACK");
+                UserNameLabel.Text = "Your USCF community is active today.";
+                ChurchContextLabel.Text = "Sign in to see your church context.";
+                MyChurchLabel.Text = "Church context unavailable";
+                return;
+            }
+
+            MauiProgram.SetCurrentUser(user);
+            var displayName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
+            GreetingLabel.Text = GetGreeting(displayName);
+            UserNameLabel.Text = $"Good to see you, {displayName}.";
+            var context = FirstNonEmpty(user.Branch, user.District, user.Region, user.Organization);
+            ChurchContextLabel.Text = string.IsNullOrWhiteSpace(context)
+                ? "Your USCF community is active today."
+                : context;
+            MyChurchLabel.Text = string.IsNullOrWhiteSpace(context) ? "USCF community" : context;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[HOME_PROFILE] {ex}");
+        }
+    }
+
+    private async Task LoadAnnouncementsAsync()
     {
         try
         {
             var service = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.ChurchAnnouncementService>();
-            var count = await service.GetUnreadCountAsync();
+            var notifications = await service.GetNotificationsAsync();
+            var count = notifications.Count(notification => !notification.IsRead);
             UnreadBadge.IsVisible = count > 0;
             UnreadCountLabel.Text = count > 99 ? "99+" : count.ToString();
+            AnnouncementsCountLabel.Text = count.ToString();
+
+            var latest = notifications.OrderByDescending(notification => notification.CreatedAtUtc).FirstOrDefault();
+            if (latest is not null)
+            {
+                LatestAnnouncementTitleLabel.Text = latest.Title;
+                LatestAnnouncementMessageLabel.Text = latest.Message;
+                LatestAnnouncementMetaLabel.Text =
+                    $"{latest.CreatedAtUtc.ToLocalTime():g}  ·  View announcement  ›";
+            }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"RefreshUnreadCountAsync error: {ex}"); }
+        catch (Exception ex)
+        {
+            AnnouncementsCountLabel.Text = "—";
+            LatestAnnouncementTitleLabel.Text = "Announcements temporarily unavailable";
+            LatestAnnouncementMessageLabel.Text = "Please try again later.";
+            System.Diagnostics.Debug.WriteLine($"[HOME_ANNOUNCEMENTS] {ex}");
+        }
+    }
+
+    private async Task LoadPrayerSummaryAsync()
+    {
+        try
+        {
+            var service = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.PrayerService>();
+            var prayers = await service.GetInitialPrayersAsync();
+            PrayerCountLabel.Text = prayers.Count.ToString();
+            var prayer = prayers.FirstOrDefault();
+            PrayerPreviewLabel.Text = prayer is null
+                ? "No prayer requests are available right now."
+                : $"“{TrimForPreview(prayer.Content)}”";
+        }
+        catch (Exception ex)
+        {
+            PrayerCountLabel.Text = "—";
+            PrayerPreviewLabel.Text = "Prayer requests temporarily unavailable.";
+            System.Diagnostics.Debug.WriteLine($"[HOME_PRAYER] {ex}");
+        }
+    }
+
+    private async Task LoadActivitySummaryAsync()
+    {
+        try
+        {
+            var service = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.CommunityService>();
+            var events = await service.GetNationalEventsAsync();
+            ActivityCountLabel.Text = events.Count.ToString();
+            EventsCountLabel.Text = events.Count.ToString();
+            EventsPreviewLabel.Text = events.Count == 0
+                ? "No upcoming church activity available."
+                : $"{events.Count} community activities available. Open Events to view them.";
+        }
+        catch (Exception ex)
+        {
+            ActivityCountLabel.Text = "—";
+            EventsCountLabel.Text = "—";
+            EventsPreviewLabel.Text = "Church activity temporarily unavailable.";
+            System.Diagnostics.Debug.WriteLine($"[HOME_ACTIVITY] {ex}");
+        }
     }
 
     private async void OpenNotifications(object? sender, TappedEventArgs e)
@@ -158,6 +258,15 @@ public partial class HomePage : ContentPage
         await Shell.Current.GoToAsync(nameof(ProfilePage));
     }
 
+    private async void OpenChurch(object? sender, TappedEventArgs e)
+        => await Shell.Current.GoToAsync(nameof(ChurchGroupSelectionPage));
+
+    private async void OpenChurchButton(object? sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(ChurchGroupSelectionPage));
+
+    private async void OpenPrayerButton(object? sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(PrayerPage));
+
     private async void OpenNotificationsButton(object? sender, EventArgs e)
         => await OpenNotificationsAsync();
 
@@ -181,5 +290,25 @@ public partial class HomePage : ContentPage
         SemanticProperties.SetDescription(
             ShortcutButton,
             _shortcutsOpen ? "Close quick shortcuts" : "Open quick shortcuts");
+    }
+
+    private static string GetGreeting(string name)
+    {
+        var greeting = DateTime.Now.Hour switch
+        {
+            < 12 => "GOOD MORNING",
+            < 18 => "GOOD AFTERNOON",
+            _ => "GOOD EVENING"
+        };
+        return $"{greeting}, {name.ToUpperInvariant()} 👋";
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+
+    private static string TrimForPreview(string content)
+    {
+        var normalized = content.Trim();
+        return normalized.Length <= 140 ? normalized : $"{normalized[..137]}...";
     }
 }

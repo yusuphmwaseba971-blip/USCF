@@ -91,6 +91,13 @@ public string SenderUid { get; set; } = string.Empty;
 
             [Indexed]
             public DateTime CreatedAt { get; set; }
+
+            public bool IsDeleted { get; set; }
+            public DateTime? DeletedAt { get; set; }
+            public bool IsEdited { get; set; }
+            public string ReplyToMessageId { get; set; } = string.Empty;
+            public string ReplyToSenderName { get; set; } = string.Empty;
+            public string ReplyToPreview { get; set; } = string.Empty;
         }
 
         // ============================================================
@@ -255,7 +262,31 @@ var migrations = new Dictionary<string, string>
 
     ["UserUid"] =
         "ALTER TABLE community_message_cache " +
-        "ADD COLUMN UserUid TEXT NOT NULL DEFAULT '';"
+        "ADD COLUMN UserUid TEXT NOT NULL DEFAULT '';",
+
+    ["IsDeleted"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN IsDeleted INTEGER NOT NULL DEFAULT 0;",
+
+    ["DeletedAt"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN DeletedAt TEXT NULL;",
+
+    ["IsEdited"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN IsEdited INTEGER NOT NULL DEFAULT 0;",
+
+    ["ReplyToMessageId"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN ReplyToMessageId TEXT NOT NULL DEFAULT '';",
+
+    ["ReplyToSenderName"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN ReplyToSenderName TEXT NOT NULL DEFAULT '';",
+
+    ["ReplyToPreview"] =
+        "ALTER TABLE community_message_cache " +
+        "ADD COLUMN ReplyToPreview TEXT NOT NULL DEFAULT '';"
 };
 
                 foreach (var migration in migrations)
@@ -377,6 +408,13 @@ MessageType =
                 UpdatedAt =
                     null,
 
+                IsDeleted = cached.IsDeleted,
+                DeletedAt = cached.DeletedAt,
+                IsEdited = cached.IsEdited,
+                ReplyToMessageId = cached.ReplyToMessageId,
+                ReplyToSenderName = cached.ReplyToSenderName,
+                ReplyToPreview = cached.ReplyToPreview,
+
                 ReadAt =
                     null
             };
@@ -471,7 +509,14 @@ SenderUid =
                     message.Duration,
 
                 CreatedAt =
-                    createdAt
+                    createdAt,
+
+                IsDeleted = message.IsDeleted,
+                DeletedAt = message.DeletedAt,
+                IsEdited = message.IsEdited,
+                ReplyToMessageId = message.ReplyToMessageId ?? string.Empty,
+                ReplyToSenderName = message.ReplyToSenderName ?? string.Empty,
+                ReplyToPreview = message.ReplyToPreview ?? string.Empty
             };
         }
 
@@ -706,6 +751,14 @@ SenderUid =
                     "[BRANCH_CHAT_DIAGNOSTIC] " +
                     $"CacheReturnedCount={cachedMessages.Count}, " +
                     $"CommunityId={normalizedGroupId}");
+
+                // A populated cache is the source for normal page opens.
+                // Pull-to-refresh owns incremental network synchronization;
+                // reopening the page must not download the full history again.
+                if (cachedMessages.Count > 0)
+                {
+                    return cachedMessages;
+                }
 
                 var remoteMessages = await GetGroupMessagesAsync(normalizedGroupId, safeLimit);
 
@@ -1156,7 +1209,10 @@ SenderUid =
                 string? fileName = null,
                 long fileSize = 0,
                 double duration = 0,
-                string? clientMessageId = null)
+                string? clientMessageId = null,
+                string? replyToMessageId = null,
+                string? replyToSenderName = null,
+                string? replyToPreview = null)
         {
             if (string.IsNullOrWhiteSpace(communityId))
             {
@@ -1325,7 +1381,10 @@ SenderUid =
                             thumbnailUrl = thumbnailUrl?.Trim(),
                             fileName = fileName?.Trim(),
                             fileSize = Math.Max(0, fileSize),
-                            duration = Math.Max(0, duration)
+                            duration = Math.Max(0, duration),
+                            replyToMessageId,
+                            replyToSenderName,
+                            replyToPreview
                         });
 
                 System.Diagnostics.Debug.WriteLine(
@@ -1444,82 +1503,19 @@ SenderUid =
 
             try
             {
-                var document =
-                    await _appwriteService.Databases.GetDocument(
-                        databaseId:
-                            AppwriteService.DatabaseId,
-
-                        collectionId:
-                            CommunityMessagesCollectionId,
-
-                        documentId:
-                            normalizedMessageId);
-
-                var data =
-                    document.Data ??
-                    new Dictionary<string, object?>();
-
-                var senderUid =
-                    TryGetString(
-                        data,
-                        "sender_uid",
-                        string.Empty)
-                    ?? string.Empty;
-
-                if (!string.Equals(
-                        senderUid,
-                        currentFirebaseUid,
-                        StringComparison.Ordinal))
-                {
-                    throw new UnauthorizedAccessException(
-                        "You are not authorized to edit this message.");
-                }
-
-                var updatedAt =
-                    DateTime.UtcNow;
-
                 var updated =
-                    await _appwriteService.Databases.UpdateDocument(
-                        databaseId:
-                            AppwriteService.DatabaseId,
+                    await SendAuthorizedCommunityApiAsync<CommunityMessage>(
+                        HttpMethod.Patch,
+                        $"api/community/messages/group/{Uri.EscapeDataString(normalizedMessageId)}",
+                        new { content = trimmedContent });
 
-                        collectionId:
-                            CommunityMessagesCollectionId,
-
-                        documentId:
-                            normalizedMessageId,
-
-                        data:
-                            new Dictionary<string, object?>
-                            {
-                                ["content"] =
-                                    trimmedContent,
-
-                                ["updated_at"] =
-                                    updatedAt.ToString("O")
-                            },
-
-                        permissions:
-                            null,
-
-                        transactionId:
-                            null);
-
-                var result =
-                    MapCommunityDocument(updated);
-
-                // ----------------------------------------------------
-                // Update local cache immediately.
-                // ----------------------------------------------------
-
-                await CacheCommunityMessageAsync(
-                    result);
+                await CacheCommunityMessageAsync(updated);
 
                 System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_COMMUNITY_MESSAGE] UPDATE SUCCESS: " +
                     normalizedMessageId);
 
-                return result;
+                return updated;
             }
             catch (UnauthorizedAccessException)
             {
@@ -1575,56 +1571,12 @@ SenderUid =
 
             try
             {
-                var document =
-                    await _appwriteService.Databases.GetDocument(
-                        databaseId:
-                            AppwriteService.DatabaseId,
+                var deleted =
+                    await SendAuthorizedCommunityApiAsync<CommunityMessage>(
+                        HttpMethod.Delete,
+                        $"api/community/messages/group/{Uri.EscapeDataString(normalizedMessageId)}");
 
-                        collectionId:
-                            CommunityMessagesCollectionId,
-
-                        documentId:
-                            normalizedMessageId);
-
-                var data =
-                    document.Data ??
-                    new Dictionary<string, object?>();
-
-                var senderUid =
-                    TryGetString(
-                        data,
-                        "sender_uid",
-                        string.Empty)
-                    ?? string.Empty;
-
-                if (!string.Equals(
-                        senderUid,
-                        currentFirebaseUid,
-                        StringComparison.Ordinal))
-                {
-                    throw new UnauthorizedAccessException(
-                        "You are not authorized to delete this message.");
-                }
-
-                await _appwriteService.Databases.DeleteDocument(
-                    databaseId:
-                        AppwriteService.DatabaseId,
-
-                    collectionId:
-                        CommunityMessagesCollectionId,
-
-                    documentId:
-                        normalizedMessageId,
-
-                    transactionId:
-                        null);
-
-                // ----------------------------------------------------
-                // Remove from local cache.
-                // ----------------------------------------------------
-
-                await DeleteCachedCommunityMessageAsync(
-                    normalizedMessageId);
+                await CacheCommunityMessageAsync(deleted);
 
                 System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_COMMUNITY_MESSAGE] DELETE SUCCESS: " +
@@ -2712,6 +2664,13 @@ var appwriteTeamId =
                         "$updatedAt");
             }
 
+            var isDeleted =
+                TryGetBool(data, "is_deleted");
+            var deletedAt =
+                TryGetNullableDateTime(data, "deleted_at");
+            var isEdited =
+                TryGetBool(data, "is_edited");
+
             return new CommunityMessage
             {
                 Id =
@@ -2786,7 +2745,14 @@ ConversationId =
                     "sent",
 
                 ReadAt =
-                    null
+                    null,
+
+                IsDeleted = isDeleted,
+                DeletedAt = deletedAt,
+                IsEdited = isEdited,
+                ReplyToMessageId = TryGetString(data, "reply_to_message_id", null),
+                ReplyToSenderName = TryGetString(data, "reply_to_sender_name", null),
+                ReplyToPreview = TryGetString(data, "reply_to_preview", null)
             };
         }
 
@@ -3439,6 +3405,24 @@ ConversationId =
         // ============================================================
         // LONG HELPER
         // ============================================================
+
+        private static bool
+            TryGetBool(
+                Dictionary<string, object?> data,
+                string key)
+        {
+            if (!data.TryGetValue(key, out var value) || value is null)
+            {
+                return false;
+            }
+
+            if (value is bool booleanValue)
+            {
+                return booleanValue;
+            }
+
+            return bool.TryParse(Convert.ToString(value), out var parsed) && parsed;
+        }
 
         private static long
             TryGetLong(
