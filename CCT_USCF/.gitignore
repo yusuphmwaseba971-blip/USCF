@@ -1,3 +1,5 @@
 
 # Firebase Admin SDK private credential
 Services/firebase-adminsdk.json
+
+node_modules/
