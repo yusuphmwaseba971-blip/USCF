@@ -160,4 +160,35 @@ public partial class SettingsPage : ContentPage
             SaveButton.IsEnabled = true;
         }
     }
+
+    private async void OnDeleteAccountClicked(object sender, EventArgs e)
+    {
+        var confirmed = await DisplayAlert(
+            "Delete account?",
+            "This permanently deletes your Firebase account and CCT-USCF Firestore profile. This action cannot be undone.",
+            "Delete account",
+            "Cancel");
+
+        if (!confirmed)
+            return;
+
+        DeleteAccountButton.IsEnabled = false;
+        try
+        {
+            await _auth.DeleteAccountAsync();
+            await DisplayAlert("Account deleted", "Your account and profile have been deleted.", "OK");
+            await Shell.Current.GoToAsync("//home");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert(
+                "Account deletion",
+                ex.Message,
+                "OK");
+        }
+        finally
+        {
+            DeleteAccountButton.IsEnabled = true;
+        }
+    }
 }

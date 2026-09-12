@@ -15,6 +15,7 @@ public partial class RegisterPage : ContentPage
     private bool _loadingRegions;
     private bool _loadingDistricts;
     private bool _loadingBranches;
+    private bool _consentAccepted;
 
     public RegisterPage()
     {
@@ -68,6 +69,52 @@ public partial class RegisterPage : ContentPage
         EventArgs e)
     {
         UpdateRoleUI();
+    }
+
+    private async void OnWhyClicked(object sender, EventArgs e)
+    {
+        var topic = (sender as Button)?.CommandParameter as string ?? string.Empty;
+        var (title, explanation) = topic switch
+        {
+            "Full name" => ("Why do we ask for your name?", "Your name helps identify your USCF profile and allows other authorized members to recognize you within appropriate CCT-USCF community features."),
+            "Username" => ("Why do we ask for a username?", "Your username provides a convenient identity within CCT-USCF and can help distinguish your account from other members."),
+            "Email" => ("Why do we ask for your email?", "Your email is used for account authentication, account-related communication and account recovery where supported."),
+            "Phone number" => ("Why do we ask for your phone number?", "Your phone number helps maintain accurate member contact information and may support account/profile-related communication where the application provides such functionality."),
+            "Role" => ("Why do we ask for your role?", "Your role helps CCT-USCF provide the appropriate experience and apply the correct organizational permissions."),
+            "USCF location" => ("Why do we ask for your location within USCF?", "This information connects your account to the appropriate USCF organizational structure and allows the application to provide relevant branch, district, regional and community features."),
+            _ => ("Why do we ask for leadership information?", "Leadership information helps CCT-USCF determine which organizational responsibilities and leadership features are appropriate for your account.")
+        };
+
+        await DisplayAlert(title, explanation, "Got it");
+    }
+
+    private void OnConsentChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        _consentAccepted = e.Value;
+        CreateAccountButton.IsEnabled = e.Value && !LoadingIndicator.IsRunning;
+    }
+
+    private void OnPasswordToggleClicked(object sender, EventArgs e)
+    {
+        if ((sender as Button)?.CommandParameter is not string field)
+            return;
+
+        var entry = string.Equals(field, "password", StringComparison.OrdinalIgnoreCase)
+            ? PasswordEntry
+            : ConfirmPasswordEntry;
+        entry.IsPassword = !entry.IsPassword;
+        if (sender is Button button)
+            button.Text = entry.IsPassword ? "Show" : "Hide";
+    }
+
+    private async void OnPrivacyPolicyClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(PrivacyPolicyPage));
+    }
+
+    private async void OnTermsClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(TermsOfUsePage));
     }
 
     private bool RequiresLocationSelection()
@@ -566,6 +613,12 @@ public partial class RegisterPage : ContentPage
         if (LoadingIndicator.IsRunning)
             return;
 
+        if (!_consentAccepted)
+        {
+            ShowError("Please accept the Terms of Use and acknowledge the Privacy Policy before creating your account.");
+            return;
+        }
+
         MessageLabel.IsVisible = false;
 
         var fullName =
@@ -808,7 +861,7 @@ public partial class RegisterPage : ContentPage
                 $"[REGISTER] Account creation failed: {ex}");
 
             ShowError(
-                ex.Message);
+                GetRegistrationErrorMessage(ex));
         }
         finally
         {
@@ -851,6 +904,30 @@ public partial class RegisterPage : ContentPage
         });
     }
 
+    private static string GetRegistrationErrorMessage(Exception ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        if (message.Contains("already registered", StringComparison.OrdinalIgnoreCase) &&
+            message.Contains("email", StringComparison.OrdinalIgnoreCase))
+            return "This email is already registered.";
+        if (message.Contains("already registered", StringComparison.OrdinalIgnoreCase) &&
+            message.Contains("username", StringComparison.OrdinalIgnoreCase))
+            return "This username is already registered.";
+        if (message.Contains("valid email", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("malformed email", StringComparison.OrdinalIgnoreCase))
+            return "Please enter a valid email address.";
+        if (message.Contains("weak", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("at least 6", StringComparison.OrdinalIgnoreCase))
+            return "Password must be at least 6 characters.";
+        if (message.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+            return "We couldn't connect to the service. Please check your connection and try again.";
+        if (message.Contains("required", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("do not match", StringComparison.OrdinalIgnoreCase))
+            return message;
+        return "We couldn't create your account. Please check your information and try again.";
+    }
+
     // =========================================================
     // LOADING
     // =========================================================
@@ -874,7 +951,7 @@ public partial class RegisterPage : ContentPage
             LoadingIndicator.IsRunning = loading;
 
             CreateAccountButton.IsEnabled =
-                !loading;
+                !loading && _consentAccepted;
 
             CreateAccountButton.Text =
                 loading

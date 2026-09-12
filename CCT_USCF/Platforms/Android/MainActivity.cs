@@ -2,6 +2,7 @@ using Android.App;
 using Android.Content.PM;
 using Android.OS;
 using Plugin.Firebase.AppCheck;
+using Plugin.Firebase.Core.Platforms.Android;
 
 namespace CCT_USCF;
 
@@ -20,8 +21,9 @@ public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
-        base.OnCreate(savedInstanceState);
         CrossFirebaseAppCheck.Configure(AppCheckOptions.PlayIntegrity);
+        CrossFirebase.Initialize(this, () => this);
+        base.OnCreate(savedInstanceState);
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&
             CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
         {

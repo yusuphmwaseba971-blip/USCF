@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
 
 using Plugin.Firebase.Auth;
-using Plugin.Firebase.AppCheck;
 using Plugin.Firebase.Firestore;
 
 namespace CCT_USCF;
@@ -62,11 +61,6 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
-#if ANDROID
-        // Register the enforced provider before any Firebase service is resolved.
-        CrossFirebaseAppCheck.Configure(AppCheckOptions.PlayIntegrity);
-#endif
-
         var builder = MauiApp.CreateBuilder();
 
         // =====================================================

@@ -3,187 +3,188 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.RegisterPage"
-    Title="Create USCF Account">
+    Title="Create USCF Account"
+    BackgroundColor="#F4F8F5">
+
+    <ContentPage.Resources>
+        <Style x:Key="LinkButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="TextColor" Value="#1A4D3A" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="4,8" />
+        </Style>
+    </ContentPage.Resources>
 
     <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="14">
+        <VerticalStackLayout Padding="20,18,20,36" Spacing="18">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="CCT-USCF" FontSize="13" FontAttributes="Bold"
+                       CharacterSpacing="2" TextColor="#1A4D3A" />
+                <Label Text="Create your USCF account" FontSize="30"
+                       FontAttributes="Bold" TextColor="#173B28" />
+                <Label Text="A trusted home for faith, fellowship and service."
+                       FontSize="14" TextColor="#52645B" />
+            </VerticalStackLayout>
 
-            <Label
-                Text="Create Your USCF Account"
-                FontSize="26"
-                FontAttributes="Bold"
-                HorizontalOptions="Center"
-                TextColor="#009E2C"/>
+            <Border Padding="16" BackgroundColor="#EAF2ED" Stroke="#CFE2D5"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                <Label Text="Your account connects you with the right USCF community and features. We only ask for information needed to operate the app."
+                       FontSize="13" TextColor="#315541" LineBreakMode="WordWrap" />
+            </Border>
 
-            <Label
-                Text="Join the University Students' Christian Fellowship"
-                FontSize="14"
-                HorizontalOptions="Center"
-                HorizontalTextAlignment="Center"/>
+            <VerticalStackLayout Spacing="12">
+                <Label Text="PERSONAL INFORMATION" FontSize="12" FontAttributes="Bold"
+                       CharacterSpacing="1.5" TextColor="#1A4D3A" />
+                <Border Padding="14,4" BackgroundColor="White" Stroke="#DCE8DF"
+                        StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                        <Entry x:Name="FullNameEntry" Placeholder="Full name" />
+                        <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Full name"
+                                Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                SemanticProperties.Description="Why CCT-USCF asks for your full name" />
+                        <Entry Grid.Row="1" x:Name="UsernameEntry" Placeholder="Username" />
+                        <Button Grid.Row="1" Grid.Column="1" Text="Why do we ask?" CommandParameter="Username"
+                                Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                SemanticProperties.Description="Why CCT-USCF asks for your username" />
+                        <Entry Grid.Row="2" x:Name="PhoneEntry" Placeholder="Phone number"
+                               Keyboard="Telephone" />
+                        <Button Grid.Row="2" Grid.Column="1" Text="Why do we ask?" CommandParameter="Phone number"
+                                Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                SemanticProperties.Description="Why CCT-USCF asks for your phone number" />
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
 
-            <!-- ACCOUNT TYPE -->
+            <VerticalStackLayout Spacing="12">
+                <Label Text="ACCOUNT INFORMATION" FontSize="12" FontAttributes="Bold"
+                       CharacterSpacing="1.5" TextColor="#1A4D3A" />
+                <Border Padding="14,4" BackgroundColor="White" Stroke="#DCE8DF"
+                        StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+                        <Entry x:Name="EmailEntry" Placeholder="Email address" Keyboard="Email" />
+                        <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Email"
+                                Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                SemanticProperties.Description="Why CCT-USCF asks for your email" />
+                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                            <Entry x:Name="PasswordEntry" Placeholder="Password" IsPassword="True" />
+                            <Button Grid.Column="1" Text="Show" Clicked="OnPasswordToggleClicked"
+                                    CommandParameter="password" Style="{StaticResource LinkButtonStyle}"
+                                    SemanticProperties.Description="Show or hide password" />
+                        </Grid>
+                        <Label Grid.Row="2" Grid.ColumnSpan="2" Text="Use at least 6 characters. Choose a password you do not use elsewhere."
+                               FontSize="12" TextColor="#64756B" />
+                        <Grid Grid.Row="3" ColumnDefinitions="*,Auto">
+                            <Entry x:Name="ConfirmPasswordEntry" Placeholder="Confirm password" IsPassword="True" />
+                            <Button Grid.Column="1" Text="Show" Clicked="OnPasswordToggleClicked"
+                                    CommandParameter="confirm" Style="{StaticResource LinkButtonStyle}"
+                                    SemanticProperties.Description="Show or hide password confirmation" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
 
-            <Label
-                Text="What type of USCF member are you?"
-                FontAttributes="Bold"
-                Margin="0,15,0,0"/>
+            <VerticalStackLayout Spacing="12">
+                <Label Text="USCF MEMBERSHIP &amp; ORGANIZATION" FontSize="12" FontAttributes="Bold"
+                       CharacterSpacing="1.5" TextColor="#1A4D3A" />
+                <Border Padding="14" BackgroundColor="White" Stroke="#DCE8DF"
+                        StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Picker x:Name="RolePicker" Title="Select account type"
+                                    SelectedIndexChanged="OnRoleChanged">
+                                <Picker.Items>
+                                    <x:String>USCF Member</x:String>
+                                    <x:String>USCF Leader</x:String>
+                                    <x:String>Pastor</x:String>
+                                </Picker.Items>
+                            </Picker>
+                            <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Role"
+                                    Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                    SemanticProperties.Description="Why CCT-USCF asks for your role" />
+                        </Grid>
 
-            <Picker
-                x:Name="RolePicker"
-                Title="Select account type"
-                SelectedIndexChanged="OnRoleChanged">
+                        <VerticalStackLayout x:Name="LeadershipSection" IsVisible="False" Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Picker x:Name="LevelPicker" Title="Select leadership level"
+                                        SelectedIndexChanged="OnLevelChanged">
+                                    <Picker.Items>
+                                        <x:String>National</x:String>
+                                        <x:String>Regional</x:String>
+                                        <x:String>District</x:String>
+                                        <x:String>Branch / Local</x:String>
+                                    </Picker.Items>
+                                </Picker>
+                                <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Leadership information"
+                                        Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                        SemanticProperties.Description="Why CCT-USCF asks for leadership information" />
+                            </Grid>
+                            <Grid x:Name="DutySection" IsVisible="False" ColumnDefinitions="*,Auto">
+                                <Picker x:Name="DutyPicker" Title="Select leadership duty"
+                                        SelectedIndexChanged="OnDutyChanged">
+                                    <Picker.Items>
+                                        <x:String>Chairman</x:String>
+                                        <x:String>Other Leader</x:String>
+                                    </Picker.Items>
+                                </Picker>
+                                <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Leadership information"
+                                        Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                        SemanticProperties.Description="Why CCT-USCF asks for leadership information" />
+                            </Grid>
+                        </VerticalStackLayout>
 
-                <Picker.Items>
-                    <x:String>USCF Member</x:String>
-                    <x:String>USCF Leader</x:String>
-                    <x:String>Pastor</x:String>
-                </Picker.Items>
+                        <VerticalStackLayout x:Name="LocationSection" Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Picker x:Name="RegionPicker" Title="Select region" />
+                                <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="USCF location"
+                                        Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
+                                        SemanticProperties.Description="Why CCT-USCF asks for USCF location" />
+                            </Grid>
+                            <Picker x:Name="DistrictPicker" Title="Select district" IsVisible="False" />
+                            <Picker x:Name="BranchPicker" Title="Select branch or local fellowship" IsVisible="False" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
 
-            </Picker>
-
-            <!-- BASIC INFORMATION -->
-
-            <Entry
-                x:Name="FullNameEntry"
-                Placeholder="Full Name"/>
-
-            <Entry
-                x:Name="UsernameEntry"
-                Placeholder="Username"/>
-
-            <Entry
-                x:Name="EmailEntry"
-                Placeholder="Email"
-                Keyboard="Email"/>
-
-            <Entry
-                x:Name="PhoneEntry"
-                Placeholder="Phone Number"
-                Keyboard="Telephone"/>
-
-            <Entry
-                x:Name="PasswordEntry"
-                Placeholder="Password"
-                IsPassword="True"/>
-
-            <Entry
-                x:Name="ConfirmPasswordEntry"
-                Placeholder="Confirm Password"
-                IsPassword="True"/>
-
-            <!-- LEADER / PASTOR LEVEL -->
-
-            <VerticalStackLayout
-                x:Name="LeadershipSection"
-                IsVisible="False"
-                Spacing="10">
-
-                <Label
-                    Text="Select your leadership level"
-                    FontAttributes="Bold"/>
-
-                <Picker
-                    x:Name="LevelPicker"
-                    Title="Select level"
-                    SelectedIndexChanged="OnLevelChanged">
-
-                    <Picker.Items>
-                        <x:String>National</x:String>
-                        <x:String>Regional</x:String>
-                        <x:String>District</x:String>
-                        <x:String>Branch / Local</x:String>
-                    </Picker.Items>
-
-                </Picker>
-
-                <VerticalStackLayout
-                    x:Name="DutySection"
-                    IsVisible="False"
-                    Spacing="10">
-
-                    <Label
-                        Text="What is your duty?"
-                        FontAttributes="Bold"/>
-
-                    <Picker
-                        x:Name="DutyPicker"
-                        Title="Select duty"
-                        SelectedIndexChanged="OnDutyChanged">
-
-                        <Picker.Items>
-                            <x:String>Chairman</x:String>
-                            <x:String>Other Leader</x:String>
-                        </Picker.Items>
-
-                    </Picker>
-
+            <Border Padding="16" BackgroundColor="#FFFFFF" Stroke="#DCE8DF"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Your privacy matters" FontSize="18" FontAttributes="Bold"
+                           TextColor="#173B28" />
+                    <Label Text="CCT-USCF collects the information needed to create and operate your account, connect you with the appropriate USCF organizational structure and provide application features."
+                           FontSize="13" TextColor="#52645B" LineBreakMode="WordWrap" />
+                    <HorizontalStackLayout Spacing="18">
+                        <Button Text="Read Privacy Policy" Clicked="OnPrivacyPolicyClicked"
+                                Style="{StaticResource LinkButtonStyle}" />
+                        <Button Text="Read Terms of Use" Clicked="OnTermsClicked"
+                                Style="{StaticResource LinkButtonStyle}" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                        <CheckBox x:Name="ConsentCheckBox" CheckedChanged="OnConsentChanged"
+                                  Color="#1A4D3A" />
+                        <Label Text="I have read and agree to the Terms of Use and acknowledge the Privacy Policy."
+                               FontSize="13" TextColor="#315541" VerticalTextAlignment="Center"
+                               LineBreakMode="WordWrap" />
+                    </HorizontalStackLayout>
                 </VerticalStackLayout>
+            </Border>
 
-            </VerticalStackLayout>
+            <Button x:Name="CreateAccountButton" Text="CREATE ACCOUNT"
+                    Clicked="OnCreateAccountClicked" IsEnabled="False"
+                    BackgroundColor="#1A4D3A" TextColor="White" CornerRadius="14"
+                    HeightRequest="54" FontAttributes="Bold" />
 
-            <!-- LOCATION -->
-
-            <VerticalStackLayout
-                x:Name="LocationSection"
-                IsVisible="True"
-                Spacing="10">
-
-                <Label
-                    Text="Your USCF Location"
-                    FontAttributes="Bold"/>
-
-                <Picker
-                    x:Name="RegionPicker"
-                    Title="Select Region"/>
-
-                <Picker
-                    x:Name="DistrictPicker"
-                    Title="Select District"
-                    IsVisible="False"/>
-
-                <Picker
-                    x:Name="BranchPicker"
-                    Title="Select Branch / Local Fellowship"
-                    IsVisible="False"/>
-
-            </VerticalStackLayout>
-
-            <Button
-                x:Name="CreateAccountButton"
-                Text="CREATE ACCOUNT"
-                Clicked="OnCreateAccountClicked"
-                BackgroundColor="#009E2C"
-                TextColor="White"
-                CornerRadius="10"
-                HeightRequest="52"/>
-
-            <HorizontalStackLayout HorizontalOptions="Center">
-
-                <Label
-                    Text="Already have an account?"
-                    VerticalOptions="Center"/>
-
-                <Button
-                    Text="Login"
-                    Clicked="OnLoginClicked"
-                    BackgroundColor="Transparent"
-                    TextColor="#009E2C"/>
-
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="4">
+                <Label Text="Already have an account?" TextColor="#52645B"
+                       VerticalTextAlignment="Center" />
+                <Button Text="Log in" Clicked="OnLoginClicked"
+                        Style="{StaticResource LinkButtonStyle}" />
             </HorizontalStackLayout>
 
-            <ActivityIndicator
-                x:Name="LoadingIndicator"
-                IsVisible="False"
-                IsRunning="False"
-                Color="#009E2C"/>
-
-            <Label
-                x:Name="MessageLabel"
-                TextColor="Red"
-                IsVisible="False"
-                HorizontalTextAlignment="Center"/>
-
+            <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False"
+                               IsRunning="False" Color="#1A4D3A" />
+            <Label x:Name="MessageLabel" TextColor="#B42318" IsVisible="False"
+                   HorizontalTextAlignment="Center" LineBreakMode="WordWrap" />
         </VerticalStackLayout>
     </ScrollView>
-
 </ContentPage>

@@ -273,6 +273,40 @@ public class AuthService
         }
     }
 
+    public async Task DeleteAccountAsync()
+    {
+        var firebaseUser = _auth.CurrentUser
+            ?? throw new InvalidOperationException("No signed-in account was found.");
+
+        var firebaseUid = firebaseUser.Uid;
+        if (string.IsNullOrWhiteSpace(firebaseUid))
+            throw new InvalidOperationException("The signed-in account could not be identified.");
+
+        try
+        {
+            await FirebaseInit.Initialized;
+
+            if (MauiProgram.Services.GetService<CommunityService>() is { } communityService)
+                await communityService.ClearCurrentUserCommunityCacheAsync();
+
+            await _firestore
+                .GetCollection("users")
+                .GetDocument(firebaseUid)
+                .DeleteDocumentAsync();
+
+            await firebaseUser.DeleteAsync();
+            await TokenStorage.ClearSessionAsync();
+            MauiProgram.SetCurrentUser(null, notify: true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FIREBASE AUTH] Account deletion failed: {ex.GetType().Name}");
+            throw new InvalidOperationException(
+                "We couldn't delete your account completely. Please try again or use the account deletion request process.",
+                ex);
+        }
+    }
+
     // =========================================================
     // REGISTER
     // =========================================================

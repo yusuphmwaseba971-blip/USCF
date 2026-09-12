@@ -67,6 +67,14 @@ public partial class AppShell : Shell
             typeof(RegisterPage));
 
         Routing.RegisterRoute(
+            nameof(PrivacyPolicyPage),
+            typeof(PrivacyPolicyPage));
+
+        Routing.RegisterRoute(
+            nameof(TermsOfUsePage),
+            typeof(TermsOfUsePage));
+
+        Routing.RegisterRoute(
             "login",
             typeof(LoginPage));
 
@@ -196,6 +204,8 @@ public partial class AppShell : Shell
     private async void OnAssistantClicked(object? sender, EventArgs e)
     {
         if (!MauiProgram.Services.GetRequiredService<ICctAssistantService>().IsEnabled)
+            return;
+        if (Navigation.ModalStack.Any(page => page is CctAssistantPage))
             return;
         await Navigation.PushModalAsync(new CctAssistantPage());
     }

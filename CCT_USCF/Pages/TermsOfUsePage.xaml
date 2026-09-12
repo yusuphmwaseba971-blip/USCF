@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.TermsOfUsePage"
+             Title="Terms of Use"
+             BackgroundColor="#F4F8F5">
+    <ScrollView>
+        <VerticalStackLayout Padding="20,18,20,36" Spacing="16">
+            <Label Text="Terms of Use" FontSize="30" FontAttributes="Bold" TextColor="#173B28" />
+            <Border Padding="16" BackgroundColor="#FFF8E8" Stroke="#E9D8A6" StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                <Label Text="LEGAL CONTENT REQUIRES PROJECT-OWNER REVIEW"
+                       FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="#7A5A00" />
+            </Border>
+            <Border Padding="16" BackgroundColor="White" Stroke="#DCE8DF" StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Draft in-app structure" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
+                    <Label Text="CCT-USCF provides faith, fellowship, organizational and community features. Users are responsible for the accuracy of their account information, protecting their credentials and using the app respectfully and lawfully." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
+                    <Label Text="Community conduct, content ownership, moderation, availability, limitations of liability, governing law, age requirements, account suspension and dispute terms require project-owner and legal confirmation before these terms are treated as final." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
+                    <Label Text="No legal contact address, support URL, effective date or organization details were found in the codebase. Those values must be supplied by the project owner rather than invented by the app." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

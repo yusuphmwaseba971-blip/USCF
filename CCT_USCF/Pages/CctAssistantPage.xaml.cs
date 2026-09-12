@@ -136,8 +136,16 @@ public partial class CctAssistantPage : ContentPage
     private void OnDismissActionClicked(object? sender, EventArgs e) =>
         ActionLayout.IsVisible = false;
 
-    private async void OnCloseClicked(object? sender, EventArgs e)
+    private async void OnOutsideTapped(object? sender, TappedEventArgs e) =>
+        await CloseAsync();
+
+    private async void OnCloseClicked(object? sender, EventArgs e) =>
+        await CloseAsync();
+
+    private async Task CloseAsync()
     {
+        if (Navigation.ModalStack.Count == 0)
+            return;
         await Panel.TranslateTo(380, 0, 180, Easing.CubicIn);
         await Navigation.PopModalAsync();
     }

@@ -32,6 +32,20 @@
 
             <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
 
+            <Border Padding="14" BackgroundColor="#FFF5F4" Stroke="#F2C8C5"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 14">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Delete account" FontSize="18" FontAttributes="Bold"
+                           TextColor="#A12622" />
+                    <Label Text="This permanently deletes your Firebase account and CCT-USCF Firestore profile. This action cannot be undone."
+                           FontSize="13" TextColor="#7A3B38" LineBreakMode="WordWrap" />
+                    <Button x:Name="DeleteAccountButton" Text="Delete my account"
+                            Clicked="OnDeleteAccountClicked"
+                            BackgroundColor="#A12622" TextColor="White"
+                            CornerRadius="10" HeightRequest="48" />
+                </VerticalStackLayout>
+            </Border>
+
             <Label Text="USCF Assistance" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
             <Frame BackgroundColor="White" Padding="14">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">

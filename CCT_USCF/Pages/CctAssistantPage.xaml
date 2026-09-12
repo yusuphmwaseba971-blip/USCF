@@ -6,8 +6,16 @@
     BackgroundColor="#55000000"
     Padding="16"
     Title="USCF Assistance">
-    <Grid HorizontalOptions="End" Padding="0,24,0,24">
+    <Grid x:Name="Overlay" ColumnDefinitions="*,Auto"
+          HorizontalOptions="Fill" Padding="0,24,0,24">
+        <BoxView Grid.Column="0" BackgroundColor="Transparent">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnOutsideTapped" />
+            </BoxView.GestureRecognizers>
+        </BoxView>
         <Border x:Name="Panel"
+                Grid.Column="1"
+                HorizontalOptions="End"
                 BackgroundColor="#D91B2B35"
                 StrokeThickness="0"
                 StrokeShape="RoundRectangle 26"

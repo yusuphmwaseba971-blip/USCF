@@ -25,12 +25,33 @@ public sealed class FirebaseAiLogicService
             if (string.IsNullOrWhiteSpace(apiKey))
                 return new("USCF Assistance is not configured for this build. You can continue using CCT-USCF normally.");
 
+            string idToken;
+            try
+            {
+                idToken = await _auth.GetCurrentFirebaseIdTokenAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                return new("Please sign in again to use USCF Assistance.");
+            }
+
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
                 $"https://firebasevertexai.googleapis.com/v1beta/projects/{ProjectId}/locations/us-central1/publishers/google/models/{Model}:generateContent");
             request.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
-            var appCheckToken = await CrossFirebaseAppCheck.GetTokenAsync();
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
+
+            string appCheckToken;
+            try
+            {
+                appCheckToken = await CrossFirebaseAppCheck.GetTokenAsync();
+            }
+            catch (Java.Lang.Exception ex)
+            {
+                LogDiagnostic($"appCheckException={ex.GetType().FullName} message={ex.Message}");
+                return new("USCF Assistance could not verify this app. Please try again.");
+            }
+
             if (string.IsNullOrWhiteSpace(appCheckToken))
                 return new("USCF Assistance could not verify this app. Please try again.");
             request.Headers.TryAddWithoutValidation("X-Firebase-AppCheck", appCheckToken);
@@ -44,9 +65,13 @@ public sealed class FirebaseAiLogicService
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             LogDiagnostic($"status={(int)response.StatusCode} reason={response.ReasonPhrase} body={Sanitize(responseBody)}");
             if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    return new("USCF Assistance could not verify this app. Please try again.");
                 return new(response.StatusCode == System.Net.HttpStatusCode.Unauthorized
                     ? "Please sign in again to use USCF Assistance."
                     : "USCF Assistance is temporarily unavailable. Please try again.");
+            }
 
             using var document = JsonDocument.Parse(responseBody);
             var text = document.RootElement
