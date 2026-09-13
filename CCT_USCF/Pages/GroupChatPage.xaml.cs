@@ -23,6 +23,7 @@ namespace CCT_USCF.Pages;
 [QueryProperty(nameof(BranchId), "branchId")]
 public partial class GroupChatPage : ContentPage
 {
+    private readonly MediaViewerService _mediaViewer;
     // ============================================================
     // SERVICES
     // ============================================================
@@ -155,6 +156,7 @@ public partial class GroupChatPage : ContentPage
     public GroupChatPage()
     {
         InitializeComponent();
+        _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
 
         _auth =
             MauiProgram.Services
@@ -1235,8 +1237,7 @@ public partial class GroupChatPage : ContentPage
         tap.Tapped +=
             async (_, _) =>
             {
-                await OpenMediaAsync(
-                    message.MediaUrl);
+                await _mediaViewer.OpenMediaAsync(message.MediaUrl, "image", message.FileName);
             };
 
         image.GestureRecognizers.Add(
@@ -1294,8 +1295,7 @@ public partial class GroupChatPage : ContentPage
         button.Clicked +=
             async (_, _) =>
             {
-                await OpenMediaAsync(
-                    message.MediaUrl);
+                await _mediaViewer.OpenMediaAsync(message.MediaUrl, "video", message.FileName);
             };
 
         stack.Children.Add(
@@ -1366,8 +1366,7 @@ public partial class GroupChatPage : ContentPage
         button.Clicked +=
             async (_, _) =>
             {
-                await OpenMediaAsync(
-                    message.MediaUrl);
+                await _mediaViewer.OpenMediaAsync(message.MediaUrl, "audio", message.FileName);
             };
 
         stack.Children.Add(
@@ -1414,28 +1413,6 @@ public partial class GroupChatPage : ContentPage
     // ============================================================
     // OPEN MEDIA
     // ============================================================
-
-    private static async Task OpenMediaAsync(
-        string mediaUrl)
-    {
-        if (string.IsNullOrWhiteSpace(
-                mediaUrl))
-        {
-            return;
-        }
-
-        try
-        {
-            await Launcher.Default.OpenAsync(
-                new Uri(
-                    mediaUrl));
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Open media failed: {ex}");
-        }
-    }
 
     // ============================================================
     // SEND BUTTON

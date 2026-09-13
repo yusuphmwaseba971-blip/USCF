@@ -161,6 +161,8 @@ public static class MauiProgram
 // Community
 builder.Services.AddSingleton<
     CCT_USCF.Services.CommunityService>();
+builder.Services.AddSingleton<
+    CCT_USCF.Services.ChurchGroupService>();
 
 // Cloudinary
 builder.Services.AddSingleton<
@@ -169,6 +171,7 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<
     CCT_USCF.Services.BibleService>();
 builder.Services.AddSingleton<ChurchAnnouncementService>();
+builder.Services.AddSingleton<MediaViewerService>();
 builder.Services.AddSingleton<AppAppearanceService>();
 builder.Services.AddSingleton<FirebaseAiLogicService>(serviceProvider =>
     new FirebaseAiLogicService(new HttpClient(), serviceProvider.GetRequiredService<AuthService>()));

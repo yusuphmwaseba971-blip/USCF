@@ -6,6 +6,7 @@ namespace CCT_USCF.Pages;
 public partial class AnnouncementActivityPage : ContentPage
 {
     private readonly ChurchAnnouncementService _service;
+    private readonly MediaViewerService _mediaViewer;
     private IReadOnlyList<ChurchNotification> _all = [];
     private string _category = "NATIONAL";
     private readonly HashSet<Guid> _scheduledReminders = [];
@@ -14,6 +15,7 @@ public partial class AnnouncementActivityPage : ContentPage
     {
         InitializeComponent();
         _service = MauiProgram.Services.GetRequiredService<ChurchAnnouncementService>();
+        _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
     }
 
     protected override async void OnAppearing()
@@ -137,7 +139,13 @@ public partial class AnnouncementActivityPage : ContentPage
         if ((sender as Button)?.CommandParameter is ChurchNotification item &&
             !string.IsNullOrWhiteSpace(item.AttachmentUrl))
         {
-            await Launcher.Default.OpenAsync(item.AttachmentUrl);
+            await _mediaViewer.OpenMediaAsync(item.AttachmentUrl);
         }
+    }
+
+    private async void OnImageTapped(object? sender, EventArgs e)
+    {
+        if ((sender as Image)?.BindingContext is ChurchNotification item)
+            await _mediaViewer.OpenMediaAsync(item.ImageUrl, "image");
     }
 }

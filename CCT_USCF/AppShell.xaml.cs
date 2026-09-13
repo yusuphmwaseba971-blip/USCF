@@ -31,6 +31,7 @@ public partial class AppShell : Shell
         Routing.RegisterRoute(nameof(WorshipComposerPage), typeof(WorshipComposerPage));
         Routing.RegisterRoute(nameof(EventComposerPage), typeof(EventComposerPage));
         Routing.RegisterRoute(nameof(ResourceComposerPage), typeof(ResourceComposerPage));
+        Routing.RegisterRoute(nameof(MediaViewerPage), typeof(MediaViewerPage));
 
         Routing.RegisterRoute(
             nameof(SettingsPage),

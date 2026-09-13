@@ -151,6 +151,12 @@ const PRAYER_ACTIONS_TABLE_ID =
 const COMMUNITY_MESSAGES_COLLECTION_ID =
   process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
   "community_messages";
+const COMMUNITY_GROUPS_COLLECTION_ID =
+  process.env.APPWRITE_COMMUNITY_GROUPS_COLLECTION_ID ||
+  "community_groups";
+const COMMUNITY_GROUP_MEMBERS_COLLECTION_ID =
+  process.env.APPWRITE_COMMUNITY_GROUP_MEMBERS_COLLECTION_ID ||
+  "community_group_members";
 
 const CHURCH_ANNOUNCEMENTS_COLLECTION_ID =
   process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID ||
@@ -939,6 +945,20 @@ async function appwriteDatabaseRequest(path, method, body) {
 
 async function ensureChurchAnnouncementCollections() {
   const compatibilityCollections = {
+    [COMMUNITY_GROUPS_COLLECTION_ID]: {
+      string: [
+        ["group_name", 255], ["description", 2000], ["group_type", 64],
+        ["scope_type", 32], ["parent_group_id", 128], ["created_by_uid", 255],
+        ["created_at", 64]
+      ],
+      integer: ["region_id", "district_id", "branch_id"],
+      boolean: ["is_active"]
+    },
+    [COMMUNITY_GROUP_MEMBERS_COLLECTION_ID]: {
+      string: [["group_id", 128], ["user_uid", 255], ["role", 64], ["joined_at", 64]],
+      integer: [],
+      boolean: ["is_active"]
+    },
     [CHURCH_ANNOUNCEMENTS_COLLECTION_ID]: {
       string: [["title", 255], ["message", 2000], ["sender_uid", 255], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
       integer: ["region_id", "district_id", "branch_id"]
@@ -1491,6 +1511,169 @@ async function getUnreadChurchNotificationCount(req, log) {
  * GET GROUP MESSAGES
  * ============================================================
  */
+
+function normalizeScopeType(value) {
+  const scope = normalizeString(value).toUpperCase();
+  return ["NATIONAL", "REGIONAL", "DISTRICT", "BRANCH"].includes(scope)
+    ? scope
+    : "";
+}
+
+function canManageScope(profile, scopeType) {
+  const scope = normalizeScopeType(scopeType);
+  const leadershipValues = [
+    profile.role,
+    profile.leadershipLevel,
+    profile.leadershipDuty
+  ].map(value => normalizeString(value).toLowerCase());
+  const isLeader = leadershipValues.some(value =>
+    ["leader", "admin", "administrator", "chairman", "pastor", "priest", "coordinator"]
+      .some(token => value.includes(token))
+  );
+  if (!isLeader) return false;
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return profile.regionId !== null;
+  if (scope === "DISTRICT") return profile.districtId !== null;
+  if (scope === "BRANCH") return profile.branchId !== null;
+  return false;
+}
+
+function groupBelongsToProfile(group, profile) {
+  if (!group.is_active) return false;
+  const scope = normalizeScopeType(group.scope_type);
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return String(group.region_id ?? "") === String(profile.regionId ?? "");
+  if (scope === "DISTRICT") return String(group.district_id ?? "") === String(profile.districtId ?? "");
+  return String(group.branch_id ?? "") === String(profile.branchId ?? "");
+}
+
+function mapGroupDocument(document, profile, memberCount = 0) {
+  const data = document.data || document;
+  return {
+    groupId: document.$id || document.id || data.group_id,
+    groupName: data.group_name || "",
+    description: data.description || "",
+    groupType: data.group_type || "CUSTOM",
+    scopeType: data.scope_type || "BRANCH",
+    parentGroupId: data.parent_group_id || "",
+    regionId: parseOptionalInt(data.region_id),
+    districtId: parseOptionalInt(data.district_id),
+    branchId: parseOptionalInt(data.branch_id),
+    createdByUid: data.created_by_uid || "",
+    createdAt: data.created_at || null,
+    isActive: data.is_active !== false,
+    canManage: data.created_by_uid === profile.uid,
+    memberCount
+  };
+}
+
+async function listChurchGroups(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const requestedScope = normalizeScopeType(req.query?.scopeType);
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUPS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "limit", values: [500] }]
+  );
+  const groups = (rows.documents || [])
+    .filter(document => {
+      const data = document.data || document;
+      return (!requestedScope || normalizeScopeType(data.scope_type) === requestedScope) &&
+        groupBelongsToProfile(data, profile);
+    })
+    .map(document => mapGroupDocument(document, profile));
+  return { groups };
+}
+
+async function createChurchGroup(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const body = getRequestBody(req);
+  const name = normalizeString(body.name);
+  const description = normalizeString(body.description);
+  const groupType = normalizeString(body.groupType || "CUSTOM").toUpperCase();
+  const scopeType = normalizeScopeType(body.scopeType);
+
+  if (name.length < 2 || name.length > 120) {
+    throw announcementError("Group name must be between 2 and 120 characters.");
+  }
+  if (!scopeType || !canManageScope(profile, scopeType)) {
+    throw announcementError("You are not authorized to create a group in this scope.", 403);
+  }
+
+  const existing = await appwriteCollectionRequest(
+    COMMUNITY_GROUPS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "limit", values: [500] }]
+  );
+  const normalizedName = name.toLowerCase();
+  const duplicate = (existing.documents || []).some(document => {
+    const data = document.data || document;
+    return groupBelongsToProfile(data, profile) &&
+      normalizeScopeType(data.scope_type) === scopeType &&
+      normalizeString(data.group_name).toLowerCase() === normalizedName;
+  });
+  if (duplicate) {
+    throw announcementError("An active group with this name already exists in the selected scope.", 409);
+  }
+
+  const now = new Date().toISOString();
+  const groupId = randomUUID();
+  const data = {
+    group_name: name,
+    description: description.slice(0, 2000),
+    group_type: groupType.slice(0, 64),
+    scope_type: scopeType,
+    parent_group_id: normalizeString(body.parentGroupId),
+    region_id: profile.regionId,
+    district_id: profile.districtId,
+    branch_id: profile.branchId,
+    created_by_uid: profile.uid,
+    created_at: now,
+    is_active: true
+  };
+
+  try {
+    const document = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "POST",
+      "",
+      { documentId: groupId, data }
+    );
+    await appwriteCollectionRequest(
+      COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+      "POST",
+      "",
+      {
+        documentId: `${groupId}:${profile.uid}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 36),
+        data: {
+          group_id: groupId,
+          user_uid: profile.uid,
+          role: "administrator",
+          joined_at: now,
+          is_active: true
+        }
+      }
+    );
+    return mapGroupDocument(document, profile, 1);
+  } catch (error) {
+    try {
+      await appwriteCollectionRequest(
+        COMMUNITY_GROUPS_COLLECTION_ID,
+        "DELETE",
+        `/${encodeURIComponent(groupId)}`
+      );
+    } catch (rollbackError) {
+      log(`[CCT_GROUP_ROLLBACK_FAILED] group=${groupId} error=${rollbackError.message}`);
+    }
+    throw error;
+  }
+}
 
 async function listGroupMessages(
   req,
@@ -2398,6 +2581,27 @@ export default async ({
         await markChurchNotificationRead(req, log, decodeURIComponent(readNotificationMatch[1])),
         200
       );
+    }
+
+    /*
+     * ========================================================
+     * COMMUNITY GROUP REGISTRY ROUTE
+     * ========================================================
+     */
+
+    if (
+      route === "/api/community/groups" ||
+      route === "api/community/groups"
+    ) {
+      if (req.method === "GET") {
+        currentStage = "GET community groups";
+        return jsonResponse(res, await listChurchGroups(req, log), 200);
+      }
+      if (req.method === "POST") {
+        currentStage = "POST community group";
+        return jsonResponse(res, await createChurchGroup(req, log), 201);
+      }
+      return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
     }
 
     /*

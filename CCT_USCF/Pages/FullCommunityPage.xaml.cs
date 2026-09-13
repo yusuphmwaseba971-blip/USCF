@@ -8,6 +8,7 @@ public partial class FullCommunityPage : ContentPage
 {
     private readonly CommunityService _community;
     private readonly CloudinaryService _cloudinary;
+    private readonly MediaViewerService _mediaViewer;
     private FileResult? _attachment;
     private string? _attachmentType;
 
@@ -16,6 +17,7 @@ public partial class FullCommunityPage : ContentPage
         InitializeComponent();
         _community = MauiProgram.Services.GetRequiredService<CommunityService>();
         _cloudinary = MauiProgram.Services.GetRequiredService<CloudinaryService>();
+        _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
     }
 
     protected override async void OnAppearing() { base.OnAppearing(); await LoadFeedAsync(); }
@@ -34,7 +36,26 @@ public partial class FullCommunityPage : ContentPage
                 if (!string.IsNullOrWhiteSpace(location)) body.Children.Add(new Label { Text = location, FontSize = 12, TextColor = Colors.Gray });
                 if (!string.IsNullOrWhiteSpace(post.Title)) body.Children.Add(new Label { Text = post.Title, FontSize = 19, FontAttributes = FontAttributes.Bold });
                 if (!string.IsNullOrWhiteSpace(post.Content)) body.Children.Add(new Label { Text = post.Content });
-                if (!string.IsNullOrWhiteSpace(post.ImageUrl)) body.Children.Add(new Image { Source = post.ImageUrl, HeightRequest = 220, Aspect = Aspect.AspectFit });
+                if (!string.IsNullOrWhiteSpace(post.ImageUrl))
+                {
+                    var image = new Image { Source = post.ImageUrl, HeightRequest = 220, Aspect = Aspect.AspectFit };
+                    var tap = new TapGestureRecognizer();
+                    tap.Tapped += async (_, _) => await _mediaViewer.OpenMediaAsync(post.ImageUrl, "image");
+                    image.GestureRecognizers.Add(tap);
+                    body.Children.Add(image);
+                }
+                if (!string.IsNullOrWhiteSpace(post.VideoUrl))
+                {
+                    var video = new Button { Text = "▶ Play video", BackgroundColor = Color.FromArgb("#1E40AF"), TextColor = Colors.White };
+                    video.Clicked += async (_, _) => await _mediaViewer.OpenMediaAsync(post.VideoUrl, "video");
+                    body.Children.Add(video);
+                }
+                if (!string.IsNullOrWhiteSpace(post.AudioUrl))
+                {
+                    var audio = new Button { Text = "▶ Play audio", BackgroundColor = Color.FromArgb("#0F766E"), TextColor = Colors.White };
+                    audio.Clicked += async (_, _) => await _mediaViewer.OpenMediaAsync(post.AudioUrl, "audio");
+                    body.Children.Add(audio);
+                }
                 body.Children.Add(new Label { Text = $"{post.CreatedAtUtc.ToLocalTime():g}  •  ❤️ {post.LikeCount}  💬 {post.CommentCount}", FontSize = 12, TextColor = Colors.Gray });
                 var actions = new HorizontalStackLayout { Spacing = 8 };
                 var like = new Button { Text = post.LikedByCurrentUser ? "Unlike" : "Like", Padding = 10 };

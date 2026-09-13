@@ -1,5 +1,6 @@
 using Plugin.Firebase.CloudMessaging;
 using CCT_USCF.Models;
+using CCT_USCF.Services;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace CCT_USCF.Pages;
@@ -186,7 +187,19 @@ public partial class HomePage : ContentPage
                 if (!string.IsNullOrWhiteSpace(location)) stack.Children.Add(new Label { Text = location, FontSize = 12, TextColor = Colors.Gray });
                 if (!string.IsNullOrWhiteSpace(post.Title)) stack.Children.Add(new Label { Text = post.Title, FontAttributes = FontAttributes.Bold });
                 if (!string.IsNullOrWhiteSpace(post.Content)) stack.Children.Add(new Label { Text = post.Content });
-                if (!string.IsNullOrWhiteSpace(post.ImageUrl)) stack.Children.Add(new Image { Source = post.ImageUrl, HeightRequest = 180, Aspect = Aspect.AspectFit });
+                if (!string.IsNullOrWhiteSpace(post.ImageUrl))
+                {
+                    var image = new Image { Source = post.ImageUrl, HeightRequest = 180, Aspect = Aspect.AspectFit };
+                    var tap = new TapGestureRecognizer();
+                    tap.Tapped += async (_, _) =>
+                    {
+                        var viewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
+                        await viewer.OpenMediaAsync(post.ImageUrl, "image");
+                    };
+                    image.GestureRecognizers.Add(tap);
+                    stack.Children.Add(image);
+                }
+                AddFeedMediaButtons(stack, post);
                 stack.Children.Add(new Label { Text = $"{post.CreatedAtUtc.ToLocalTime():g}  •  ❤️ {post.LikeCount}  💬 {post.CommentCount}", FontSize = 12, TextColor = Colors.Gray });
                 card.Content = stack; NationalFeedStack.Children.Add(card);
             }
@@ -239,6 +252,17 @@ public partial class HomePage : ContentPage
         body.Children.Add(new Label { Text = type, FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#167A4A") });
         body.Children.Add(new Label { Text = displayTitle, FontSize = 17, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#075E36") });
         body.Children.Add(new Label { Text = post.Content, FontSize = 14, TextColor = Color.FromArgb("#173323"), MaxLines = 5 });
+        if (!string.IsNullOrWhiteSpace(post.ImageUrl))
+        {
+            var image = new Image { Source = post.ImageUrl, HeightRequest = 180, Aspect = Aspect.AspectFit };
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (_, _) =>
+                await MauiProgram.Services.GetRequiredService<MediaViewerService>()
+                    .OpenMediaAsync(post.ImageUrl, "image");
+            image.GestureRecognizers.Add(tap);
+            body.Children.Add(image);
+        }
+        AddFeedMediaButtons(body, post);
         var location = string.Join(" · ", new[] { post.AuthorRegionName, post.AuthorDistrictName, post.AuthorBranchName }.Where(value => !string.IsNullOrWhiteSpace(value)));
         body.Children.Add(new Label { Text = $"{post.AuthorName}{(string.IsNullOrWhiteSpace(location) ? string.Empty : $" · {location}")}", FontSize = 12, TextColor = Color.FromArgb("#64748B") });
         var actions = new HorizontalStackLayout { Spacing = 8 };
@@ -265,6 +289,25 @@ public partial class HomePage : ContentPage
         actions.Children.Add(respond);
         body.Children.Add(actions);
         return new Border { Content = body, Padding = 15, BackgroundColor = Color.FromArgb("#FFFFFF"), Stroke = Color.FromArgb("#DCEBE0"), StrokeThickness = 1, StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(20) } };
+    }
+
+    private static void AddFeedMediaButtons(
+        VerticalStackLayout stack,
+        CCT_USCF.Models.NationalCommunityPost post)
+    {
+        var viewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
+        if (!string.IsNullOrWhiteSpace(post.VideoUrl))
+        {
+            var button = new Button { Text = "▶ Play video", BackgroundColor = Color.FromArgb("#1E40AF"), TextColor = Colors.White };
+            button.Clicked += async (_, _) => await viewer.OpenMediaAsync(post.VideoUrl, "video");
+            stack.Children.Add(button);
+        }
+        if (!string.IsNullOrWhiteSpace(post.AudioUrl))
+        {
+            var button = new Button { Text = "▶ Play audio", BackgroundColor = Color.FromArgb("#0F766E"), TextColor = Colors.White };
+            button.Clicked += async (_, _) => await viewer.OpenMediaAsync(post.AudioUrl, "audio");
+            stack.Children.Add(button);
+        }
     }
 
     private async Task LoadBibleFeedAsync()

@@ -22,6 +22,7 @@ public partial class BranchChatPage : ContentPage
     private readonly IFirebaseFirestore _firestore;
     private readonly CommunityService _communityService;
     private readonly CloudinaryService _cloudinaryService;
+    private readonly MediaViewerService _mediaViewer;
 
     private readonly List<BranchChatMessageUi> _messages = new();
     private readonly HashSet<string> _selectedMessageIds = new(StringComparer.Ordinal);
@@ -64,6 +65,7 @@ public partial class BranchChatPage : ContentPage
         _cloudinaryService =
             MauiProgram.Services
                 .GetRequiredService<CloudinaryService>();
+        _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
 
         var membersTap =
             new TapGestureRecognizer();
@@ -2029,8 +2031,7 @@ DateTime? updatedAt =
 
         tap.Tapped += async (_, _) =>
         {
-            await OpenMediaAsync(
-                message.MediaUrl);
+            await _mediaViewer.OpenMediaAsync(message.MediaUrl, "image", message.FileName);
         };
 
         image.GestureRecognizers.Add(
@@ -2087,8 +2088,7 @@ DateTime? updatedAt =
 
         button.Clicked += async (_, _) =>
         {
-            await OpenMediaAsync(
-                message.MediaUrl);
+            await _mediaViewer.OpenMediaAsync(message.MediaUrl, "video", message.FileName);
         };
 
         stack.Children.Add(
@@ -2142,8 +2142,7 @@ DateTime? updatedAt =
 
         button.Clicked += async (_, _) =>
         {
-            await OpenMediaAsync(
-                message.MediaUrl);
+            await _mediaViewer.OpenMediaAsync(message.MediaUrl, "audio", message.FileName);
         };
 
         stack.Children.Add(
@@ -2194,28 +2193,6 @@ DateTime? updatedAt =
                    out uri!) &&
                (uri.Scheme == Uri.UriSchemeHttp ||
                 uri.Scheme == Uri.UriSchemeHttps);
-    }
-
-    private static async Task OpenMediaAsync(
-        string? mediaUrl)
-    {
-        if (!TryCreateMediaUri(
-                mediaUrl,
-                out var uri))
-        {
-            return;
-        }
-
-        try
-        {
-            await Launcher.Default.OpenAsync(
-                uri);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[BRANCH_CHAT] Open media failed: {ex}");
-        }
     }
 
     // ============================================================

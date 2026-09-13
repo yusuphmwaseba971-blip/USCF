@@ -10,6 +10,9 @@ public partial class ChurchGroupSelectionPage : ContentPage
 {
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
+    private readonly ChurchGroupService _groupService;
+    private string _selectedLevel = string.Empty;
+    private CCT_USCF.Models.CurrentUser? _loadedUser;
     private string _destination = string.Empty;
 
     public ChurchGroupSelectionPage()
@@ -17,6 +20,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
         InitializeComponent();
         _auth = MauiProgram.Services.GetRequiredService<IFirebaseAuth>();
         _firestore = MauiProgram.Services.GetRequiredService<IFirebaseFirestore>();
+        _groupService = MauiProgram.Services.GetRequiredService<ChurchGroupService>();
     }
 
     public string Destination
@@ -61,7 +65,9 @@ public partial class ChurchGroupSelectionPage : ContentPage
     private async Task LoadGroupsAsync(string level)
     {
         GroupsLayout.Clear();
+        AddGroupButton.IsVisible = false;
         StatusLabel.Text = "Loading groups...";
+        _selectedLevel = level;
 
         try
         {
@@ -72,6 +78,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 StatusLabel.Text = "Your authenticated profile is unavailable.";
                 return;
             }
+            _loadedUser = user;
 
             var groups = await GetGroupsForLevelAsync(level, user);
             if (groups.Count == 0)
@@ -81,6 +88,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
             }
 
             StatusLabel.Text = $"{level} groups";
+            AddGroupButton.IsVisible = CanCreateGroups(level, user);
             foreach (var group in groups)
             {
                 var accent = level switch
@@ -181,6 +189,97 @@ public partial class ChurchGroupSelectionPage : ContentPage
             StatusLabel.Text = "Unable to connect to the Church Group right now. Please check your internet connection and try again.";
         }
     }
+
+    private bool CanCreateGroups(string level, CCT_USCF.Models.CurrentUser user)
+        {
+            var values = new[] { user.Role, user.LeadershipLevel, user.LeadershipDuty }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.ToLowerInvariant())
+                .ToList();
+            var isLeader = values.Any(value =>
+                value.Contains("leader") ||
+                value.Contains("admin") ||
+                value.Contains("chairman") ||
+                value.Contains("pastor") ||
+                value.Contains("priest") ||
+                value.Contains("coordinator"));
+            if (!isLeader)
+                return false;
+
+            return level switch
+            {
+                "National" => true,
+                "Regional" => user.RegionId.HasValue,
+                "District" => user.DistrictId.HasValue,
+                "Branch" => user.BranchId.HasValue,
+                _ => false
+            };
+        }
+
+        private async void OnAddGroupClicked(object sender, EventArgs e)
+        {
+            if (_loadedUser == null || string.IsNullOrWhiteSpace(_selectedLevel))
+                return;
+
+            var name = await DisplayPromptAsync("Create New Group", "Group name");
+            if (string.IsNullOrWhiteSpace(name))
+                return;
+            var description = await DisplayPromptAsync("Create New Group", "Description (optional)");
+            var type = await DisplayActionSheet(
+                "Group type",
+                "Cancel",
+                null,
+                "Choir",
+                "Prayer Team",
+                "Youth",
+                "Media",
+                "Bible Study",
+                "Custom");
+            if (string.IsNullOrWhiteSpace(type) || type == "Cancel")
+                return;
+
+            var confirmed = await DisplayAlert(
+                "Create group",
+                $"{name.Trim()}\n\nScope: {_selectedLevel}\n\nThe group will be created under your verified {_selectedLevel.ToLowerInvariant()} scope.",
+                "Create",
+                "Cancel");
+            if (!confirmed)
+                return;
+
+            AddGroupButton.IsEnabled = false;
+            try
+            {
+                var group = await _groupService.CreateGroupAsync(
+                    name.Trim(),
+                    description?.Trim() ?? string.Empty,
+                    type.ToUpperInvariant(),
+                    _selectedLevel.ToUpperInvariant());
+
+                await DisplayAlert("Group created", "Your group is ready.", "Open");
+                var created = new FirestoreGroupDocument
+                {
+                    DocumentId = group.GroupId,
+                    Name = group.GroupName,
+                    Level = group.ScopeType,
+                    GroupType = group.GroupType,
+                    RegionId = group.RegionId ?? 0,
+                    DistrictId = group.DistrictId ?? 0,
+                    BranchId = group.BranchId,
+                    IsCustom = true,
+                    MemberUids = new List<string> { GetFirebaseUid() }
+                };
+                await SelectGroupAsync(created, _loadedUser);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Create failed: {ex}");
+                await DisplayAlert("Unable to create group", ex.Message, "OK");
+            }
+            finally
+            {
+                AddGroupButton.IsEnabled = true;
+            }
+        }
 
     private async Task<List<FirestoreGroupDocument>> GetGroupsForLevelAsync(string level, CCT_USCF.Models.CurrentUser user)
     {
@@ -397,8 +496,10 @@ public partial class ChurchGroupSelectionPage : ContentPage
             return;
         }
 
-        if (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) ||
+        if (!group.IsCustom &&
+            (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) ||
             group.Name.Contains("Branch", StringComparison.OrdinalIgnoreCase))
+           )
         {
             var branchId = group.BranchId ?? user.BranchId ?? 0;
             if (branchId <= 0)
@@ -516,5 +617,11 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         [FirestoreProperty("memberUids")]
         public List<string>? MemberUids { get; set; }
+
+        [FirestoreProperty("groupType")]
+        public string GroupType { get; set; } = string.Empty;
+
+        [FirestoreProperty("isCustom")]
+        public bool IsCustom { get; set; }
     }
 }

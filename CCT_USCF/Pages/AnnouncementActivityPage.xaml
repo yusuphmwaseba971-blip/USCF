@@ -57,7 +57,11 @@
                                         <Label Grid.Column="1" Text="{Binding CreatedAtUtc, StringFormat='{0:dd MMM yyyy}'}" TextColor="#78857B" FontSize="11" />
                                     </Grid>
                                     <Label Text="{Binding Title}" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" />
-                                    <Image Source="{Binding ImageUrl}" IsVisible="{Binding HasImage}" HeightRequest="150" Aspect="AspectFill" />
+                                    <Image Source="{Binding ImageUrl}" IsVisible="{Binding HasImage}" HeightRequest="150" Aspect="AspectFill">
+                                        <Image.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnImageTapped" />
+                                        </Image.GestureRecognizers>
+                                    </Image>
                                     <Label Text="{Binding Preview}" TextColor="#4E5D53" MaxLines="3" />
                                     <Label Text="{Binding SenderName, StringFormat='Issued by {0}'}" TextColor="#78857B" FontSize="12" />
                                     <HorizontalStackLayout Spacing="10">
