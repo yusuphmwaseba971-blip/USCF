@@ -4,6 +4,12 @@ public sealed class NationalCommunityCreateRequest
 {
     public string? Title { get; set; }
     public string? Content { get; set; }
+    public string? ContributionType { get; set; }
+    public string? Audience { get; set; }
+    public string? Organization { get; set; }
+    public string? Region { get; set; }
+    public string? District { get; set; }
+    public string? Branch { get; set; }
     public string? ImageUrl { get; set; }
     public string? VideoUrl { get; set; }
     public string? AudioUrl { get; set; }
@@ -19,6 +25,9 @@ public sealed class NationalCommunityPost
     public string? AuthorPhoto { get; set; }
     public string? Title { get; set; }
     public string Content { get; set; } = string.Empty;
+    public string? ContributionType { get; set; }
+    public string? Audience { get; set; }
+    public string? Organization { get; set; }
     public string? ImageUrl { get; set; }
     public string? VideoUrl { get; set; }
     public string? AudioUrl { get; set; }

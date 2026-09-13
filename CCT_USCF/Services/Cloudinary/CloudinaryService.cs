@@ -84,6 +84,9 @@ namespace CCT_USCF.Services.Cloudinary
         public Task<CloudinaryUploadResult> UploadAnnouncementPdfAsync(FileResult file) =>
             UploadAsync(file, "raw", "cct-uscf/announcements");
 
+        public Task<CloudinaryUploadResult> UploadResourceAsync(FileResult file) =>
+            UploadAsync(file, "raw", "cct-uscf/resources");
+
         // ============================================================
         // GENERIC UPLOAD
         // ============================================================

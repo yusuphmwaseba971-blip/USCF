@@ -1,12 +1,12 @@
 using Plugin.Firebase.CloudMessaging;
 using CCT_USCF.Models;
+using Microsoft.Maui.Controls.Shapes;
 
 namespace CCT_USCF.Pages;
 
 public partial class HomePage : ContentPage
 {
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
-    private bool _shortcutsOpen;
 
     public HomePage()
     {
@@ -21,6 +21,7 @@ public partial class HomePage : ContentPage
         _ = LoadDashboardAsync();
         _ = LoadBibleFeedAsync();
         _ = LoadNationalFeedAsync();
+        _ = LoadCommunityBlessingsAsync();
         _ = RegisterMessagingTokenAsync();
         ApplyAppearance();
     }
@@ -193,6 +194,79 @@ public partial class HomePage : ContentPage
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LoadNationalFeedAsync error: {ex}"); }
     }
 
+    private async Task LoadCommunityBlessingsAsync()
+    {
+        try
+        {
+            var community = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.CommunityService>();
+            var posts = (await community.GetNationalPostsAsync(20))
+                .Where(post => post.Title?.StartsWith("[Share & Serve", StringComparison.OrdinalIgnoreCase) == true)
+                .Take(3)
+                .ToList();
+
+            CommunityBlessingsStack.Children.Clear();
+            if (posts.Count == 0)
+            {
+                CommunityBlessingsStateLabel.Text = "Nothing new to share yet. Be the first to encourage the church today.";
+                return;
+            }
+
+            CommunityBlessingsStateLabel.Text = "Recent offerings from the church community";
+            foreach (var post in posts)
+                CommunityBlessingsStack.Children.Add(BuildBlessingCard(post, community));
+        }
+        catch (Exception ex)
+        {
+            CommunityBlessingsStateLabel.Text = "Community blessings are temporarily unavailable.";
+            System.Diagnostics.Debug.WriteLine($"[HOME_BLESSINGS] {ex}");
+        }
+    }
+
+    private static Border BuildBlessingCard(
+        CCT_USCF.Models.NationalCommunityPost post,
+        CCT_USCF.Services.CommunityService community)
+    {
+        var title = post.Title ?? "Community blessing";
+        var markerEnd = title.IndexOf("] ", StringComparison.Ordinal);
+        var displayTitle = markerEnd >= 0 ? title[(markerEnd + 2)..] : title;
+        var type = title.Contains("SCRIPTURE", StringComparison.OrdinalIgnoreCase) ? "📖 SCRIPTURE"
+            : title.Contains("ENCOURAGEMENT", StringComparison.OrdinalIgnoreCase) ? "💬 ENCOURAGEMENT"
+            : title.Contains("NOTICE", StringComparison.OrdinalIgnoreCase) ? "📢 MINISTRY NOTICE"
+            : title.Contains("WORSHIP", StringComparison.OrdinalIgnoreCase) ? "🎵 WORSHIP"
+            : title.Contains("EVENT", StringComparison.OrdinalIgnoreCase) ? "📅 EVENT"
+            : "📚 RESOURCE";
+        var body = new VerticalStackLayout { Spacing = 7 };
+        body.Children.Add(new Label { Text = type, FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#167A4A") });
+        body.Children.Add(new Label { Text = displayTitle, FontSize = 17, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#075E36") });
+        body.Children.Add(new Label { Text = post.Content, FontSize = 14, TextColor = Color.FromArgb("#173323"), MaxLines = 5 });
+        var location = string.Join(" · ", new[] { post.AuthorRegionName, post.AuthorDistrictName, post.AuthorBranchName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        body.Children.Add(new Label { Text = $"{post.AuthorName}{(string.IsNullOrWhiteSpace(location) ? string.Empty : $" · {location}")}", FontSize = 12, TextColor = Color.FromArgb("#64748B") });
+        var actions = new HorizontalStackLayout { Spacing = 8 };
+        var amen = new Button { Text = post.LikedByCurrentUser ? "🙏 Amen'd" : "🙏 Amen", BackgroundColor = Color.FromArgb("#E4F4E9"), TextColor = Color.FromArgb("#167A4A"), Padding = new Thickness(12, 7) };
+        amen.Clicked += async (_, _) =>
+        {
+            amen.IsEnabled = false;
+            try
+            {
+                var result = await community.ToggleNationalLikeAsync(post.Id, post.LikedByCurrentUser);
+                post.LikedByCurrentUser = result.Liked;
+                amen.Text = result.Liked ? "🙏 Amen'd" : "🙏 Amen";
+            }
+            finally { amen.IsEnabled = true; }
+        };
+        var respond = new Button { Text = "Respond", BackgroundColor = Colors.Transparent, TextColor = Color.FromArgb("#167A4A"), Padding = new Thickness(12, 7) };
+        respond.Clicked += async (_, _) =>
+        {
+            var response = await Application.Current!.MainPage!.DisplayPromptAsync("Respond", "Write a thoughtful response");
+            if (!string.IsNullOrWhiteSpace(response))
+                await community.AddNationalCommentAsync(post.Id, response.Trim());
+        };
+        actions.Children.Add(amen);
+        actions.Children.Add(respond);
+        body.Children.Add(actions);
+        return new Border { Content = body, Padding = 15, BackgroundColor = Color.FromArgb("#FFFFFF"), Stroke = Color.FromArgb("#DCEBE0"), StrokeThickness = 1, StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(20) } };
+    }
+
     private async Task LoadBibleFeedAsync()
     {
         try
@@ -279,17 +353,58 @@ public partial class HomePage : ContentPage
     private async void OpenGivingButton(object? sender, EventArgs e)
         => await Shell.Current.GoToAsync(nameof(GivingPage));
 
+    private async void OpenShareAndServe(object? sender, TappedEventArgs e)
+        => await OpenShareAndServeAsync();
+
+    private async void CloseShareAndServe(object? sender, EventArgs e)
+        => await CloseShareAndServeAsync();
+
+    private async Task OpenShareAndServeAsync()
+    {
+        if (ShareServeOverlay.IsVisible) return;
+        ShortcutPanel.IsVisible = false;
+        ShortcutButton.Text = "×";
+        ShareServeOverlay.Opacity = 0;
+        ShareServeOverlay.IsVisible = true;
+        await ShareServeOverlay.FadeTo(1, 180, Easing.CubicOut);
+    }
+
+    private async Task CloseShareAndServeAsync()
+    {
+        if (!ShareServeOverlay.IsVisible) return;
+        await ShareServeOverlay.FadeTo(0, 140, Easing.CubicIn);
+        ShareServeOverlay.IsVisible = false;
+        ShortcutButton.Text = "＋";
+    }
+
+    private async Task OpenComposerAsync(string route)
+    {
+        await CloseShareAndServeAsync();
+        await Shell.Current.GoToAsync(route);
+    }
+
+    private async void OpenScriptureComposer(object? sender, EventArgs e) => await OpenComposerAsync(nameof(ScriptureComposerPage));
+    private async void OpenPrayerFromShare(object? sender, EventArgs e) { await CloseShareAndServeAsync(); await Shell.Current.GoToAsync(nameof(PrayerPage)); }
+    private async void OpenEncouragementComposer(object? sender, EventArgs e) => await OpenComposerAsync(nameof(EncouragementComposerPage));
+    private async void OpenNoticeComposer(object? sender, EventArgs e) => await OpenComposerAsync(nameof(NoticeComposerPage));
+    private async void OpenWorshipComposer(object? sender, EventArgs e) => await OpenComposerAsync(nameof(WorshipComposerPage));
+    private async void OpenEventComposer(object? sender, EventArgs e) => await OpenComposerAsync(nameof(EventComposerPage));
+    private async void OpenResourceComposer(object? sender, EventArgs e) => await OpenComposerAsync(nameof(ResourceComposerPage));
+
     private async Task OpenNotificationsAsync()
         => await Shell.Current.GoToAsync(nameof(AnnouncementActivityPage));
 
     private void ToggleShortcuts(object? sender, EventArgs e)
     {
-        _shortcutsOpen = !_shortcutsOpen;
-        ShortcutPanel.IsVisible = _shortcutsOpen;
-        ShortcutButton.Text = _shortcutsOpen ? "×" : "＋";
+        if (ShareServeOverlay.IsVisible)
+        {
+            _ = CloseShareAndServeAsync();
+            return;
+        }
+        _ = OpenShareAndServeAsync();
         SemanticProperties.SetDescription(
             ShortcutButton,
-            _shortcutsOpen ? "Close quick shortcuts" : "Open quick shortcuts");
+            "Open Share and Serve");
     }
 
     private static string GetGreeting(string name)
