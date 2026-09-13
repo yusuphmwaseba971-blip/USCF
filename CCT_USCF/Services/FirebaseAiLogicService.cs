@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Plugin.Firebase.AppCheck;
+using Plugin.Firebase.Auth;
 
 namespace CCT_USCF.Services;
 
@@ -28,18 +29,19 @@ public sealed class FirebaseAiLogicService
             string idToken;
             try
             {
-                idToken = await _auth.GetCurrentFirebaseIdTokenAsync();
+                var authUser = CrossFirebaseAuth.Current.CurrentUser;
+                LogDiagnostic($"AUTH_CHECK currentUserPresent={authUser is not null} uidAvailable={!string.IsNullOrWhiteSpace(authUser?.Uid)}");
+                if (authUser is null)
+                    return new("Please sign in again to use USCF Assistance.");
+
+                idToken = await _auth.GetCurrentFirebaseIdTokenAsync(forceRefresh: true);
+                LogDiagnostic("AUTH_CHECK sessionValid=true tokenAvailable=true");
             }
-            catch (InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Java.Lang.Exception)
             {
+                LogDiagnostic($"AUTH_CHECK sessionValid=false errorType={ex.GetType().Name}");
                 return new("Please sign in again to use USCF Assistance.");
             }
-
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                $"https://firebasevertexai.googleapis.com/v1beta/projects/{ProjectId}/locations/us-central1/publishers/google/models/{Model}:generateContent");
-            request.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
 
             string appCheckToken;
             try
@@ -48,28 +50,32 @@ public sealed class FirebaseAiLogicService
             }
             catch (Java.Lang.Exception ex)
             {
-                LogDiagnostic($"appCheckException={ex.GetType().FullName} message={ex.Message}");
+                LogDiagnostic($"AI_ERROR appCheckException={ex.GetType().Name} message={ex.Message}");
                 return new("USCF Assistance could not verify this app. Please try again.");
             }
 
             if (string.IsNullOrWhiteSpace(appCheckToken))
                 return new("USCF Assistance could not verify this app. Please try again.");
-            request.Headers.TryAddWithoutValidation("X-Firebase-AppCheck", appCheckToken);
-            request.Content = JsonContent.Create(new
-            {
-                contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
-                generationConfig = new { temperature = 0.3, maxOutputTokens = 512 }
-            });
 
-            using var response = await _http.SendAsync(request, cancellationToken);
+            var response = await SendRequestAsync(apiKey, idToken, appCheckToken, prompt, cancellationToken);
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            LogDiagnostic($"status={(int)response.StatusCode} reason={response.ReasonPhrase} body={Sanitize(responseBody)}");
+            LogDiagnostic($"AI_RESPONSE status={(int)response.StatusCode} reason={response.ReasonPhrase} body={Sanitize(responseBody)}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                LogDiagnostic("AUTH_CHECK tokenRejected=true retryingWithRefreshedToken=true");
+                idToken = await _auth.GetCurrentFirebaseIdTokenAsync(forceRefresh: true);
+                response = await SendRequestAsync(apiKey, idToken, appCheckToken, prompt, cancellationToken);
+                responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                LogDiagnostic($"AI_RESPONSE retry=true status={(int)response.StatusCode} reason={response.ReasonPhrase} body={Sanitize(responseBody)}");
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                     return new("USCF Assistance could not verify this app. Please try again.");
                 return new(response.StatusCode == System.Net.HttpStatusCode.Unauthorized
-                    ? "Please sign in again to use USCF Assistance."
+                    ? "Your CCT-USCF session could not be refreshed. Please sign in again."
                     : "USCF Assistance is temporarily unavailable. Please try again.");
             }
 
@@ -86,9 +92,32 @@ public sealed class FirebaseAiLogicService
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or Java.Lang.Exception)
         {
-            LogDiagnostic($"exceptionType={ex.GetType().FullName} message={ex.Message}");
+            LogDiagnostic($"AI_ERROR exceptionType={ex.GetType().Name} message={ex.Message}");
             return new("USCF Assistance is temporarily unavailable. Please try again.");
         }
+    }
+
+    private async Task<HttpResponseMessage> SendRequestAsync(
+        string apiKey,
+        string idToken,
+        string appCheckToken,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"https://firebasevertexai.googleapis.com/v1beta/projects/{ProjectId}/locations/us-central1/publishers/google/models/{Model}:generateContent");
+        request.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
+        request.Headers.TryAddWithoutValidation("X-Firebase-AppCheck", appCheckToken);
+        request.Content = JsonContent.Create(new
+        {
+            contents = new[] { new { role = "user", parts = new[] { new { text = prompt } } } },
+            generationConfig = new { temperature = 0.3, maxOutputTokens = 512 }
+        });
+
+        LogDiagnostic("AI_REQUEST sent=true");
+        return await _http.SendAsync(request, cancellationToken);
     }
 
     private static void LogDiagnostic(string message)

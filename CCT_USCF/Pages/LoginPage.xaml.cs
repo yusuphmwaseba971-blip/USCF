@@ -62,7 +62,7 @@ public partial class LoginPage : ContentPage
                 }
                 catch (Exception ex)
                 {
-                    MessageLabel.Text = ex.Message;
+                    MessageLabel.Text = "The session could not be saved. Please try again.";
                     MessageLabel.IsVisible = true;
                     System.Diagnostics.Debug.WriteLine($"[LOGIN] Error saving session: {ex}");
                     return;
@@ -87,13 +87,13 @@ public partial class LoginPage : ContentPage
                         MauiProgram.SetCurrentUser(user);
                         await CCT_USCF.Services.TokenStorage.SaveCachedUserAsync(localUser);
                         MauiProgram.NotifyAuthChanged();
-                        await Shell.Current.GoToAsync("//home");
+                    }
+                    else
+                    {
+                        MessageLabel.Text = "The session could not be verified. Please try again.";
+                        MessageLabel.IsVisible = true;
                         return;
                     }
-
-                    MessageLabel.Text = "The session could not be verified. Please try again.";
-                    MessageLabel.IsVisible = true;
-                    return;
                 }
 
                 if (user == null)
@@ -107,9 +107,18 @@ public partial class LoginPage : ContentPage
 
                 await TokenStorage.SaveCachedUserAsync(user);
 
-                System.Diagnostics.Debug.WriteLine("[LOGIN] Login successful, navigating to home");
                 MauiProgram.SetCurrentUser(user);
                 MauiProgram.NotifyAuthChanged();
+
+                if (!result.EmailVerified)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "[LOGIN] Firebase account is unverified; opening email verification.");
+                    await Shell.Current.GoToAsync(nameof(VerifyEmailPage));
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine("[LOGIN] Login successful, navigating to home");
                 await Shell.Current.GoToAsync("//home");
 
             }

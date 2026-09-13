@@ -3,3 +3,8 @@
 Services/firebase-adminsdk.json
 
 node_modules/
+
+# Android signing material must remain outside source control.
+*.keystore
+*.jks
+*.p12

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.VerifyEmailPage"
+    Title="Verify Your Email"
+    BackgroundColor="#F4F8F5"
+    Shell.NavBarIsVisible="False">
+    <ScrollView>
+        <VerticalStackLayout Padding="24,44,24,32" Spacing="22">
+            <Border WidthRequest="82" HeightRequest="82" Padding="0"
+                    HorizontalOptions="Center" BackgroundColor="#DDF3E5"
+                    Stroke="#B9DEC5" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 41">
+                <Label Text="✓" FontSize="46" FontAttributes="Bold"
+                       TextColor="#1A4D3A" HorizontalTextAlignment="Center"
+                       VerticalTextAlignment="Center" />
+            </Border>
+
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Verify Your Email" FontSize="30"
+                       FontAttributes="Bold" TextColor="#173B28"
+                       HorizontalTextAlignment="Center" />
+                <Label Text="One quick step to secure your CCT-USCF account."
+                       FontSize="15" TextColor="#52645B"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+
+            <Border Padding="20" BackgroundColor="White" Stroke="#DCE8DF"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="We've sent a verification link to"
+                           FontSize="14" TextColor="#52645B"
+                           HorizontalTextAlignment="Center" />
+                    <Label x:Name="EmailLabel" FontSize="18"
+                           FontAttributes="Bold" TextColor="#1A4D3A"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="Open your email and tap the Firebase verification link. Then return here to complete your registration."
+                           FontSize="14" TextColor="#52645B"
+                           LineBreakMode="WordWrap"
+                           HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label x:Name="StatusLabel" TextColor="#B42318"
+                   IsVisible="False" LineBreakMode="WordWrap"
+                   HorizontalTextAlignment="Center" />
+
+            <Button x:Name="CheckButton" Text="I've Verified My Email"
+                    Clicked="OnCheckClicked" BackgroundColor="#1A4D3A"
+                    TextColor="White" CornerRadius="14"
+                    HeightRequest="54" FontAttributes="Bold" />
+            <Button x:Name="ResendButton" Text="Resend Email"
+                    Clicked="OnResendClicked" BackgroundColor="Transparent"
+                    TextColor="#1A4D3A" BorderColor="#1A4D3A"
+                    BorderWidth="1" CornerRadius="14"
+                    HeightRequest="50" />
+            <Button x:Name="EditEmailButton" Text="Edit email"
+                    Clicked="OnEditEmailClicked" BackgroundColor="Transparent"
+                    TextColor="#52645B" HeightRequest="44" />
+
+            <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False"
+                               IsRunning="False" Color="#1A4D3A" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

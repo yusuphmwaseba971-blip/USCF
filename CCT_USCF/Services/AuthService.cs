@@ -30,6 +30,8 @@ public class AuthService
     {
         public bool Success { get; set; }
 
+        public bool EmailVerified { get; set; }
+
         public string? Token { get; set; }
 
         public string? RefreshToken { get; set; }
@@ -189,6 +191,7 @@ public class AuthService
                 };
             }
 
+            await _auth.ReloadCurrentUserAsync();
             var currentUser = await LoadCurrentUserAsync();
             MauiProgram.SetCurrentUser(currentUser);
 
@@ -200,6 +203,7 @@ public class AuthService
             return new AuthResult
             {
                 Success = true,
+                EmailVerified = firebaseUser.IsEmailVerified,
                 Token = firebaseUser.Uid,
                 RefreshToken = firebaseUser.Email,
                 ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
@@ -477,6 +481,8 @@ public class AuthService
             }
 
             MauiProgram.SetCurrentUser(currentUser);
+
+            await SendVerificationEmailAsync();
         }
         catch (Exception ex)
         {
@@ -495,6 +501,54 @@ public class AuthService
     public string? GetCurrentFirebaseUid()
     {
         return _auth.CurrentUser?.Uid;
+    }
+
+    public string? CurrentEmail => _auth.CurrentUser?.Email;
+
+    public bool HasAuthenticatedFirebaseUser => _auth.CurrentUser != null;
+
+    public bool IsCurrentUserEmailVerified =>
+        _auth.CurrentUser?.IsEmailVerified == true;
+
+    public async Task SendVerificationEmailAsync()
+    {
+        var firebaseUser = _auth.CurrentUser
+            ?? throw new InvalidOperationException("No signed-in Firebase user was found.");
+
+        await firebaseUser.SendEmailVerificationAsync();
+        System.Diagnostics.Debug.WriteLine(
+            $"[FIREBASE AUTH] Verification email requested for Firebase UID {firebaseUser.Uid}.");
+    }
+
+    public async Task UpdateCurrentEmailAsync(string email)
+    {
+        var firebaseUser = _auth.CurrentUser
+            ?? throw new InvalidOperationException("No signed-in Firebase user was found.");
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        if (!normalizedEmail.Contains('@', StringComparison.Ordinal))
+            throw new ArgumentException("Enter a valid email address.", nameof(email));
+
+        await firebaseUser.UpdateEmailAsync(normalizedEmail);
+        await _firestore
+            .GetCollection("users")
+            .GetDocument(firebaseUser.Uid)
+            .SetDataAsync(new Dictionary<string, object>
+            {
+                ["email"] = normalizedEmail
+            });
+        await SendVerificationEmailAsync();
+    }
+
+    public async Task<bool> RefreshEmailVerificationAsync()
+    {
+        var firebaseUser = _auth.CurrentUser
+            ?? throw new InvalidOperationException("No signed-in Firebase user was found.");
+
+        await _auth.ReloadCurrentUserAsync();
+        var verified = firebaseUser.IsEmailVerified;
+        System.Diagnostics.Debug.WriteLine(
+            $"[FIREBASE AUTH] Email verification refreshed: verified={verified}.");
+        return verified;
     }
 
     public async Task<string> GetCurrentFirebaseIdTokenAsync(

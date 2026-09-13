@@ -67,6 +67,10 @@ public partial class AppShell : Shell
             typeof(RegisterPage));
 
         Routing.RegisterRoute(
+            nameof(VerifyEmailPage),
+            typeof(VerifyEmailPage));
+
+        Routing.RegisterRoute(
             nameof(PrivacyPolicyPage),
             typeof(PrivacyPolicyPage));
 
@@ -88,6 +92,7 @@ public partial class AppShell : Shell
 
         MauiProgram.AuthStateChanged +=
             OnAuthStateChanged;
+        Navigating += OnShellNavigating;
 
         var assistant = MauiProgram.Services.GetRequiredService<ICctAssistantService>();
         assistant.EnabledChanged += OnAssistantEnabledChanged;
@@ -119,6 +124,26 @@ public partial class AppShell : Shell
         await UpdateAuthUIAsync();
     }
 
+    private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e)
+    {
+        var auth = MauiProgram.CreateAuthServiceForPages();
+        if (auth.CurrentEmail == null ||
+            auth.IsCurrentUserEmailVerified ||
+            e.Target.Location.OriginalString.Contains(
+                nameof(VerifyEmailPage),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        e.Cancel();
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            if (Shell.Current.CurrentPage is not VerifyEmailPage)
+                await Shell.Current.GoToAsync(nameof(VerifyEmailPage));
+        });
+    }
+
     // =========================================================
     // UPDATE AUTHENTICATION UI
     // =========================================================
@@ -138,12 +163,30 @@ public partial class AppShell : Shell
 
             if (firebaseUser == null)
             {
-                MauiProgram.SetCurrentUser(null);
-                ShowUnauthenticatedState();
+                if (auth.HasAuthenticatedFirebaseUser)
+                    ShowAuthenticatedState();
+                else
+                {
+                    MauiProgram.SetCurrentUser(null);
+                    ShowUnauthenticatedState();
+                }
                 return;
             }
 
             MauiProgram.SetCurrentUser(firebaseUser);
+            var authService = MauiProgram.CreateAuthServiceForPages();
+            var isVerified = await authService.RefreshEmailVerificationAsync();
+            var shell = Shell.Current;
+
+            if (!isVerified &&
+                shell is not null &&
+                shell.CurrentPage is not VerifyEmailPage)
+            {
+                ShowUnauthenticatedState();
+                await shell.GoToAsync(nameof(VerifyEmailPage));
+                return;
+            }
+
             ShowAuthenticatedState();
         }
         catch (Exception ex)
@@ -151,8 +194,12 @@ public partial class AppShell : Shell
             System.Diagnostics.Debug.WriteLine(
                 $"[APP SHELL AUTH] {ex}");
 
-            if (MauiProgram.CurrentUser != null)
+            var auth = MauiProgram.CreateAuthServiceForPages();
+            if (auth.HasAuthenticatedFirebaseUser)
             {
+                if (!auth.IsCurrentUserEmailVerified &&
+                    Shell.Current.CurrentPage is not VerifyEmailPage)
+                    await Shell.Current.GoToAsync(nameof(VerifyEmailPage));
                 ShowAuthenticatedState();
             }
             else

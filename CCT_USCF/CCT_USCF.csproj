@@ -64,6 +64,22 @@
     <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
   </PropertyGroup>
 
+  <!--
+    Release signing is supplied through user-level environment variables:
+    CCT_USCF_ANDROID_SIGNING_KEYSTORE
+    CCT_USCF_ANDROID_SIGNING_ALIAS
+    CCT_USCF_ANDROID_SIGNING_KEY_PASS
+    CCT_USCF_ANDROID_SIGNING_STORE_PASS
+  -->
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)' == 'Release|net10.0-android'">
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <AndroidKeyStore>true</AndroidKeyStore>
+    <AndroidSigningKeyStore Condition="'$(AndroidSigningKeyStore)' == ''">$(CCT_USCF_ANDROID_SIGNING_KEYSTORE)</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias Condition="'$(AndroidSigningKeyAlias)' == ''">$(CCT_USCF_ANDROID_SIGNING_ALIAS)</AndroidSigningKeyAlias>
+    <AndroidSigningKeyPass Condition="'$(AndroidSigningKeyPass)' == ''">$(CCT_USCF_ANDROID_SIGNING_KEY_PASS)</AndroidSigningKeyPass>
+    <AndroidSigningStorePass Condition="'$(AndroidSigningStorePass)' == ''">$(CCT_USCF_ANDROID_SIGNING_STORE_PASS)</AndroidSigningStorePass>
+  </PropertyGroup>
+
 
   <!-- =========================================================
        MAUI RESOURCES

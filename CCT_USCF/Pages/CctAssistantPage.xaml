@@ -6,7 +6,7 @@
     BackgroundColor="#55000000"
     Padding="16"
     Title="USCF Assistance">
-    <Grid x:Name="Overlay" ColumnDefinitions="*,Auto"
+    <Grid x:Name="Overlay" ColumnDefinitions="*,360"
           HorizontalOptions="Fill" Padding="0,24,0,24">
         <BoxView Grid.Column="0" BackgroundColor="Transparent">
             <BoxView.GestureRecognizers>

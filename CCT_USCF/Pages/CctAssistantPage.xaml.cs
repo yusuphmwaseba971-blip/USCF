@@ -42,7 +42,12 @@ public partial class CctAssistantPage : ContentPage
             button.GestureRecognizers.Add(CreatePressGesture(button));
             QuickActionsLayout.Children.Add(button);
         }
-        _ = AnimatePanelAsync();
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await AnimatePanelAsync();
     }
 
     private static PanGestureRecognizer CreatePressGesture(Border row)

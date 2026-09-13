@@ -845,15 +845,10 @@ public partial class RegisterPage : ContentPage
             // SUCCESS
             // =================================================
 
-            await DisplayAlert(
-                "Account Created",
-                "Your USCF account has been created successfully.",
-                "OK");
-
-            // Firebase automatically signs in the new user.
-            // Go directly to Home.
+            // Firebase automatically signs in the new user. Email verification
+            // must be completed before the protected application is reachable.
             await Shell.Current.GoToAsync(
-                "//home");
+                nameof(VerifyEmailPage));
         }
         catch (Exception ex)
         {
