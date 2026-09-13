@@ -73,9 +73,20 @@ public sealed class ChurchAnnouncementService
         System.Diagnostics.Debug.WriteLine(
             $"[ANNOUNCEMENT_FETCH_START] timestamp={DateTimeOffset.UtcNow:O} " +
             "database=cct-uscf-db table=announcements");
-        var remote = await SendAsync<List<ChurchNotification>>(
-            HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
-        await AnnouncementCache.MergeAsync(remote);
+        List<ChurchNotification> remote;
+        try
+        {
+            remote = await SendAsync<List<ChurchNotification>>(
+                HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
+            await AnnouncementCache.MergeAsync(remote);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            var cached = (await AnnouncementCache.GetAllAsync()).Select(x => x.ToNotification()).ToList();
+            System.Diagnostics.Debug.WriteLine(
+                $"[ANNOUNCEMENT_CACHE_FALLBACK] rows={cached.Count} reason={ex.GetType().Name}");
+            return cached.OrderByDescending(x => x.CreatedAtUtc).ToList();
+        }
         System.Diagnostics.Debug.WriteLine(
             $"[ANNOUNCEMENT_FETCH_RESULT] rows={remote.Count} visible={remote.Count}");
         return remote
@@ -86,7 +97,8 @@ public sealed class ChurchAnnouncementService
     public async Task<int> GetUnreadCountAsync(CancellationToken ct = default)
         => (await GetNotificationsAsync(ct)).Count(notification => !notification.IsRead);
 
-    public async Task CreateAsync(string title, string message, ChurchAnnouncementTarget target, CancellationToken ct = default)
+    public async Task CreateAsync(string title, string message, ChurchAnnouncementTarget target,
+        string? imageUrl = null, string? attachmentUrl = null, CancellationToken ct = default)
     {
         var payload = new
         {
@@ -96,6 +108,8 @@ public sealed class ChurchAnnouncementService
             regionId = target.RegionId,
             districtId = target.DistrictId,
             branchId = target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase) ? (int?)target.Id : null
+            ,imageUrl
+            ,attachmentUrl
         };
         var result = await SendAsync<AnnouncementCreateResponse>(
             HttpMethod.Post, "api/church-announcements", payload, ct);

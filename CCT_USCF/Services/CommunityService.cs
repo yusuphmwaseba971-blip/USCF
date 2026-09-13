@@ -100,6 +100,19 @@ public string SenderUid { get; set; } = string.Empty;
             public string ReplyToPreview { get; set; } = string.Empty;
         }
 
+        [Table("community_chat_history_state")]
+        private sealed class CommunityChatHistoryState
+        {
+            [PrimaryKey]
+            public string Key { get; set; } = string.Empty;
+            [Indexed]
+            public string UserUid { get; set; } = string.Empty;
+            [Indexed]
+            public string GroupId { get; set; } = string.Empty;
+            public bool Enrolled { get; set; }
+            public bool HistoryCleared { get; set; }
+        }
+
         // ============================================================
         // SQLITE MIGRATION HELPER
         // ============================================================
@@ -166,6 +179,8 @@ public string SenderUid { get; set; } = string.Empty;
 
                         await _messageCacheDatabase
                             .CreateTableAsync<CachedCommunityMessage>();
+                        await _messageCacheDatabase
+                            .CreateTableAsync<CommunityChatHistoryState>();
 
                         // ------------------------------------------------
                         // IMPORTANT:
@@ -648,6 +663,78 @@ SenderUid =
                 $"[COMMUNITY_LOGOUT_CACHE_CLEAR_RESULT] userUid={uid}, cleared=true");
         }
 
+        private static string BuildChatHistoryStateKey(string userUid, string groupId) =>
+            $"{userUid.Trim()}|{groupId.Trim()}";
+
+        public async Task<bool> GetChatHistoryEnrolledAsync(string groupId)
+        {
+            var uid = GetCacheUserUid();
+            var normalizedGroupId = groupId.Trim();
+            var database = await GetMessageCacheDatabaseAsync();
+            var state = await database.FindAsync<CommunityChatHistoryState>(
+                BuildChatHistoryStateKey(uid, normalizedGroupId));
+
+            if (state != null)
+                return state.Enrolled;
+
+            var hasCachedMessages = await database.Table<CachedCommunityMessage>()
+                .Where(row => row.UserUid == uid && row.CommunityId == normalizedGroupId)
+                .CountAsync() > 0;
+
+            if (hasCachedMessages)
+            {
+                await SetChatHistoryEnrolledAsync(normalizedGroupId);
+                return true;
+            }
+
+            return false;
+        }
+
+        public async Task<bool> IsLocalGroupHistoryClearedAsync(string groupId)
+        {
+            var uid = GetCacheUserUid();
+            var database = await GetMessageCacheDatabaseAsync();
+            var state = await database.FindAsync<CommunityChatHistoryState>(
+                BuildChatHistoryStateKey(uid, groupId.Trim()));
+            return state?.HistoryCleared == true;
+        }
+
+        public async Task SetChatHistoryEnrolledAsync(string groupId)
+        {
+            var uid = GetCacheUserUid();
+            var normalizedGroupId = groupId.Trim();
+            var database = await GetMessageCacheDatabaseAsync();
+            await database.InsertOrReplaceAsync(new CommunityChatHistoryState
+            {
+                Key = BuildChatHistoryStateKey(uid, normalizedGroupId),
+                UserUid = uid,
+                GroupId = normalizedGroupId,
+                Enrolled = true,
+                HistoryCleared = false
+            });
+            Debug.WriteLine($"[COMMUNITY_CHAT_STATE] UserUid={uid} GroupId={normalizedGroupId} Enrolled=true");
+        }
+
+        public async Task ClearLocalGroupChatAsync(string groupId)
+        {
+            var uid = GetCacheUserUid();
+            var normalizedGroupId = groupId.Trim();
+            var database = await GetMessageCacheDatabaseAsync();
+            await database.ExecuteAsync(
+                "DELETE FROM community_message_cache WHERE UserUid = ? AND CommunityId = ?",
+                uid, normalizedGroupId);
+            var state = new CommunityChatHistoryState
+            {
+                Key = BuildChatHistoryStateKey(uid, normalizedGroupId),
+                UserUid = uid,
+                GroupId = normalizedGroupId,
+                Enrolled = true,
+                HistoryCleared = true
+            };
+            await database.InsertOrReplaceAsync(state);
+            Debug.WriteLine($"[COMMUNITY_CHAT_STATE] UserUid={uid} GroupId={normalizedGroupId} LocalHistoryCleared=true");
+        }
+
         // ============================================================
         // DELETE MESSAGE FROM LOCAL CACHE
         // ============================================================
@@ -747,6 +834,18 @@ SenderUid =
 
             try
             {
+                var enrolled = await GetChatHistoryEnrolledAsync(normalizedGroupId);
+                if (!enrolled)
+                {
+                    Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} ChatHistoryEnrolled=false HistoricalFetch=SKIPPED Reason=NEW_USER");
+                    return new List<CommunityMessage>();
+                }
+                if (await IsLocalGroupHistoryClearedAsync(normalizedGroupId))
+                {
+                    Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} LocalHistoryCleared=true HistoricalFetch=SKIPPED");
+                    return new List<CommunityMessage>();
+                }
+
                 System.Diagnostics.Debug.WriteLine(
                     "[BRANCH_CHAT_DIAGNOSTIC] " +
                     $"CacheReturnedCount={cachedMessages.Count}, " +
@@ -802,6 +901,18 @@ SenderUid =
 
             var safeLimit =
                 Math.Clamp(limit, 1, 100);
+
+            if (!await GetChatHistoryEnrolledAsync(normalizedGroupId))
+            {
+                Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} IncrementalSync=SKIPPED ChatHistoryEnrolled=false");
+                return new List<CommunityMessage>();
+            }
+
+            if (await IsLocalGroupHistoryClearedAsync(normalizedGroupId))
+            {
+                Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} IncrementalSync=SKIPPED LocalHistoryCleared=true");
+                return new List<CommunityMessage>();
+            }
 
             var database =
                 await GetMessageCacheDatabaseAsync();

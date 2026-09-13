@@ -30,6 +30,9 @@ public partial class BranchChatPage : ContentPage
     private bool _isLoading;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
+    private bool _chatHistoryEnrolled;
+    private bool _isReadingOlderMessages;
+    private int _unreadIncomingCount;
     private PendingAttachment? _pendingAttachment;
 
     private ClientWebSocket? _appwriteRealtimeSocket;
@@ -119,6 +122,10 @@ public partial class BranchChatPage : ContentPage
                 $"[COMMUNITY_MESSAGE] APPWRITE MESSAGE CREATE SUCCESS message_id={createdMessage.MessageId}");
 
             await _communityService.CacheCommunityMessageAsync(createdMessage);
+            await _communityService.SetChatHistoryEnrolledAsync(_branchId.ToString());
+            _chatHistoryEnrolled = true;
+            System.Diagnostics.Debug.WriteLine(
+                $"[BranchChat] ChatHistoryEnrolled=true GroupId={_branchId} InitialParticipationEstablished");
             var uiMessage = ToUiMessage(createdMessage);
             uiMessage.Status = "sent";
             uiMessage.LocalPreviewBytes = null;
@@ -241,9 +248,8 @@ public partial class BranchChatPage : ContentPage
                 return;
             }
 
-            AttachRealtimeListener();
-
             await LoadBranchGroupAsync();
+            AttachRealtimeListener();
             StartMessageSync();
         }
         catch (Exception ex)
@@ -561,6 +567,13 @@ public partial class BranchChatPage : ContentPage
     private void ProcessRealtimeMessage(
         string rawMessage)
     {
+        if (!_chatHistoryEnrolled)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BranchChat] HistoricalFetch=SKIPPED RealtimeEvent=IGNORED " +
+                $"GroupId={_branchId} Reason=NOT_ENROLLED");
+            return;
+        }
         if (string.IsNullOrWhiteSpace(rawMessage))
         {
             return;
@@ -1126,6 +1139,13 @@ DateTime? updatedAt =
                 $"UID={GetCurrentUserUid()} " +
                 $"Branch={_branchId}; starting Appwrite message load.");
 
+            _chatHistoryEnrolled =
+                await _communityService.GetChatHistoryEnrolledAsync(
+                    _branchId.ToString());
+            System.Diagnostics.Debug.WriteLine(
+                $"[BranchChat] UserUid={GetCurrentUserUid()} GroupId={_branchId} " +
+                $"ChatHistoryEnrolled={_chatHistoryEnrolled}");
+
             // Firestore member metadata is optional for chat history. Do not
             // let a denied or slow member query block Appwrite messages.
             _ = LoadBranchMembersForDisplayAsync();
@@ -1600,7 +1620,21 @@ DateTime? updatedAt =
             $"message_id={message.MessageId} " +
             $"sender_uid_present={!string.IsNullOrWhiteSpace(message.SenderUid)}");
 
-        _ = ScrollMessagesToBottomAsync();
+        if (source.Contains("send", StringComparison.OrdinalIgnoreCase))
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[BranchChat] OwnMessageSent AutoScrollToMessage={message.MessageId}");
+            _ = ScrollMessagesToBottomAsync();
+        }
+        else if (_isReadingOlderMessages &&
+                 !string.Equals(message.SenderUid, GetCurrentUserUid(), StringComparison.Ordinal))
+        {
+            _unreadIncomingCount++;
+            NewMessagesButton.Text = $"{_unreadIncomingCount} new messages";
+            NewMessagesButton.IsVisible = true;
+            System.Diagnostics.Debug.WriteLine(
+                $"[BranchChat] IncomingMessage UserAtBottom=false UnreadCount={_unreadIncomingCount}");
+        }
     }
 
     private Border CreateMessageContainer(
@@ -1619,7 +1653,7 @@ DateTime? updatedAt =
                 BackgroundColor =
                     isCurrentUser
                         ? Color.FromArgb("#E8E4DA")
-                        : Colors.White,
+                        : GetSenderColor(message.SenderUid),
 
                 Stroke =
                     Color.FromArgb("#E4DED4"),
@@ -1769,6 +1803,56 @@ DateTime? updatedAt =
         }
 
         return container;
+    }
+
+    private static Color GetSenderColor(string senderUid)
+    {
+        var palette = new[]
+        {
+            "#EAF4EC", "#EAF2FA", "#F1ECF8", "#FFF2E2", "#E8F3F1"
+        };
+        var hash = 17;
+        foreach (var character in senderUid ?? string.Empty)
+            hash = unchecked(hash * 31 + character);
+        return Color.FromArgb(palette[(hash & int.MaxValue) % palette.Length]);
+    }
+
+    private void OnMessagesScrolled(object? sender, ScrolledEventArgs e)
+    {
+        var scrollableHeight = Math.Max(0, MessagesScrollView.ContentSize.Height - MessagesScrollView.Height);
+        var distanceFromBottom = e.ScrollY - (scrollableHeight - 24);
+        _isReadingOlderMessages = distanceFromBottom < -80;
+        if (!_isReadingOlderMessages)
+        {
+            _unreadIncomingCount = 0;
+            NewMessagesButton.IsVisible = false;
+        }
+    }
+
+    private async void OnNewMessagesClicked(object? sender, EventArgs e)
+    {
+        _unreadIncomingCount = 0;
+        NewMessagesButton.IsVisible = false;
+        _isReadingOlderMessages = false;
+        await ScrollMessagesToBottomAsync();
+    }
+
+    private async void OnClearLocalChatClicked(object? sender, EventArgs e)
+    {
+        if (_branchId <= 0)
+            return;
+        var confirmed = await DisplayAlert(
+            "Clear local chat",
+            "Clear only this account's local Branch messages? Server messages will remain unchanged.",
+            "Clear",
+            "Cancel");
+        if (!confirmed)
+            return;
+
+        await _communityService.ClearLocalGroupChatAsync(_branchId.ToString());
+        _messages.Clear();
+        await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+        BranchStatusLabel.Text = "Local chat cleared";
     }
 
     // ============================================================
@@ -2853,6 +2937,10 @@ DateTime? updatedAt =
             await _communityService
                 .CacheCommunityMessageAsync(
                     createdMessage);
+            await _communityService.SetChatHistoryEnrolledAsync(_branchId.ToString());
+            _chatHistoryEnrolled = true;
+            System.Diagnostics.Debug.WriteLine(
+                $"[BranchChat] ChatHistoryEnrolled=true GroupId={_branchId} InitialParticipationEstablished");
 
             var uiMessage =
                 ToUiMessage(
@@ -2956,6 +3044,7 @@ DateTime? updatedAt =
             OnRemoveAttachmentClicked(null, EventArgs.Empty);
             MessageEntry.Text = string.Empty;
             await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            _ = ScrollMessagesToBottomAsync();
             _ = PersistMediaMessageAsync(localMessage);
 
             return;
@@ -3035,6 +3124,7 @@ DateTime? updatedAt =
             _messages.Add(localMessage);
             MessageEntry.Text = string.Empty;
             await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            _ = ScrollMessagesToBottomAsync();
 
             _ = PersistTextMessageAsync(localMessage);
         }

@@ -78,6 +78,12 @@ namespace CCT_USCF.Services.Cloudinary
                 "video");
         }
 
+        public Task<CloudinaryUploadResult> UploadAnnouncementImageAsync(FileResult file) =>
+            UploadAsync(file, "image", "cct-uscf/announcements");
+
+        public Task<CloudinaryUploadResult> UploadAnnouncementPdfAsync(FileResult file) =>
+            UploadAsync(file, "raw", "cct-uscf/announcements");
+
         // ============================================================
         // GENERIC UPLOAD
         // ============================================================
@@ -85,7 +91,8 @@ namespace CCT_USCF.Services.Cloudinary
         private async Task<CloudinaryUploadResult>
             UploadAsync(
                 FileResult file,
-                string resourceType)
+                string resourceType,
+                string? folder = null)
         {
             if (file == null)
             {
@@ -100,7 +107,8 @@ namespace CCT_USCF.Services.Cloudinary
                 ?? string.Empty;
 
             if (normalizedResourceType != "image" &&
-                normalizedResourceType != "video")
+                normalizedResourceType != "video" &&
+                normalizedResourceType != "raw")
             {
                 throw new ArgumentException(
                     "Cloudinary resource type must be image or video.",
@@ -164,6 +172,8 @@ namespace CCT_USCF.Services.Cloudinary
                     UploadPreset,
                     Encoding.UTF8),
                 "upload_preset");
+            if (!string.IsNullOrWhiteSpace(folder))
+                form.Add(new StringContent(folder, Encoding.UTF8), "folder");
 
             // --------------------------------------------------------
             // FILE

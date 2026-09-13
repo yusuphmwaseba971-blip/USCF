@@ -2,25 +2,80 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.AnnouncementActivityPage"
-             Title="Announcement" BackgroundColor="#F8FAFC">
+             Title="Announcement Center"
+             BackgroundColor="#F5F7F3">
+    <ContentPage.Resources>
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#E8EFE9" />
+            <Setter Property="TextColor" Value="#173C2C" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="CornerRadius" Value="12" />
+        </Style>
+    </ContentPage.Resources>
     <RefreshView x:Name="RefreshHost" Refreshing="OnRefreshing">
-        <CollectionView x:Name="NotificationsView">
-        <CollectionView.ItemTemplate>
-            <DataTemplate>
-                <Border Padding="14" Margin="10,6" BackgroundColor="White" StrokeThickness="0">
+        <ScrollView>
+            <VerticalStackLayout Padding="18,18,18,30" Spacing="16">
+                <Border StrokeThickness="0" BackgroundColor="#173C2C" Padding="20" StrokeShape="RoundRectangle 24">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="ANNOUNCEMENTS" TextColor="#D9B86C" FontAttributes="Bold" FontSize="12" />
+                            <Label Text="Stay informed. Stay connected." TextColor="White" FontAttributes="Bold" FontSize="25" />
+                            <Label Text="Official updates and important information from CCT-USCF." TextColor="#DDEBE2" FontSize="13" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="1" Text="◉" TextColor="#D9B86C" FontSize="44" VerticalOptions="Center" />
+                    </Grid>
+                </Border>
+
+                <Label Text="Information Center" TextColor="#173C2C" FontAttributes="Bold" FontSize="20" />
+                <HorizontalStackLayout Spacing="8">
+                    <Button x:Name="NationalButton" Text="NATIONAL 0" Clicked="OnCategoryClicked" CommandParameter="NATIONAL" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="RegionalButton" Text="REGIONAL 0" Clicked="OnCategoryClicked" CommandParameter="REGIONAL" Style="{StaticResource SecondaryButtonStyle}" />
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Spacing="8">
+                    <Button x:Name="DistrictButton" Text="DISTRICT 0" Clicked="OnCategoryClicked" CommandParameter="DISTRICT" Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="BranchButton" Text="BRANCH 0" Clicked="OnCategoryClicked" CommandParameter="BRANCH" Style="{StaticResource SecondaryButtonStyle}" />
+                </HorizontalStackLayout>
+
+                <Border x:Name="FeaturedCard" IsVisible="False" BackgroundColor="#FFF8E8" Stroke="#E3C778" StrokeThickness="1" Padding="16" StrokeShape="RoundRectangle 18">
                     <VerticalStackLayout Spacing="5">
-                        <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
-                        <Label Text="{Binding Message}" />
-                        <Label Text="{Binding SenderName, StringFormat='From: {0}'}" FontSize="12" TextColor="#64748B" />
-                        <Label Text="{Binding TargetLevel}" FontSize="12" TextColor="#64748B" />
-                        <Label Text="{Binding CreatedAtUtc, StringFormat='{0:g}'}" FontSize="12" TextColor="#64748B" />
+                        <Label Text="FEATURED ANNOUNCEMENT" TextColor="#9B6B18" FontAttributes="Bold" FontSize="11" />
+                        <Label x:Name="FeaturedTitle" TextColor="#173C2C" FontAttributes="Bold" FontSize="19" />
+                        <Label x:Name="FeaturedPreview" TextColor="#4E5D53" MaxLines="3" />
                     </VerticalStackLayout>
                 </Border>
-            </DataTemplate>
-        </CollectionView.ItemTemplate>
-        <CollectionView.EmptyView>
-            <Label Text="No announcements available" HorizontalOptions="Center" VerticalOptions="Center" />
-        </CollectionView.EmptyView>
-        </CollectionView>
+
+                <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" IsRunning="False" Color="#A98232" />
+                <Label x:Name="ErrorLabel" IsVisible="False" TextColor="#A63D40" HorizontalOptions="Center" />
+                <CollectionView x:Name="NotificationsView" SelectionMode="Single" SelectionChanged="OnSelected">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="16" Margin="0,5" BackgroundColor="White" Stroke="#E3E9E3" StrokeThickness="1" StrokeShape="RoundRectangle 18">
+                                <VerticalStackLayout Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Label Text="{Binding ScopeLabel}" TextColor="#A98232" FontAttributes="Bold" FontSize="11" />
+                                        <Label Grid.Column="1" Text="{Binding CreatedAtUtc, StringFormat='{0:dd MMM yyyy}'}" TextColor="#78857B" FontSize="11" />
+                                    </Grid>
+                                    <Label Text="{Binding Title}" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" />
+                                    <Label Text="{Binding Preview}" TextColor="#4E5D53" MaxLines="3" />
+                                    <Label Text="{Binding SenderName, StringFormat='Issued by {0}'}" TextColor="#78857B" FontSize="12" />
+                                    <HorizontalStackLayout Spacing="10">
+                                        <Button Text="READ MORE" Clicked="OnReadClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
+                                        <Button Text="SHARE" Clicked="OnShareClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
+                                        <Button Text="REMINDER" Clicked="OnReminderClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                    <CollectionView.EmptyView>
+                        <VerticalStackLayout Padding="20,45" Spacing="8" HorizontalOptions="Center">
+                            <Label Text="No announcements in this category" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" HorizontalTextAlignment="Center" />
+                            <Label Text="Official updates for your area will appear here." TextColor="#78857B" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </CollectionView.EmptyView>
+                </CollectionView>
+            </VerticalStackLayout>
+        </ScrollView>
     </RefreshView>
 </ContentPage>

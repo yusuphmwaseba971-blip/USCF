@@ -1303,6 +1303,8 @@ async function createChurchAnnouncement(req, log) {
   const regionId = parseOptionalInt(body.regionId);
   const districtId = parseOptionalInt(body.districtId);
   const branchId = parseOptionalInt(body.branchId);
+  const imageUrl = normalizeString(body.imageUrl);
+  const attachmentUrl = normalizeString(body.attachmentUrl);
   const canSendRequestedAudience =
     isAnnouncementLeader(profile) ||
     (targetLevel === "Branch" && canSendBranchAnnouncement(profile));
@@ -1337,6 +1339,8 @@ async function createChurchAnnouncement(req, log) {
     region_id: regionId === null ? null : String(regionId),
     district_id: districtId === null ? null : String(districtId),
     branch_id: branchId === null ? null : String(branchId),
+    image_url: imageUrl || null,
+    attachment_url: attachmentUrl || null,
     is_active: true
   };
 
@@ -1445,6 +1449,13 @@ async function listChurchNotifications(req, log) {
     message: row.content || "",
     senderName: row.sender_name || "",
     targetLevel: row.scope_type || "",
+    regionId: parseOptionalInt(row.region_id ?? row.region),
+    districtId: parseOptionalInt(row.district_id ?? row.district),
+    branchId: parseOptionalInt(row.branch_id ?? row.branch),
+    imageUrl: row.image_url || "",
+    attachmentUrl: row.attachment_url || "",
+    expiresAtUtc: safeIsoDate(row.expires_at),
+    isActive: row.is_active !== false,
     createdAtUtc: safeIsoDate(row.$createdAt),
     isRead: false
   }));
@@ -2081,6 +2092,12 @@ async function createGroupMessage(
       document
     );
 
+  await notifyBranchMessageRecipients(
+    message,
+    firebaseUser.uid,
+    log
+  );
+
   log(
     `[CCT_MESSAGE_CREATE] Mapped response MessageId=${message.messageId}`
   );
@@ -2108,6 +2125,48 @@ async function createGroupMessage(
   return buildCreateResponse(
     message
   );
+}
+
+async function notifyBranchMessageRecipients(message, senderUid, log) {
+  const branchId = normalizeString(message.branchId);
+  if (!branchId) return;
+
+  try {
+    const tokenPage = await appwriteTableRowRequest(
+      CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+      "GET",
+      "",
+      undefined,
+      [
+        { method: "equal", attribute: "branch_id", values: [branchId] },
+        { method: "limit", values: [100] }
+      ]
+    );
+    const tokens = (tokenPage.rows || tokenPage.documents || [])
+      .filter(token => normalizeString(token.user_uid) !== senderUid)
+      .map(token => normalizeString(token.token))
+      .filter(Boolean);
+    if (!tokens.length) return;
+
+    const preview = message.isDeleted
+      ? "Message deleted"
+      : normalizeString(message.content).slice(0, 120);
+    const result = await firebaseMessaging.sendEachForMulticast({
+      tokens,
+      notification: {
+        title: message.senderName || "Branch Church Group",
+        body: preview
+      },
+      data: {
+        type: "branch_message",
+        groupId: branchId,
+        messageId: normalizeString(message.messageId)
+      }
+    });
+    log(`[FCM] Branch notification target group=${branchId} sent=${result.successCount} failed=${result.failureCount}`);
+  } catch (error) {
+    log(`[FCM] Branch notification failed group=${branchId}: ${error.message}`);
+  }
 }
 
 async function updateGroupMessage(req, log, messageId, deleted) {
