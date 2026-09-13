@@ -131,4 +131,13 @@ public partial class AnnouncementActivityPage : ContentPage
             reminderButton.Text = "REMINDER SET";
         await DisplayAlert("Reminder set", $"You will be reminded on {reminder:g}.", "OK");
     }
+
+    private async void OnAttachmentClicked(object? sender, EventArgs e)
+    {
+        if ((sender as Button)?.CommandParameter is ChurchNotification item &&
+            !string.IsNullOrWhiteSpace(item.AttachmentUrl))
+        {
+            await Launcher.Default.OpenAsync(item.AttachmentUrl);
+        }
+    }
 }

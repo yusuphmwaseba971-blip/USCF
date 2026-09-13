@@ -2,18 +2,45 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.ChurchAnnouncementPage"
-             Title="Church Announcement" BackgroundColor="{StaticResource PageBackground}">
+             Title="Create Announcement"
+             BackgroundColor="#F5F7F3">
     <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="14">
-            <Label Text="Church Announcement" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource AccentPurple}" />
-            <Label x:Name="LeadershipLabel" FontSize="16" />
-            <Label x:Name="OrganizationLabel" FontSize="14" TextColor="{StaticResource TextSecondary}" />
-            <Picker x:Name="AudiencePicker" Title="Audience" ItemDisplayBinding="{Binding .}" />
-            <Entry x:Name="TitleEntry" Placeholder="Announcement title" />
-            <Editor x:Name="MessageEditor" Placeholder="Announcement message" AutoSize="TextChanges" MinimumHeightRequest="140" />
-            <Button x:Name="SendButton" Text="Send announcement" Clicked="OnSendClicked" />
-            <Label x:Name="StatusLabel" TextColor="#B45309" LineBreakMode="WordWrap" />
-            <Button Text="Announcement activity" Clicked="OnActivityClicked" />
+        <VerticalStackLayout Padding="18,20,18,32" Spacing="16">
+            <Border BackgroundColor="#173C2C" StrokeThickness="0" Padding="20" StrokeShape="RoundRectangle 24">
+                <VerticalStackLayout Spacing="5">
+                    <Label Text="CREATE ANNOUNCEMENT" TextColor="#D9B86C" FontAttributes="Bold" FontSize="12" />
+                    <Label Text="Share an important message with your church community." TextColor="White" FontAttributes="Bold" FontSize="23" />
+                    <Label x:Name="OrganizationLabel" TextColor="#DDEBE2" FontSize="13" />
+                </VerticalStackLayout>
+            </Border>
+            <Label x:Name="LeadershipLabel" TextColor="#78857B" FontSize="12" />
+
+            <Label Text="Audience" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" />
+            <Picker x:Name="AudiencePicker" Title="Choose an audience" ItemDisplayBinding="{Binding .}" />
+
+            <Border BackgroundColor="White" Stroke="#E3E9E3" StrokeThickness="1" Padding="14" StrokeShape="RoundRectangle 16">
+                <VerticalStackLayout Spacing="10">
+                    <Entry x:Name="TitleEntry" Placeholder="Announcement title" FontSize="18" />
+                    <Editor x:Name="MessageEditor" Placeholder="Write your announcement..." AutoSize="TextChanges" MinimumHeightRequest="150" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border BackgroundColor="#FFF8E8" Stroke="#E3C778" StrokeThickness="1" Padding="15" StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="5">
+                    <Label Text="Add attachment" TextColor="#173C2C" FontAttributes="Bold" FontSize="17" />
+                    <Label Text="Attach an image or document to this announcement." TextColor="#78857B" FontSize="12" />
+                    <Button x:Name="AttachmentButton" Text="CHOOSE IMAGE OR PDF" Clicked="OnAttachmentClicked" />
+                    <Grid x:Name="AttachmentPreview" IsVisible="False" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Image x:Name="SelectedImagePreview" WidthRequest="72" HeightRequest="72" Aspect="AspectFill" IsVisible="False" />
+                        <Label x:Name="SelectedFileLabel" Grid.Column="1" TextColor="#173C2C" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                        <Button Grid.Column="2" Text="REMOVE" Clicked="OnRemoveAttachmentClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <Button x:Name="SendButton" Text="SEND ANNOUNCEMENT" Clicked="OnSendClicked" FontAttributes="Bold" />
+            <Label x:Name="StatusLabel" TextColor="#A98232" LineBreakMode="WordWrap" />
+            <Button Text="ANNOUNCEMENT ACTIVITY" Clicked="OnActivityClicked" />
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
