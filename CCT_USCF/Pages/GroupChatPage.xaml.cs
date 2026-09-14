@@ -763,8 +763,17 @@ public partial class GroupChatPage : ContentPage
             await EnsureCurrentUserMembershipAsync(
                 currentUser);
 
-            var members =
-                await LoadGroupMembersAsync();
+            List<GroupMemberUi> members;
+            try
+            {
+                members = await LoadGroupMembersAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP_CHAT] Member load skipped while offline: {ex}");
+                members = new List<GroupMemberUi>();
+            }
 
             MembersLabel.Text =
                 members.Count == 1
@@ -777,8 +786,17 @@ public partial class GroupChatPage : ContentPage
                     : $"{members.Count} members in this group";
 
             var backendGroupId = GetBackendCommunityId();
-            _chatHistoryEnrolled =
-                await _communityService.GetChatHistoryEnrolledAsync(backendGroupId);
+            try
+            {
+                _chatHistoryEnrolled =
+                    await _communityService.GetChatHistoryEnrolledAsync(backendGroupId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP_CHAT] Chat history enrollment unavailable; opening cached group: {ex}");
+                _chatHistoryEnrolled = true;
+            }
             System.Diagnostics.Debug.WriteLine(
                 $"[GroupChat] UserUid={GetCurrentUserUid()} GroupId={backendGroupId} " +
                 $"HistoryEnrolled={_chatHistoryEnrolled}");

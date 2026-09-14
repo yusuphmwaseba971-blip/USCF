@@ -29,7 +29,7 @@ public class MainActivity : MauiAppCompatActivity
 #endif
         CrossFirebase.Initialize(this, () => this);
         base.OnCreate(savedInstanceState);
-        Window?.SetSoftInputMode(SoftInput.AdjustResize);
+        Window?.SetSoftInputMode(SoftInput.AdjustPan);
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&
             CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
         {

@@ -28,15 +28,15 @@
                 <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
                     <Image Source="uscf_logo.png" WidthRequest="30" HeightRequest="30" />
                     <VerticalStackLayout Grid.Column="1" Spacing="1">
-                            <Label Text="USCF Assistance" FontSize="16" FontAttributes="Bold"
-                                   TextColor="White" />
-                            <Label x:Name="ContextLabel" FontSize="12"
-                                   TextColor="#D0D7DE" LineBreakMode="WordWrap" />
+                        <Label Text="USCF Assistance" FontSize="16" FontAttributes="Bold"
+                               TextColor="White" />
+                        <Label x:Name="ContextLabel" FontSize="12"
+                               TextColor="#D0D7DE" LineBreakMode="WordWrap" />
                     </VerticalStackLayout>
                     <Button Grid.Column="2" Text="×" FontSize="22" WidthRequest="36"
-                                HeightRequest="36" Clicked="OnCloseClicked"
-                                BackgroundColor="Transparent" TextColor="{StaticResource BrandGreen}"
-                                Padding="0" />
+                            HeightRequest="36" Clicked="OnCloseClicked"
+                            BackgroundColor="Transparent" TextColor="{StaticResource BrandGreen}"
+                            Padding="0" />
                 </Grid>
                 <ScrollView Grid.Row="1" x:Name="ConversationScroll"
                             VerticalScrollBarVisibility="Always">
@@ -70,9 +70,9 @@
                             PlaceholderColor="#B8C4CC" />
                     <Button x:Name="AskSurface"
                             Grid.Column="1"
-                    Text=">"
-                    FontSize="20"
-                    WidthRequest="52"
+                            Text=">"
+                            FontSize="20"
+                            WidthRequest="52"
                             HeightRequest="48"
                             Padding="8,0"
                             HorizontalOptions="End"

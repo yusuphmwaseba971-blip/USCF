@@ -1141,9 +1141,18 @@ DateTime? updatedAt =
                 $"UID={GetCurrentUserUid()} " +
                 $"Branch={_branchId}; starting Appwrite message load.");
 
-            _chatHistoryEnrolled =
-                await _communityService.GetChatHistoryEnrolledAsync(
-                    _branchId.ToString());
+            try
+            {
+                _chatHistoryEnrolled =
+                    await _communityService.GetChatHistoryEnrolledAsync(
+                        _branchId.ToString());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[BRANCH_CHAT] Chat history enrollment unavailable; opening cached branch: {ex}");
+                _chatHistoryEnrolled = true;
+            }
             System.Diagnostics.Debug.WriteLine(
                 $"[BranchChat] UserUid={GetCurrentUserUid()} GroupId={_branchId} " +
                 $"ChatHistoryEnrolled={_chatHistoryEnrolled}");

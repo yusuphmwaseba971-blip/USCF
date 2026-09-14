@@ -847,6 +847,14 @@ SenderUid =
                     normalizedGroupId,
                     safeLimit);
 
+            // Cached messages remain readable when the device is offline,
+            // even if the enrollment state cannot be refreshed.
+            if (cachedMessages.Count > 0)
+            {
+                Debug.WriteLine($"[COMMUNITY_CACHE] Returning {cachedMessages.Count} cached messages for {normalizedGroupId}.");
+                return cachedMessages;
+            }
+
             try
             {
                 var enrolled = await GetChatHistoryEnrolledAsync(normalizedGroupId);
@@ -865,14 +873,6 @@ SenderUid =
                     "[BRANCH_CHAT_DIAGNOSTIC] " +
                     $"CacheReturnedCount={cachedMessages.Count}, " +
                     $"CommunityId={normalizedGroupId}");
-
-                // A populated cache is the source for normal page opens.
-                // Pull-to-refresh owns incremental network synchronization;
-                // reopening the page must not download the full history again.
-                if (cachedMessages.Count > 0)
-                {
-                    return cachedMessages;
-                }
 
                 var remoteMessages = await GetGroupMessagesAsync(
                     normalizedGroupId, safeLimit, null,
