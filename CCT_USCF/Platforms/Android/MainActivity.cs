@@ -1,6 +1,7 @@
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
+using Android.Views;
 using Plugin.Firebase.AppCheck;
 using Plugin.Firebase.Core.Platforms.Android;
 
@@ -28,6 +29,7 @@ public class MainActivity : MauiAppCompatActivity
 #endif
         CrossFirebase.Initialize(this, () => this);
         base.OnCreate(savedInstanceState);
+        Window?.SetSoftInputMode(SoftInput.AdjustResize);
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&
             CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
         {

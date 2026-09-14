@@ -60,3 +60,17 @@ public sealed class NationalCommunityEvent
     public Guid PostId { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }
+
+public sealed class CctPost
+{
+    public string Id { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string PostType { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "none";
+    public string? MediaUrl { get; set; }
+    public long? MediaSize { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public bool IsPublished { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+}

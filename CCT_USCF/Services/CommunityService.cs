@@ -11,6 +11,7 @@ namespace CCT_USCF.Services
 {
     public class CommunityService
     {
+        public static event EventHandler? CctPostCreated;
         // ============================================================
         // APPWRITE COLLECTIONS
         // ============================================================
@@ -26,6 +27,16 @@ namespace CCT_USCF.Services
 
         private const string BiblePostsCollectionId =
             "cct_posts";
+
+        private static readonly string[] PlusPostTypes =
+        {
+            "scripture",
+            "encouragement",
+            "worship",
+            "prayer",
+            "notice",
+            "event"
+        };
 
         // ============================================================
         // SERVICES
@@ -812,7 +823,11 @@ SenderUid =
         public async Task<List<CommunityMessage>>
             LoadGroupMessagesWithCacheAsync(
                 string groupId,
-                int limit = 100)
+                int limit = 100,
+                string? organizationalLevel = null,
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null)
         {
             if (string.IsNullOrWhiteSpace(groupId))
             {
@@ -859,7 +874,9 @@ SenderUid =
                     return cachedMessages;
                 }
 
-                var remoteMessages = await GetGroupMessagesAsync(normalizedGroupId, safeLimit);
+                var remoteMessages = await GetGroupMessagesAsync(
+                    normalizedGroupId, safeLimit, null,
+                    organizationalLevel, branchId, regionId, districtId);
 
                 System.Diagnostics.Debug.WriteLine(
                     "[BRANCH_CHAT_DIAGNOSTIC] " +
@@ -887,7 +904,11 @@ SenderUid =
         public async Task<List<CommunityMessage>>
             SyncNewerGroupMessagesAsync(
                 string groupId,
-                int limit = 100)
+                int limit = 100,
+                string? organizationalLevel = null,
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null)
         {
             if (string.IsNullOrWhiteSpace(groupId))
             {
@@ -941,7 +962,12 @@ SenderUid =
                 var initialMessages =
                     await GetGroupMessagesAsync(
                         normalizedGroupId,
-                        safeLimit);
+                        safeLimit,
+                        null,
+                        organizationalLevel,
+                        branchId,
+                        regionId,
+                        districtId);
 
                 if (initialMessages.Count > 0)
                 {
@@ -970,7 +996,11 @@ SenderUid =
                 await GetGroupMessagesAsync(
                     normalizedGroupId,
                     safeLimit,
-                    newestCreatedAt);
+                    newestCreatedAt,
+                    organizationalLevel,
+                    branchId,
+                    regionId,
+                    districtId);
 
             var cachedMessageIds =
                 (await database
@@ -1267,7 +1297,11 @@ SenderUid =
             GetGroupMessagesAsync(
                 string groupId,
                 int limit = 100,
-                DateTime? newerThan = null)
+                DateTime? newerThan = null,
+                string? organizationalLevel = null,
+                string? branchId = null,
+                string? regionId = null,
+                string? districtId = null)
         {
             if (string.IsNullOrWhiteSpace(groupId))
             {
@@ -1287,10 +1321,16 @@ SenderUid =
                     newerThan,
 
                 organizationalLevel:
-                    "Branch",
+                    organizationalLevel ?? "Branch",
 
                 branchId:
-                    groupId.Trim());
+                    branchId ?? (organizationalLevel == null ? groupId.Trim() : null),
+
+                regionId:
+                    regionId,
+
+                districtId:
+                    districtId);
         }
 
         // ============================================================
@@ -3794,6 +3834,201 @@ ConversationId =
                 new JsonSerializerOptions(JsonSerializerDefaults.Web))
                 ?? throw new InvalidOperationException("The server returned no post.");
         }
+
+        public async Task<CctPost> CreateCctPostAsync(
+            string content,
+            string postType)
+        {
+            var userId = _authService.GetCurrentFirebaseUid();
+            var isEncouragement = string.Equals(
+                postType?.Trim(),
+                "encouragement",
+                StringComparison.OrdinalIgnoreCase);
+            var isScripture = string.Equals(
+                postType?.Trim(),
+                "scripture",
+                StringComparison.OrdinalIgnoreCase);
+            var isWorship = string.Equals(
+                postType?.Trim(),
+                "worship",
+                StringComparison.OrdinalIgnoreCase);
+
+            if (isEncouragement)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ENCOURAGEMENT_PUBLISH] started firebaseUid={userId ?? "<null>"} " +
+                    $"contentLength={content?.Length ?? 0} postType={postType ?? "<null>"} " +
+                    $"database={AppwriteConfig.DatabaseId} table={BiblePostsCollectionId}");
+            }
+            else if (isScripture)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SCRIPTURE_PUBLISH] started firebaseUid={userId ?? "<null>"} " +
+                    $"contentLength={content?.Length ?? 0} postType={postType ?? "<null>"} " +
+                    "mediaType=none " +
+                    $"database={AppwriteConfig.DatabaseId} table={BiblePostsCollectionId}");
+            }
+            else if (isWorship)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[WORSHIP_PUBLISH] started firebaseUid={userId ?? "<null>"} " +
+                    $"contentLength={content?.Length ?? 0} postType={postType ?? "<null>"} " +
+                    "mediaType=none " +
+                    $"database={AppwriteConfig.DatabaseId} table={BiblePostsCollectionId}");
+            }
+
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new InvalidOperationException("You must be signed in to publish a post.");
+
+            if (string.IsNullOrWhiteSpace(content))
+                throw new ArgumentException("Post content is required.", nameof(content));
+            if (string.IsNullOrWhiteSpace(postType))
+                throw new ArgumentException("Post type is required.", nameof(postType));
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                "api/community/posts")
+            {
+                Content = JsonContent.Create(new
+                {
+                    content = content.Trim(),
+                    postType = postType.Trim()
+                })
+            };
+            await AddFirebaseAuthorizationAsync(request);
+            if (isEncouragement)
+                System.Diagnostics.Debug.WriteLine(
+                    "[ENCOURAGEMENT_PUBLISH] sending authenticated create request.");
+            else if (isScripture)
+                System.Diagnostics.Debug.WriteLine(
+                    "[SCRIPTURE_PUBLISH] sending authenticated Appwrite create request.");
+            else if (isWorship)
+                System.Diagnostics.Debug.WriteLine(
+                    "[WORSHIP_PUBLISH] sending authenticated Appwrite create request.");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.SendAsync(request);
+            }
+            catch (Exception ex) when (isScripture || isWorship)
+            {
+                var tag = isScripture ? "SCRIPTURE_PUBLISH" : "WORSHIP_PUBLISH";
+                System.Diagnostics.Debug.WriteLine(
+                    $"[{tag}] failed exception={ex.GetType().Name} " +
+                    $"message={ex.Message} operation=Appwrite create request");
+                throw;
+            }
+
+            using (response)
+            {
+                var responseBody = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (isEncouragement)
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[ENCOURAGEMENT_PUBLISH] failed exception=HttpStatus " +
+                            $"status={(int)response.StatusCode} body={responseBody}");
+                    else if (isScripture)
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[SCRIPTURE_PUBLISH] failed exception=HttpStatus " +
+                            $"status={(int)response.StatusCode} body={responseBody}");
+                    else if (isWorship)
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[WORSHIP_PUBLISH] failed exception=HttpStatus " +
+                            $"status={(int)response.StatusCode} body={responseBody}");
+                    throw new InvalidOperationException(
+                        $"The post service rejected the request ({(int)response.StatusCode}).");
+                }
+
+                var post = JsonSerializer.Deserialize<CctPost>(
+                    responseBody,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    ?? throw new InvalidOperationException("The post service returned no post.");
+                if (isEncouragement)
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[ENCOURAGEMENT_PUBLISH] succeeded documentId={post.Id} " +
+                        $"status={post.Status} isPublished={post.IsPublished}");
+                else if (isScripture)
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SCRIPTURE_PUBLISH] succeeded documentId={post.Id} " +
+                        $"postType={post.PostType} status={post.Status} isPublished={post.IsPublished}");
+                else if (isWorship)
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[WORSHIP_PUBLISH] succeeded documentId={post.Id} " +
+                        $"postType={post.PostType} status={post.Status} isPublished={post.IsPublished}");
+                CctPostCreated?.Invoke(null, EventArgs.Empty);
+                return post;
+            }
+        }
+
+        public async Task<List<CctPost>> GetPublishedCctPostsAsync(int limit = 20)
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/community/posts?limit={Math.Clamp(limit, 1, 50)}");
+            await AddFirebaseAuthorizationAsync(request);
+            using var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var posts = await response.Content.ReadFromJsonAsync<List<CctPost>>()
+                ?? new List<CctPost>();
+            return posts
+                .Where(post => PlusPostTypes.Contains(
+                    post.PostType,
+                    StringComparer.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        private static CctPost MapCctPost(global::Appwrite.Models.Document document)
+        {
+            var data = document.Data;
+            return new CctPost
+            {
+                Id = document.Id,
+                UserId = ReadString(data, "user_id"),
+                Content = ReadString(data, "content"),
+                PostType = ReadString(data, "post_type"),
+                MediaType = ReadString(data, "media_type", "none"),
+                MediaUrl = ReadNullableString(data, "media_url"),
+                MediaSize = ReadNullableLong(data, "media_size"),
+                Status = ReadString(data, "status"),
+                IsPublished = ReadBool(data, "is_published"),
+                CreatedAtUtc = DateTime.TryParse(
+                    document.CreatedAt,
+                    out var createdAt)
+                    ? createdAt.ToUniversalTime()
+                    : DateTime.UtcNow
+            };
+        }
+
+        private static string ReadString(
+            IDictionary<string, object> data,
+            string key,
+            string fallback = "")
+            => data.TryGetValue(key, out var value) && value is not null
+                ? Convert.ToString(value) ?? fallback
+                : fallback;
+
+        private static string? ReadNullableString(
+            IDictionary<string, object> data,
+            string key)
+            => data.TryGetValue(key, out var value) && value is not null
+                ? Convert.ToString(value)
+                : null;
+
+        private static long? ReadNullableLong(
+            IDictionary<string, object> data,
+            string key)
+            => data.TryGetValue(key, out var value) && value is not null &&
+               long.TryParse(Convert.ToString(value), out var number)
+                ? number
+                : null;
+
+        private static bool ReadBool(
+            IDictionary<string, object> data,
+            string key)
+            => data.TryGetValue(key, out var value) &&
+               bool.TryParse(Convert.ToString(value), out var result) && result;
 
         public async Task<(bool Liked, int Count)> ToggleNationalLikeAsync(Guid postId, bool liked)
         {

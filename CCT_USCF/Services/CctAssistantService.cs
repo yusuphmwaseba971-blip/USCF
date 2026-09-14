@@ -5,9 +5,9 @@ namespace CCT_USCF.Services;
 public sealed class CctAssistantService : ICctAssistantService
 {
     private const string EnabledKey = "cct.assistant.enabled";
-    private readonly FirebaseAiLogicService _ai;
+    private readonly CloudflareAiService _ai;
 
-    public CctAssistantService(FirebaseAiLogicService ai) => _ai = ai;
+    public CctAssistantService(CloudflareAiService ai) => _ai = ai;
 
     public bool IsEnabled => Preferences.Default.Get(EnabledKey, true);
     public event EventHandler? EnabledChanged;
@@ -69,12 +69,32 @@ public sealed class CctAssistantService : ICctAssistantService
             normalized.Contains("share", StringComparison.OrdinalIgnoreCase))
             return new("Sharing remains under your control. After publishing, use the normal Android share sheet to choose WhatsApp and the recipient.", "Open Church Announcement");
 
+        var user = MauiProgram.CurrentUser;
+        var runtimeContext = new StringBuilder()
+            .AppendLine($"Current page: {context.PageName}.")
+            .AppendLine($"Role: {Safe(user?.Role)}.")
+            .AppendLine($"Leadership level: {Safe(user?.LeadershipLevel)}.")
+            .AppendLine($"Leadership duty: {Safe(user?.LeadershipDuty)}.")
+            .AppendLine($"Region ID: {Safe(user?.RegionId)}.")
+            .AppendLine($"District ID: {Safe(user?.DistrictId)}.")
+            .AppendLine($"Branch ID: {Safe(user?.BranchId)}.")
+            .ToString();
+        var knowledge = CctUsfcKnowledgeBase.BuildRelevantKnowledge(normalized, context.PageName);
         var promptWithContext = new StringBuilder()
             .AppendLine("You are USCF Assistance inside the CCT-USCF Android app.")
-            .AppendLine($"Current page: {context.PageName}.")
-            .AppendLine("Only explain existing app features. Do not invent data, private content, counts, permissions, or news.")
+            .AppendLine("Answer only from the VERIFIED CCT-USCF knowledge below and the supplied runtime context.")
+            .AppendLine($"If the answer is not verified, say exactly: \"{CctUsfcKnowledgeBase.UnknownAnswer}\"")
+            .AppendLine("Never invent pages, buttons, workflows, permissions, data, counts, news, or offline behavior.")
+            .AppendLine("The application/backend is authoritative for authentication, authorization, data, and operations.")
             .AppendLine("Never claim to have published, sent, deleted, or changed anything.")
             .AppendLine("Keep the response concise and helpful.")
+            .AppendLine()
+            .AppendLine("VERIFIED CCT-USCF KNOWLEDGE:")
+            .AppendLine(knowledge)
+            .AppendLine()
+            .AppendLine("SAFE CURRENT APPLICATION CONTEXT:")
+            .AppendLine(runtimeContext)
+            .AppendLine()
             .AppendLine($"User request: {normalized}")
             .ToString();
 
@@ -100,4 +120,7 @@ public sealed class CctAssistantService : ICctAssistantService
          value.Contains("where", StringComparison.OrdinalIgnoreCase) ||
          value.Contains("go", StringComparison.OrdinalIgnoreCase) ||
          value.Contains("find", StringComparison.OrdinalIgnoreCase));
+
+    private static string Safe(object? value) =>
+        value?.ToString() is { Length: > 0 } text ? text : "unknown";
 }

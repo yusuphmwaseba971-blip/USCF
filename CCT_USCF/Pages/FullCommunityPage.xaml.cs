@@ -1,13 +1,11 @@
 using CCT_USCF.Models;
 using CCT_USCF.Services;
-using CCT_USCF.Services.Cloudinary;
 
 namespace CCT_USCF.Pages;
 
 public partial class FullCommunityPage : ContentPage
 {
     private readonly CommunityService _community;
-    private readonly CloudinaryService _cloudinary;
     private readonly MediaViewerService _mediaViewer;
     private FileResult? _attachment;
     private string? _attachmentType;
@@ -16,7 +14,6 @@ public partial class FullCommunityPage : ContentPage
     {
         InitializeComponent();
         _community = MauiProgram.Services.GetRequiredService<CommunityService>();
-        _cloudinary = MauiProgram.Services.GetRequiredService<CloudinaryService>();
         _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
     }
 
@@ -81,18 +78,13 @@ public partial class FullCommunityPage : ContentPage
         {
             var request = new NationalCommunityCreateRequest { Title = TitleEntry.Text, Content = ContentEditor.Text, LinkUrl = LinkEntry.Text };
             if (_attachment is not null)
-            {
-                if (_attachmentType == "audio")
-                {
-                    var upload = await _cloudinary.UploadAudioAsync(_attachment);
-                    if (upload.Duration <= 0) throw new InvalidOperationException("Unable to determine audio duration safely.");
-                    if (upload.Duration > 15) throw new InvalidOperationException("Audio must not be longer than 15 seconds.");
-                    request.AudioDurationSeconds = upload.Duration; request.AudioUrl = upload.SecureUrl;
-                }
-                else if (_attachmentType == "image") request.ImageUrl = (await _cloudinary.UploadImageAsync(_attachment)).SecureUrl;
-                else request.VideoUrl = (await _cloudinary.UploadVideoAsync(_attachment)).SecureUrl;
-            }
+                throw new InvalidOperationException(
+                    "Media posting is temporarily unavailable. Please remove the attachment and try a text-only post.");
             await _community.CreateNationalPostAsync(request);
+            if (_attachment is null)
+                await _community.CreateCctPostAsync(
+                    request.Content ?? string.Empty,
+                    "FullCommunity");
             TitleEntry.Text = ContentEditor.Text = LinkEntry.Text = string.Empty; _attachment = null; _attachmentType = null; AttachmentLabel.Text = "No media selected"; AudioDurationEntry.IsVisible = false;
             await LoadFeedAsync();
         }

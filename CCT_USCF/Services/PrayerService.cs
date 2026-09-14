@@ -40,11 +40,20 @@ public class PrayerService
         PrayerVisibility visibility,
         PrayerNameVisibility nameVisibility)
     {
-        System.Diagnostics.Debug.WriteLine("[PRAYER_REQUEST_START]");
+        var normalizedContent = NormalizeContent(content);
+        var isPrivate = visibility == PrayerVisibility.Private;
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_REQUEST_START] contentLength={normalizedContent.Length} " +
+            $"private={isPrivate} database=cct-uscf-db table=cct_prayers");
+
+        if (string.IsNullOrWhiteSpace(normalizedContent))
+            throw new ArgumentException("Prayer request content is required.", nameof(content));
+
         var currentUser = _auth.CurrentUser;
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_REQUEST_AUTH] uidPresent={!string.IsNullOrWhiteSpace(currentUser?.Uid)}");
         if (currentUser == null)
             throw new InvalidOperationException("You must be signed in to create a prayer request.");
-        System.Diagnostics.Debug.WriteLine($"[PRAYER_REQUEST_AUTH] uid={currentUser.Uid}");
 
         var profile = MauiProgram.CurrentUser;
         var prayerId = Guid.NewGuid().ToString("N");
@@ -58,7 +67,7 @@ public class PrayerService
             AuthorUid = currentUser.Uid,
             AuthorDisplayName = authorDisplayName,
             IsAnonymous = nameVisibility == PrayerNameVisibility.Anonymous,
-            Content = NormalizeContent(content),
+            Content = normalizedContent,
             Category = category,
             Reach = reach,
             Visibility = visibility,
@@ -75,11 +84,22 @@ public class PrayerService
             IsOwnerVisible = nameVisibility == PrayerNameVisibility.ShowMyName
         };
 
-        var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        string? token;
+        try
+        {
+            token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[PRAYER_REQUEST_ERROR] exceptionType={ex.GetType().FullName} " +
+                $"message={ex.Message} operation=Firebase ID token retrieval");
+            throw;
+        }
+
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
 
-        var isPrivate = visibility == PrayerVisibility.Private;
         var payload = new
         {
             content = prayer.Content,
@@ -87,32 +107,73 @@ public class PrayerService
             is_private = isPrivate
         };
         System.Diagnostics.Debug.WriteLine(
-            $"[PRAYER_REQUEST_PAYLOAD] contentLength={prayer.Content.Length} isPrivate={isPrivate} leaderId=none");
+            $"[PRAYER_REQUEST_PAYLOAD] contentLength={prayer.Content.Length} " +
+            $"private={isPrivate} leaderId=none");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/prayers")
         {
             Content = JsonContent.Create(payload)
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        System.Diagnostics.Debug.WriteLine("[PRAYER_REQUEST_APPWRITE_CREATE] route=api/prayers database=cct-uscf-db table=cct_prayers");
-        using var response = await _http.SendAsync(request);
-        var responseBody = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
+        System.Diagnostics.Debug.WriteLine(
+            "[PRAYER_REQUEST_APPWRITE_CREATE] started route=api/prayers " +
+            "database=cct-uscf-db table=cct_prayers");
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request);
+        }
+        catch (HttpRequestException ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[PRAYER_REQUEST_ERROR] status={(int)response.StatusCode} body={responseBody}");
-            throw new HttpRequestException($"Prayer request could not be saved ({(int)response.StatusCode}).");
+                $"[PRAYER_REQUEST_ERROR] exceptionType={ex.GetType().FullName} " +
+                $"status={(int?)ex.StatusCode ?? 0} message={ex.Message} " +
+                "operation=Appwrite create request");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[PRAYER_REQUEST_ERROR] exceptionType={ex.GetType().FullName} " +
+                $"message={ex.Message} operation=Appwrite create request");
+            throw;
         }
 
-        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerCreateResponse>(
-            responseBody,
-            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        if (result is null || !result.Success || string.IsNullOrWhiteSpace(result.RowId))
-            throw new InvalidOperationException("Appwrite did not confirm creation of the prayer request.");
+        using (response)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[PRAYER_REQUEST_ERROR] exceptionType=HttpStatus " +
+                    $"status={(int)response.StatusCode} message={responseBody} " +
+                    "operation=Appwrite create request");
+                throw new HttpRequestException(
+                    $"Prayer request could not be saved ({(int)response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            }
 
-        prayer.PrayerId = result.RowId;
-        prayer.Status = PrayerStatus.Active;
-        System.Diagnostics.Debug.WriteLine($"[PRAYER_REQUEST_SUCCESS] rowId={result.RowId}");
+            var result = System.Text.Json.JsonSerializer.Deserialize<PrayerCreateResponse>(
+                responseBody,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (result is null || !result.Success || string.IsNullOrWhiteSpace(result.RowId))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[PRAYER_REQUEST_ERROR] exceptionType=InvalidResponse " +
+                    "message=Appwrite did not confirm creation of the prayer request. " +
+                    "operation=Appwrite create response");
+                throw new InvalidOperationException(
+                    "Appwrite did not confirm creation of the prayer request.");
+            }
+
+            prayer.PrayerId = result.RowId;
+            prayer.Status = ParseStatus(result.Status);
+            System.Diagnostics.Debug.WriteLine(
+                $"[PRAYER_REQUEST_SUCCESS] documentId={result.RowId} " +
+                $"status={result.Status} private={result.IsPrivate}");
+        }
 
         await SaveOrUpdateCachedPrayersAsync([prayer]);
         return prayer;
@@ -708,6 +769,8 @@ public class PrayerService
     {
         public bool Success { get; set; }
         public string RowId { get; set; } = string.Empty;
+        public bool IsPrivate { get; set; }
+        public string Status { get; set; } = "pending";
     }
 
     private static PrayerFirestoreDocument ToFirestoreDocument(PrayerRequest prayer)

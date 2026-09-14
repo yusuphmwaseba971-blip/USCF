@@ -6,6 +6,8 @@ namespace CCT_USCF;
 
 public partial class AppShell : Shell
 {
+    private int _assistantOpening;
+
     public AppShell()
     {
         InitializeComponent();
@@ -30,7 +32,7 @@ public partial class AppShell : Shell
         Routing.RegisterRoute(nameof(NoticeComposerPage), typeof(NoticeComposerPage));
         Routing.RegisterRoute(nameof(WorshipComposerPage), typeof(WorshipComposerPage));
         Routing.RegisterRoute(nameof(EventComposerPage), typeof(EventComposerPage));
-        Routing.RegisterRoute(nameof(ResourceComposerPage), typeof(ResourceComposerPage));
+        Routing.RegisterRoute(nameof(PrayerComposerPage), typeof(PrayerComposerPage));
         Routing.RegisterRoute(nameof(MediaViewerPage), typeof(MediaViewerPage));
 
         Routing.RegisterRoute(
@@ -257,11 +259,30 @@ public partial class AppShell : Shell
 
     private async void OnAssistantClicked(object? sender, EventArgs e)
     {
-        if (!MauiProgram.Services.GetRequiredService<ICctAssistantService>().IsEnabled)
+        if (Interlocked.Exchange(ref _assistantOpening, 1) != 0)
             return;
-        if (Navigation.ModalStack.Any(page => page is CctAssistantPage))
-            return;
-        await Navigation.PushModalAsync(new CctAssistantPage());
+
+        try
+        {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                if (!MauiProgram.Services.GetRequiredService<ICctAssistantService>().IsEnabled ||
+                    Navigation.ModalStack.Any(page => page is CctAssistantPage))
+                {
+                    return;
+                }
+
+                await Navigation.PushModalAsync(new CctAssistantPage(), animated: false);
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[USCF ASSISTANCE] navigation_failed {ex}");
+        }
+        finally
+        {
+            Volatile.Write(ref _assistantOpening, 0);
+        }
     }
 
     // =========================================================

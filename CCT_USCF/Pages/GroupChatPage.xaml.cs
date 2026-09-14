@@ -39,6 +39,7 @@ public partial class GroupChatPage : ContentPage
 
     private readonly List<GroupChatMessageUi> _messages = new();
 
+    private bool _chatHistoryEnrolled;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
 
@@ -775,6 +776,13 @@ public partial class GroupChatPage : ContentPage
                     ? "1 member in this group"
                     : $"{members.Count} members in this group";
 
+            var backendGroupId = GetBackendCommunityId();
+            _chatHistoryEnrolled =
+                await _communityService.GetChatHistoryEnrolledAsync(backendGroupId);
+            System.Diagnostics.Debug.WriteLine(
+                $"[GroupChat] UserUid={GetCurrentUserUid()} GroupId={backendGroupId} " +
+                $"HistoryEnrolled={_chatHistoryEnrolled}");
+
             await LoadMessagesAsync();
         }
         catch (Exception ex)
@@ -805,31 +813,13 @@ public partial class GroupChatPage : ContentPage
         try
         {
             var appwriteMessages =
-                await _communityService
-                    .GetCommunityMessagesAsync(
-                        communityId:
-                            communityId,
-
-                        limit:
-                            100,
-
-                        organizationalLevel:
-                            OrganizationalLevel,
-
-                        branchId:
-                            _branchId > 0
-                                ? _branchId.ToString()
-                                : null,
-
-                        regionId:
-                            _regionId > 0
-                                ? _regionId.ToString()
-                                : null,
-
-                        districtId:
-                            _districtId > 0
-                                ? _districtId.ToString()
-                                : null);
+                await _communityService.LoadGroupMessagesWithCacheAsync(
+                    communityId,
+                    100,
+                    OrganizationalLevel,
+                    _branchId > 0 ? _branchId.ToString() : null,
+                    _regionId > 0 ? _regionId.ToString() : null,
+                    _districtId > 0 ? _districtId.ToString() : null);
 
             var loadedMessages =
                 appwriteMessages
@@ -1553,6 +1543,9 @@ public partial class GroupChatPage : ContentPage
             await _communityService
                 .CacheCommunityMessageAsync(
                     createdMessage);
+            await _communityService.SetChatHistoryEnrolledAsync(
+                GetBackendCommunityId());
+            _chatHistoryEnrolled = true;
 
             AddOrReplaceMessage(
                 ToUiMessage(
@@ -2912,6 +2905,11 @@ public partial class GroupChatPage : ContentPage
 
     private string GetBackendCommunityId()
     {
+        // Registered custom groups use UUID identities. Never collapse them
+        // onto the numeric branch/district/region community id.
+        if (Guid.TryParse(_groupId, out _))
+            return _groupId;
+
         var level =
             NormalizeLevel(
                 OrganizationalLevel);

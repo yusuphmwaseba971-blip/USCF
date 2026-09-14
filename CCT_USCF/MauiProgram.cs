@@ -173,8 +173,8 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<ChurchAnnouncementService>();
 builder.Services.AddSingleton<MediaViewerService>();
 builder.Services.AddSingleton<AppAppearanceService>();
-builder.Services.AddSingleton<FirebaseAiLogicService>(serviceProvider =>
-    new FirebaseAiLogicService(new HttpClient(), serviceProvider.GetRequiredService<AuthService>()));
+builder.Services.AddSingleton<CloudflareAiService>(_ =>
+    new CloudflareAiService(new HttpClient()));
 builder.Services.AddSingleton<ICctAssistantService, CctAssistantService>();
         // =====================================================
         // FIREBASE DATA SEEDERS

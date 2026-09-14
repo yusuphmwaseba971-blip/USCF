@@ -283,32 +283,92 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private async Task<List<FirestoreGroupDocument>> GetGroupsForLevelAsync(string level, CCT_USCF.Models.CurrentUser user)
     {
+        IReadOnlyList<CCT_USCF.Models.ChurchGroup> registeredGroups;
+        var usingOfflineGroups = false;
+
         try
         {
-            var snapshot = await _firestore
-                .GetCollection("groups")
-                .GetDocumentsAsync<FirestoreGroupDocument>(Source.Default);
-
-            if (snapshot == null)
-                return BuildFallbackGroups(level, user);
-
-            var dbGroups = snapshot.Documents
-                .Select(document => document.Data)
-                .Where(group => group != null && GroupMatchesLevel(level, group, user))
-                .Select(group => group!)
-                .OrderBy(group => group.Name)
-                .ToList();
-
-            return dbGroups.Count > 0
-                ? dbGroups
-                : BuildFallbackGroups(level, user);
+            registeredGroups = await _groupService.GetGroupsAsync(level.ToUpperInvariant());
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Firebase groups query failed: {ex}");
-            return BuildFallbackGroups(level, user);
+            usingOfflineGroups = true;
+            registeredGroups = Array.Empty<CCT_USCF.Models.ChurchGroup>();
+            System.Diagnostics.Debug.WriteLine(
+                $"[CHURCH GROUP] {level} registry unavailable; using offline groups. {ex}");
         }
+        catch (InvalidOperationException ex) when (
+            ex.Message.StartsWith("Group request failed", StringComparison.Ordinal))
+        {
+            usingOfflineGroups = true;
+            registeredGroups = Array.Empty<CCT_USCF.Models.ChurchGroup>();
+            System.Diagnostics.Debug.WriteLine(
+                $"[CHURCH GROUP] {level} registry returned an error; using offline groups. {ex}");
+        }
+
+        var groups = registeredGroups
+            .Where(group => group.IsActive)
+            .Select(group => new FirestoreGroupDocument
+            {
+                DocumentId = group.GroupId,
+                Name = group.GroupName,
+                Level = group.ScopeType,
+                RegionId = group.RegionId ?? 0,
+                DistrictId = group.DistrictId ?? 0,
+                BranchId = group.BranchId,
+                GroupType = group.GroupType,
+                IsCustom = string.Equals(group.GroupType, "CUSTOM", StringComparison.OrdinalIgnoreCase),
+                MemberUids = new List<string> { GetFirebaseUid() }
+            })
+            .ToList();
+
+        if (usingOfflineGroups)
+            groups.AddRange(BuildFallbackGroups(level, user));
+
+        var mainGroup = CreateMainGroup(level, user);
+        if (mainGroup != null &&
+            !groups.Any(group => string.Equals(group.DocumentId, mainGroup.DocumentId, StringComparison.OrdinalIgnoreCase)))
+        {
+            groups.Insert(0, mainGroup);
+        }
+
+        return groups.OrderBy(group => group.IsCustom ? 1 : 0).ThenBy(group => group.Name).ToList();
     }
+
+    private static FirestoreGroupDocument? CreateMainGroup(
+        string level,
+        CCT_USCF.Models.CurrentUser user) =>
+        level switch
+        {
+            "National" => new FirestoreGroupDocument
+            {
+                DocumentId = "national-main",
+                Name = "National Main Group",
+                Level = "National"
+            },
+            "Regional" when user.RegionId.HasValue => new FirestoreGroupDocument
+            {
+                DocumentId = $"regional-main-{user.RegionId.Value}",
+                Name = $"{user.Region ?? "Regional"} Main Group",
+                Level = "Regional",
+                RegionId = user.RegionId.Value
+            },
+            "District" when user.DistrictId.HasValue => new FirestoreGroupDocument
+            {
+                DocumentId = $"district-main-{user.DistrictId.Value}",
+                Name = $"{user.District ?? "District"} Main Group",
+                Level = "District",
+                DistrictId = user.DistrictId.Value
+            },
+            "Branch" when user.BranchId.HasValue => new FirestoreGroupDocument
+            {
+                DocumentId = $"branch-{user.BranchId.Value}",
+                Name = user.Branch ?? "Branch Group",
+                Level = "Branch",
+                BranchId = user.BranchId.Value
+            },
+            _ => null
+        };
 
     private static List<FirestoreGroupDocument> BuildFallbackGroups(string level, CCT_USCF.Models.CurrentUser user)
     {

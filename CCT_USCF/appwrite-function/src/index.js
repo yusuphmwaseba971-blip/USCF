@@ -1547,6 +1547,39 @@ function groupBelongsToProfile(group, profile) {
   return String(group.branch_id ?? "") === String(profile.branchId ?? "");
 }
 
+async function isGroupMember(groupId, uid) {
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [groupId] },
+      { method: "equal", attribute: "user_uid", values: [uid] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [1] }
+    ]
+  );
+  return (rows.documents || []).length > 0;
+}
+
+async function authorizeGroupAccess(groupId, profile) {
+  const document = await appwriteCollectionRequest(
+    COMMUNITY_GROUPS_COLLECTION_ID,
+    "GET",
+    `/${encodeURIComponent(groupId)}`
+  );
+  const group = document.data || document;
+  if (!group || group.is_active === false ||
+      (group.created_by_uid !== profile.uid &&
+        !(await isGroupMember(groupId, profile.uid)))) {
+    const error = new Error("You are not a member of this group.");
+    error.statusCode = 403;
+    throw error;
+  }
+  return group;
+}
+
 function mapGroupDocument(document, profile, memberCount = 0) {
   const data = document.data || document;
   return {
@@ -1578,13 +1611,16 @@ async function listChurchGroups(req, log) {
     undefined,
     [{ method: "limit", values: [500] }]
   );
-  const groups = (rows.documents || [])
-    .filter(document => {
+  const groups = [];
+  for (const document of (rows.documents || [])) {
       const data = document.data || document;
-      return (!requestedScope || normalizeScopeType(data.scope_type) === requestedScope) &&
-        groupBelongsToProfile(data, profile);
-    })
-    .map(document => mapGroupDocument(document, profile));
+      if ((requestedScope && normalizeScopeType(data.scope_type) !== requestedScope) ||
+          !groupBelongsToProfile(data, profile)) continue;
+      const isCreator = data.created_by_uid === profile.uid;
+      if (!isCreator &&
+          !(await isGroupMember(document.$id || data.group_id, profile.uid))) continue;
+      groups.push(mapGroupDocument(document, profile));
+  }
   return { groups };
 }
 
@@ -1629,7 +1665,13 @@ async function createChurchGroup(req, log) {
     description: description.slice(0, 2000),
     group_type: groupType.slice(0, 64),
     scope_type: scopeType,
-    parent_group_id: normalizeString(body.parentGroupId),
+    parent_group_id: scopeType === "NATIONAL"
+      ? "national"
+      : scopeType === "REGIONAL"
+        ? `region:${profile.regionId}`
+        : scopeType === "DISTRICT"
+          ? `district:${profile.districtId}`
+          : `branch:${profile.branchId}`,
     region_id: profile.regionId,
     district_id: profile.districtId,
     branch_id: profile.branchId,
@@ -1702,6 +1744,10 @@ async function listGroupMessages(
     throw new Error(
       "communityId is required."
     );
+  }
+
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+    await authorizeGroupAccess(communityId, profile);
   }
 
   const organizationalLevel =
@@ -1964,6 +2010,11 @@ async function createGroupMessage(
     );
   }
 
+  const profile = await getAnnouncementProfile(firebaseUser);
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+    await authorizeGroupAccess(communityId, profile);
+  }
+
   const messageType =
     normalizeString(
       body.messageType ??
@@ -2072,7 +2123,6 @@ async function createGroupMessage(
     ) || "Branch";
 
   if (organizationalLevel.toLowerCase() === "branch") {
-    const profile = await getAnnouncementProfile(firebaseUser);
     if (!profile.branchId || profile.branchId !== branchId) {
       const authorizationError = new Error("You are not assigned to this branch.");
       authorizationError.statusCode = 403;
@@ -2397,6 +2447,73 @@ async function updateGroupMessage(req, log, messageId, deleted) {
   return mapMessageDocument(updated);
 }
 
+const CCT_POSTS_COLLECTION_ID = "cct_posts";
+
+function mapCctPostDocument(document) {
+  const data = document?.data || {};
+  return {
+    id: document.$id || document.id,
+    userId: normalizeString(data.user_id),
+    content: normalizeString(data.content),
+    postType: normalizeString(data.post_type),
+    mediaType: normalizeString(data.media_type || "none"),
+    mediaUrl: data.media_url || null,
+    mediaSize: data.media_size ?? null,
+    status: normalizeString(data.status),
+    isPublished: data.is_published === true || data.is_published === "true",
+    createdAtUtc: safeIsoDate(document.$createdAt || data.created_at)
+  };
+}
+
+async function listCctPosts(req, log) {
+  await verifyFirebaseRequest(req, log);
+  const limit = Math.min(Math.max(parseOptionalInt(new URL(req.url).searchParams.get("limit")) || 20, 1), 50);
+  const result = await appwriteCollectionRequest(
+    CCT_POSTS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "is_published", values: [true] },
+      { method: "equal", attribute: "status", values: ["published"] },
+      { method: "orderDesc", attribute: "$createdAt" },
+      { method: "limit", values: [limit] }
+    ]
+  );
+  return (result.documents || []).map(mapCctPostDocument);
+}
+
+async function createCctPost(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+  const content = normalizeString(body.content);
+  const postType = normalizeString(body.postType);
+  if (!content) throw announcementError("Post content is required.", 400);
+  if (!postType) throw announcementError("Post type is required.", 400);
+  if (content.length > 5000) throw announcementError("Post content is too long.", 400);
+
+  const document = await appwriteCollectionRequest(
+    CCT_POSTS_COLLECTION_ID,
+    "POST",
+    "",
+    {
+      documentId: randomUUID(),
+      data: {
+        user_id: firebaseUser.uid,
+        content,
+        post_type: postType,
+        media_type: "none",
+        media_url: null,
+        sia_object_id: null,
+        media_size: null,
+        status: "published",
+        is_published: true
+      }
+    }
+  );
+  return mapCctPostDocument(document);
+}
+
 
 /* ============================================================
  * ROUTE RESOLUTION
@@ -2581,6 +2698,19 @@ export default async ({
         await markChurchNotificationRead(req, log, decodeURIComponent(readNotificationMatch[1])),
         200
       );
+    }
+
+    if (route === "/api/community/posts" ||
+        route === "api/community/posts") {
+      if (req.method === "GET") {
+        currentStage = "GET CCT posts";
+        return jsonResponse(res, await listCctPosts(req, log), 200);
+      }
+      if (req.method === "POST") {
+        currentStage = "POST CCT post";
+        return jsonResponse(res, await createCctPost(req, log), 201);
+      }
+      throw announcementError("Method not allowed.", 405);
     }
 
     /*

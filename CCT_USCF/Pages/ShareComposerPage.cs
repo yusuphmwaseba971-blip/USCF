@@ -1,7 +1,5 @@
-using System.Globalization;
 using CCT_USCF.Models;
 using CCT_USCF.Services;
-using CCT_USCF.Services.Cloudinary;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace CCT_USCF.Pages;
@@ -13,37 +11,31 @@ public enum ShareContributionType
     Notice,
     Worship,
     Event,
-    Resource
+    Prayer
 }
 
 public abstract class ShareComposerPage : ContentPage
 {
     private readonly ShareContributionType _type;
     private readonly CommunityService _community;
-    private readonly CloudinaryService _cloudinary;
     private readonly Entry _title = new();
     private readonly Editor _content = new() { HeightRequest = 130 };
     private readonly Entry _reference = new();
     private readonly Entry _chapter = new() { Keyboard = Keyboard.Numeric };
     private readonly Entry _verses = new();
     private readonly Entry _location = new();
-    private readonly Entry _resourceCategory = new();
     private readonly DatePicker _date = new() { MinimumDate = DateTime.Today };
     private readonly TimePicker _startTime = new() { Time = new TimeSpan(10, 0, 0) };
     private readonly TimePicker _endTime = new() { Time = new TimeSpan(11, 0, 0) };
     private readonly Picker _book = new();
-    private readonly Picker _audience = new();
     private readonly Button _submit = new();
     private readonly Label _status = new();
-    private FileResult? _attachment;
-    private string? _attachmentKind;
     private CurrentUser? _user;
 
     protected ShareComposerPage(ShareContributionType type, string title, string subtitle)
     {
         _type = type;
         _community = MauiProgram.Services.GetRequiredService<CommunityService>();
-        _cloudinary = MauiProgram.Services.GetRequiredService<CloudinaryService>();
         Title = title;
         BackgroundColor = Color.FromArgb("#F4F8F5");
         BuildLayout(title, subtitle);
@@ -60,7 +52,6 @@ public abstract class ShareComposerPage : ContentPage
             return;
         }
         MauiProgram.SetCurrentUser(_user);
-        ConfigureAudience();
     }
 
     private void BuildLayout(string title, string subtitle)
@@ -85,8 +76,8 @@ public abstract class ShareComposerPage : ContentPage
         }
         else
         {
-            if (_type is ShareContributionType.Notice or ShareContributionType.Event or ShareContributionType.Worship or ShareContributionType.Resource)
-                AddField(stack, _type == ShareContributionType.Notice ? "Notice title" : _type == ShareContributionType.Event ? "Event title" : _type == ShareContributionType.Resource ? "Resource title" : "Worship title", _title, "Enter a clear title");
+            if (_type is ShareContributionType.Notice or ShareContributionType.Event or ShareContributionType.Worship)
+                AddField(stack, _type == ShareContributionType.Notice ? "Notice title" : _type == ShareContributionType.Event ? "Event title" : "Worship title", _title, "Enter a clear title");
             AddField(stack, _type == ShareContributionType.Event ? "Description" : "Message", _content, _type == ShareContributionType.Event ? "Describe this church event" : "Share something that will strengthen the church");
             if (_type == ShareContributionType.Worship)
                 AddField(stack, "Scripture reference (optional)", _reference, "e.g. Psalm 23");
@@ -97,15 +88,14 @@ public abstract class ShareComposerPage : ContentPage
                 AddField(stack, "End time (optional)", _endTime);
                 AddField(stack, "Location", _location, "Where will it happen?");
             }
-            if (_type == ShareContributionType.Resource)
-                AddField(stack, "Category (optional)", _resourceCategory, "Bible study, guide, song...");
-            if (_type is ShareContributionType.Encouragement or ShareContributionType.Notice or ShareContributionType.Worship)
-                AddAttachmentButton(stack, "Add image (optional)", "image");
-            if (_type == ShareContributionType.Resource)
-                AddAttachmentButton(stack, "Choose resource file", "resource");
         }
 
-        AddField(stack, "Audience", _audience);
+        stack.Children.Add(new Label
+        {
+            Text = "Your post will appear on the Home feed after you share it.",
+            FontSize = 13,
+            TextColor = Color.FromArgb("#64748B")
+        });
         _submit.Text = SubmitText();
         _submit.BackgroundColor = Color.FromArgb("#009E2C");
         _submit.TextColor = Colors.White;
@@ -136,30 +126,6 @@ public abstract class ShareComposerPage : ContentPage
     private void AddField(VerticalStackLayout stack, string label, DatePicker input) => AddField(stack, label, (View)input);
     private void AddField(VerticalStackLayout stack, string label, TimePicker input) => AddField(stack, label, (View)input);
 
-    private void AddAttachmentButton(VerticalStackLayout stack, string text, string kind)
-    {
-        var button = new Button { Text = text, BackgroundColor = Color.FromArgb("#E4F4E9"), TextColor = Color.FromArgb("#167A4A") };
-        var label = new Label { Text = "No file selected", FontSize = 12, TextColor = Color.FromArgb("#64748B") };
-        button.Clicked += async (_, _) =>
-        {
-            _attachment = kind == "image" ? await MediaPicker.Default.PickPhotoAsync() : await FilePicker.Default.PickAsync();
-            if (_attachment is not null) { _attachmentKind = kind; label.Text = _attachment.FileName; }
-        };
-        stack.Children.Add(button);
-        stack.Children.Add(label);
-    }
-
-    private void ConfigureAudience()
-    {
-        var values = new List<string>();
-        if (!string.IsNullOrWhiteSpace(_user?.Branch)) values.Add($"My Branch · {_user.Branch}");
-        if (!string.IsNullOrWhiteSpace(_user?.District)) values.Add($"My District · {_user.District}");
-        if (!string.IsNullOrWhiteSpace(_user?.Region)) values.Add($"My Region · {_user.Region}");
-        values.Add("National USCF");
-        _audience.ItemsSource = values;
-        if (_audience.SelectedIndex < 0) _audience.SelectedIndex = 0;
-    }
-
     private string SubmitText() => _type switch
     {
         ShareContributionType.Scripture => "Share Scripture",
@@ -167,7 +133,7 @@ public abstract class ShareComposerPage : ContentPage
         ShareContributionType.Notice => "Publish Notice",
         ShareContributionType.Worship => "Share Worship",
         ShareContributionType.Event => "Create Event",
-        _ => "Share Resource"
+        ShareContributionType.Prayer => "Share Prayer"
     };
 
     private async void SubmitAsync(object? sender, EventArgs e)
@@ -181,28 +147,10 @@ public abstract class ShareComposerPage : ContentPage
         _status.Text = "Preparing your contribution...";
         try
         {
-            var typeName = _type.ToString().ToUpperInvariant();
-            var title = BuildTitle(typeName);
-            var request = new NationalCommunityCreateRequest
-            {
-                Title = $"[Share & Serve · {typeName}] {title}".Trim(),
-                Content = BuildContent(),
-                ContributionType = typeName,
-                Audience = _audience.SelectedItem?.ToString(),
-                Organization = _user?.Organization,
-                Region = _user?.Region,
-                District = _user?.District,
-                Branch = _user?.Branch
-            };
-            if (_attachment is not null)
-            {
-                if (_attachmentKind == "image") request.ImageUrl = (await _cloudinary.UploadImageAsync(_attachment)).SecureUrl;
-                else request.LinkUrl = (await _cloudinary.UploadResourceAsync(_attachment)).SecureUrl;
-            }
-            await _community.CreateNationalPostAsync(request);
-            _status.Text = "Shared with the church. Thank you for serving.";
-            await DisplayAlert("Shared successfully", "Your contribution is now available in the church community stream.", "Done");
-            await Shell.Current.GoToAsync("..");
+            var typeName = _type.ToString().ToLowerInvariant();
+            await _community.CreateCctPostAsync(BuildContent(), typeName);
+            _status.Text = "Posted to the Home feed.";
+            await Shell.Current.GoToAsync("//home");
         }
         catch (HttpRequestException)
         {
@@ -231,12 +179,12 @@ public abstract class ShareComposerPage : ContentPage
     {
         if (_type == ShareContributionType.Scripture && (_book.SelectedItem is null || string.IsNullOrWhiteSpace(_chapter.Text) || string.IsNullOrWhiteSpace(_verses.Text)))
             return "Choose a Bible book and complete the chapter and verse fields.";
-        if (_type != ShareContributionType.Scripture && _type != ShareContributionType.Encouragement && string.IsNullOrWhiteSpace(_title.Text))
+        if ((_type is ShareContributionType.Notice or ShareContributionType.Event or ShareContributionType.Worship) &&
+            string.IsNullOrWhiteSpace(_title.Text))
             return "A title is required.";
         if (string.IsNullOrWhiteSpace(_content.Text)) return "Please add the content you want to share.";
         if (_type == ShareContributionType.Event && _date.Date < DateTime.Today) return "Choose today or a future date.";
         if (_type == ShareContributionType.Event && _endTime.Time <= _startTime.Time) return "The end time must be after the start time.";
-        if (_type == ShareContributionType.Resource && _attachment is null) return "Choose a resource file before sharing.";
         return null;
     }
 
@@ -244,6 +192,7 @@ public abstract class ShareComposerPage : ContentPage
     {
         ShareContributionType.Scripture => $"{_book.SelectedItem} {_chapter.Text}:{_verses.Text}",
         ShareContributionType.Encouragement => "A word of encouragement",
+        ShareContributionType.Prayer => "A prayer for the church",
         ShareContributionType.Event => _title.Text?.Trim() ?? string.Empty,
         _ => _title.Text?.Trim() ?? typeName
     };
@@ -253,7 +202,7 @@ public abstract class ShareComposerPage : ContentPage
         var parts = new List<string>();
         if (_type == ShareContributionType.Scripture)
         {
-            parts.Add(_content.Text!.Trim());
+            parts.Add($"{BuildTitle("scripture")}\n\n{_content.Text!.Trim()}");
             if (!string.IsNullOrWhiteSpace(_reference.Text)) parts.Add($"Reflection: {_reference.Text.Trim()}");
         }
         else
@@ -261,7 +210,6 @@ public abstract class ShareComposerPage : ContentPage
             parts.Add(_content.Text!.Trim());
             if (_type == ShareContributionType.Worship && !string.IsNullOrWhiteSpace(_reference.Text)) parts.Add($"Scripture: {_reference.Text.Trim()}");
             if (_type == ShareContributionType.Event) parts.Add($"When: {_date.Date:dddd, MMMM d, yyyy} · {_startTime.Time:hh\\:mm}–{_endTime.Time:hh\\:mm}\nLocation: {_location.Text?.Trim()}");
-            if (_type == ShareContributionType.Resource && !string.IsNullOrWhiteSpace(_resourceCategory.Text)) parts.Add($"Category: {_resourceCategory.Text.Trim()}");
         }
         return string.Join("\n\n", parts);
     }
@@ -292,7 +240,7 @@ public sealed class EventComposerPage : ShareComposerPage
     public EventComposerPage() : base(ShareContributionType.Event, "Create Event", "Invite the church to gather, serve and fellowship.") { }
 }
 
-public sealed class ResourceComposerPage : ShareComposerPage
+public sealed class PrayerComposerPage : ShareComposerPage
 {
-    public ResourceComposerPage() : base(ShareContributionType.Resource, "Share Resource", "Place a useful resource in the hands of the church.") { }
+    public PrayerComposerPage() : base(ShareContributionType.Prayer, "Share Prayer", "Share a prayer with the church community.") { }
 }

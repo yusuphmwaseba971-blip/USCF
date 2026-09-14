@@ -217,16 +217,15 @@
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="Community Blessings" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="Share &amp; Serve  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                        <Label Text="PLUS posts" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="Refresh  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OpenShareAndServe" />
+                                <TapGestureRecognizer Tapped="RefreshCctPosts" />
                             </Label.GestureRecognizers>
                         </Label>
                     </Grid>
-                    <Label x:Name="CommunityBlessingsStateLabel"
-                           Text="Loading contributions..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
-                    <VerticalStackLayout x:Name="CommunityBlessingsStack" Spacing="10" />
+                    <Label x:Name="CctPostsStateLabel" Text="Loading posts..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    <VerticalStackLayout x:Name="CctPostsStack" Spacing="10" />
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Spacing="10">
@@ -269,7 +268,6 @@
                         <Button Grid.Row="1" Grid.Column="1" Text="📢  Notice" Clicked="OpenNoticeComposer" BackgroundColor="#FFF8E7" TextColor="#684400" />
                         <Button Grid.Row="2" Text="🎵  Worship" Clicked="OpenWorshipComposer" BackgroundColor="#EAF5FF" TextColor="#123B73" />
                         <Button Grid.Row="2" Grid.Column="1" Text="📅  Event" Clicked="OpenEventComposer" BackgroundColor="#EAF7EE" TextColor="{StaticResource BrandDeepGreen}" />
-                        <Button Grid.Row="3" Grid.ColumnSpan="2" Text="📚  Resource" Clicked="OpenResourceComposer" BackgroundColor="#F2F4F7" TextColor="{StaticResource TextPrimary}" />
                     </Grid>
                     <Button Text="Close" Clicked="CloseShareAndServe" BackgroundColor="Transparent"
                             TextColor="{StaticResource BrandGreen}" />

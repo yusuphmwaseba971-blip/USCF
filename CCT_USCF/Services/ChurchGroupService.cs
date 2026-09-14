@@ -7,7 +7,6 @@ namespace CCT_USCF.Services;
 
 public sealed class ChurchGroupService
 {
-    private const string ApiBaseUrl = "https://6a9ade0a003b6bd60240.sgp.appwrite.run/";
     private readonly AuthService _authService;
     private readonly HttpClient _httpClient;
 
@@ -65,7 +64,11 @@ public sealed class ChurchGroupService
         CancellationToken cancellationToken)
     {
         var token = await _authService.GetCurrentFirebaseIdTokenAsync();
-        var request = new HttpRequestMessage(method, new Uri(new Uri(ApiBaseUrl), relativePath));
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] {method} {new Uri(new Uri(ApiConfig.BaseUrl.TrimEnd('/') + "/"), relativePath)}");
+        var request = new HttpRequestMessage(
+            method,
+            new Uri(new Uri(ApiConfig.BaseUrl.TrimEnd('/') + "/"), relativePath));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return request;
