@@ -12,13 +12,13 @@ public partial class VerifyEmailPage : ContentPage
     {
         InitializeComponent();
         _authService = LoginRegisterHelpers.GetAuthService();
-        EmailLabel.Text = MaskEmail(_authService.CurrentEmail);
+        EmailLabel.Text = _authService.CurrentEmail ?? "your registered email address";
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        EmailLabel.Text = MaskEmail(_authService.CurrentEmail);
+        EmailLabel.Text = _authService.CurrentEmail ?? "your registered email address";
     }
 
     protected override bool OnBackButtonPressed() => true;
@@ -46,7 +46,7 @@ public partial class VerifyEmailPage : ContentPage
                 return;
             }
 
-            ShowStatus("Email not verified yet\n\nPlease open the verification email and tap the verification link before continuing.");
+            ShowStatus("Your email hasn't been verified yet. Please check your inbox and try again.");
         }
         catch (Exception ex)
         {
@@ -113,14 +113,17 @@ public partial class VerifyEmailPage : ContentPage
         try
         {
             await _authService.UpdateCurrentEmailAsync(editedEmail);
-            EmailLabel.Text = MaskEmail(_authService.CurrentEmail);
+            EmailLabel.Text = _authService.CurrentEmail ?? editedEmail.Trim();
             ShowStatus("Email updated. The new verification email was sent.", isError: false);
             StartResendCooldown();
         }
         catch (Exception ex)
         {
             LogTechnicalFailure("Email update failed", ex);
-            ShowStatus("We couldn't update that email. Please try again.");
+            ShowStatus(
+                string.IsNullOrWhiteSpace(ex.Message)
+                    ? "We couldn't update that email. Please try again."
+                    : ex.Message);
         }
         finally
         {
@@ -169,19 +172,6 @@ public partial class VerifyEmailPage : ContentPage
         StatusLabel.Text = message;
         StatusLabel.TextColor = isError ? Color.FromArgb("#B42318") : Color.FromArgb("#1A4D3A");
         StatusLabel.IsVisible = true;
-    }
-
-    private static string MaskEmail(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-            return "your registered email address";
-
-        var parts = email.Trim().Split('@', 2);
-        if (parts.Length != 2 || parts[0].Length < 2)
-            return email.Trim();
-
-        var visible = parts[0][0];
-        return $"{visible}{new string('*', Math.Min(4, parts[0].Length - 1))}@{parts[1]}";
     }
 
     private static bool IsValidEmail(string email)

@@ -24,17 +24,29 @@ public partial class MyPrayerRequestsPage : ContentPage
 
     private async Task LoadMyRequestsAsync()
     {
+        LoadingState.IsVisible = true;
+        ErrorState.IsVisible = false;
+        RequestsCollectionView.IsVisible = false;
         try
         {
             var list = await _prayerService.GetMyPrayersAsync();
             RequestsCollectionView.ItemsSource = list.OrderByDescending(x => x.CreatedAtUtc).ToList();
+            RequestsCollectionView.IsVisible = true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[PRAYER] LoadMyRequests error: {ex}");
-            await DisplayAlert("Error", "Unable to load your prayer requests right now.", "OK");
+            ErrorMessage.Text = "We couldn't load your prayer requests. Please check your connection and try again.";
+            ErrorState.IsVisible = true;
+        }
+        finally
+        {
+            LoadingState.IsVisible = false;
         }
     }
+
+    private async void OnRetryClicked(object sender, EventArgs e) =>
+        await LoadMyRequestsAsync();
 
     private async void OnDeleteClicked(object sender, EventArgs e)
     {

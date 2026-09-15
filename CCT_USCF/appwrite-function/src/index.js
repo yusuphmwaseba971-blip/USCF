@@ -136,7 +136,7 @@ if (!appwriteApiKey) {
 
 const DEFAULT_DATABASE_ID =
   process.env.APPWRITE_DATABASE_ID ||
-  "cct-uscf-db";
+  "database-cct-uscf-db";
 
 const ANNOUNCEMENTS_TABLE_ID =
   process.env.APPWRITE_ANNOUNCEMENTS_TABLE_ID ||
@@ -1210,6 +1210,9 @@ async function listPrayerRequests(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const profile = await getAnnouncementProfile(firebaseUser);
   let limit = Math.min(Math.max(Number(getQueryValue(req, "limit") || 25), 1), 100);
+  const mineOnly = ["1", "true", "yes"].includes(
+    String(getQueryValue(req, "mine") || "").toLowerCase()
+  );
   const cursorAfter = getQueryValue(req, "cursorAfter") || getQueryValue(req, "cursor_after");
   const newerThan = getQueryValue(req, "newerThan") || getQueryValue(req, "newer_than");
   log(`[PRAYER_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} limit=${limit} cursorAfter=${cursorAfter || "none"} newerThan=${newerThan || "none"}`);
@@ -1225,6 +1228,9 @@ async function listPrayerRequests(req, log) {
   if (newerThan) {
     queries.push({ method: "greaterThan", attribute: "$updatedAt", values: [newerThan] });
   }
+  if (mineOnly) {
+    queries.push({ method: "equal", attribute: "user_id", values: [firebaseUser.uid] });
+  }
 
   const page = await appwriteTableRowRequest(
     PRAYERS_TABLE_ID,
@@ -1235,26 +1241,47 @@ async function listPrayerRequests(req, log) {
   );
 
   const isLeader = isAnnouncementLeader(profile);
-  const rows = (page.rows || [])
+  const visibleRows = (page.rows || [])
     .filter(row => normalizeString(row.status).toLowerCase() !== "archived")
     .filter(row =>
+      mineOnly ||
       row.is_private !== true ||
       row.user_id === firebaseUser.uid ||
       isLeader
-    )
+    );
+  const rows = await Promise.all(visibleRows
     .sort((left, right) => new Date(right.$createdAt || 0) - new Date(left.$createdAt || 0))
-    .map(row => ({
+    .map(async row => ({
       id: row.$id || "",
       userId: row.user_id || "",
       content: row.content || "",
       isPrivate: row.is_private === true,
       status: row.status || "pending",
       createdAtUtc: safeIsoDate(row.$createdAt),
-      updatedAtUtc: safeIsoDate(row.$updatedAt || row.$createdAt)
-    }));
+      updatedAtUtc: safeIsoDate(row.$updatedAt || row.$createdAt),
+      ...(await getPrayerActionSummaryForUser(row.$id || "", firebaseUser.uid))
+    })));
 
-  log(`[PRAYER_FETCH_RESULT] rows=${page.rows?.length || 0} visible=${rows.length} requestedLimit=${limit}`);
+  log(`[PRAYER_FETCH_RESULT] rows=${page.rows?.length || 0} visible=${rows.length} requestedLimit=${limit} mineOnly=${mineOnly}`);
   return { rows };
+}
+
+async function getPrayerActionSummaryForUser(prayerId, userUid) {
+  const page = await appwriteTableRowRequest(
+    PRAYER_ACTIONS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "prayer_id", values: [prayerId] },
+      { method: "limit", values: [5000] }
+    ]
+  );
+  const rows = page.rows || [];
+  return {
+    prayerCount: Number.isInteger(page.total) ? page.total : rows.length,
+    isPrayed: rows.some(row => row.user_uid === userUid)
+  };
 }
 
 async function recordPrayerAction(req, log, prayerId) {
@@ -1291,21 +1318,11 @@ async function recordPrayerAction(req, log, prayerId) {
 async function getPrayerActionSummary(req, log, prayerId) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   if (!prayerId) throw announcementError("Prayer ID is required.");
-  const page = await appwriteTableRowRequest(
-    PRAYER_ACTIONS_TABLE_ID,
-    "GET",
-    "",
-    undefined,
-    [
-      { method: "equal", attribute: "prayer_id", values: [prayerId] },
-      { method: "limit", values: [5000] }
-    ]
-  );
-  const rows = page.rows || [];
+  const summary = await getPrayerActionSummaryForUser(prayerId, firebaseUser.uid);
   return {
     prayerId,
-    count: rows.length,
-    hasPrayed: rows.some(row => row.user_uid === firebaseUser.uid)
+    count: summary.prayerCount,
+    hasPrayed: summary.isPrayed
   };
 }
 
@@ -2450,7 +2467,7 @@ async function updateGroupMessage(req, log, messageId, deleted) {
 const CCT_POSTS_COLLECTION_ID = "cct_posts";
 
 function mapCctPostDocument(document) {
-  const data = document?.data || {};
+  const data = document?.data || document || {};
   return {
     id: document.$id || document.id,
     userId: normalizeString(data.user_id),
@@ -2470,7 +2487,7 @@ function mapCctPostDocument(document) {
 async function listCctPosts(req, log) {
   await verifyFirebaseRequest(req, log);
   const limit = Math.min(Math.max(parseOptionalInt(new URL(req.url).searchParams.get("limit")) || 20, 1), 50);
-  const result = await appwriteCollectionRequest(
+  const result = await appwriteTableRowRequest(
     CCT_POSTS_COLLECTION_ID,
     "GET",
     "",
@@ -2482,7 +2499,7 @@ async function listCctPosts(req, log) {
       { method: "limit", values: [limit] }
     ]
   );
-  return (result.documents || []).map(mapCctPostDocument);
+  return (result.rows || []).map(mapCctPostDocument);
 }
 
 async function createCctPost(req, log) {
@@ -2494,12 +2511,12 @@ async function createCctPost(req, log) {
   if (!postType) throw announcementError("Post type is required.", 400);
   if (content.length > 5000) throw announcementError("Post content is too long.", 400);
 
-  const document = await appwriteCollectionRequest(
+  const document = await appwriteTableRowRequest(
     CCT_POSTS_COLLECTION_ID,
     "POST",
     "",
     {
-      documentId: randomUUID(),
+      rowId: randomUUID().replace(/-/g, ""),
       data: {
         user_id: firebaseUser.uid,
         content,

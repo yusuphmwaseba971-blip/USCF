@@ -13,7 +13,7 @@
             <Border Padding="16" BackgroundColor="White" Stroke="#DCE8DF" StrokeThickness="1" StrokeShape="RoundRectangle 16">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Information collected" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="Registration collects your full name, username, email address, phone number, password for Firebase Authentication, role, leadership information and USCF region, district and branch selections. Passwords are sent to Firebase Authentication and are not written to the Firestore profile." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
+                    <Label Text="Registration collects your full name, username, email address, password for Firebase Authentication, role, leadership information and USCF region, district and branch selections. Phone number is not needed to create an account. Passwords are sent to Firebase Authentication and are not written to the Firestore profile." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
                     <Label Text="How it is used" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
                     <Label Text="The app uses this information for authentication, profile management, organizational permissions, branch and community features, prayer/community functionality where enabled, and account-related communication or recovery supported by the app." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
                     <Label Text="Where it is stored and processed" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />

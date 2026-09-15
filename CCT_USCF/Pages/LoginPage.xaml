@@ -11,6 +11,10 @@
             <Entry x:Name="PasswordEntry" IsPassword="True" Placeholder="Password" />
 
             <Button x:Name="LoginButton" Text="LOGIN" Clicked="OnLoginClicked" BackgroundColor="#009E2C" TextColor="White" />
+            <Button x:Name="GoogleSignInButton" Text="CONTINUE WITH GOOGLE"
+                    Clicked="OnGoogleSignInClicked"
+                    BackgroundColor="White" TextColor="#173B28"
+                    BorderColor="#DCE8DF" BorderWidth="1" />
 
             <HorizontalStackLayout HorizontalOptions="Center">
                 <Label Text="Don't have an account?" />

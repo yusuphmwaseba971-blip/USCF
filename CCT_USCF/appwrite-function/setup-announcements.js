@@ -7,7 +7,7 @@ const projectId =
   process.env.APPWRITE_PROJECT_ID || "project-sgp-cct-uscf";
 
 const databaseId =
-  process.env.APPWRITE_DATABASE_ID || "cct-uscf-db";
+  process.env.APPWRITE_DATABASE_ID || "database-cct-uscf-db";
 
 const apiKey = process.env.APPWRITE_API_KEY;
 
@@ -184,6 +184,32 @@ async function ensureBoolean(
   console.log(`  Created boolean: ${tableId}.${key}`);
 }
 
+async function ensureIndex(tableId, key, type, columns, orders = undefined) {
+  try {
+    await request(
+      `/tablesdb/${encodeURIComponent(databaseId)}/tables/${encodeURIComponent(tableId)}/indexes/${encodeURIComponent(key)}`
+    );
+    console.log(`  Index already exists: ${tableId}.${key}`);
+    return;
+  } catch (error) {
+    if (!String(error.message).includes("(404)")) {
+      throw error;
+    }
+  }
+
+  await request(
+    `/tablesdb/${encodeURIComponent(databaseId)}/tables/${encodeURIComponent(tableId)}/indexes`,
+    "POST",
+    {
+      key,
+      type,
+      columns,
+      ...(orders ? { orders } : {})
+    }
+  );
+  console.log(`  Created ${type} index: ${tableId}.${key}`);
+}
+
 /*
  * ============================================================
  * 1. CHURCH ANNOUNCEMENTS
@@ -198,6 +224,17 @@ const prayerActionsTable = process.env.APPWRITE_PRAYER_ACTIONS_TABLE_ID || "cct_
 const announcementTables = Array.from(new Set([preferredAnnouncementTable, "church_announcements"]));
 const notificationTables = Array.from(new Set([preferredNotificationTable, "church_notifications"]));
 const deviceTokenTables = Array.from(new Set([preferredDeviceTokenTable, "church_device_tokens"]));
+
+await ensureTable(prayerActionsTable, "Prayer Actions");
+await ensureVarchar(prayerActionsTable, "prayer_id", 255, true);
+await ensureVarchar(prayerActionsTable, "user_uid", 255, true);
+await ensureVarchar(prayerActionsTable, "created_at", 64, true);
+await ensureIndex(
+  prayerActionsTable,
+  "prayer_user_unique",
+  "unique",
+  ["prayer_id", "user_uid"]
+);
 
 for (const tableId of announcementTables) {
   await ensureTable(tableId, "Church Announcements");
@@ -262,10 +299,6 @@ for (const tableId of deviceTokenTables) {
     await ensureVarchar(tableId, key, size);
   }
 
-  await ensureTable(prayerActionsTable, "Prayer Actions");
-  await ensureVarchar(prayerActionsTable, "prayer_id", 255, true);
-  await ensureVarchar(prayerActionsTable, "user_uid", 255, true);
-  await ensureVarchar(prayerActionsTable, "created_at", 64, true);
   for (const key of ["region_id", "district_id", "branch_id"]) {
     await ensureInteger(tableId, key);
   }

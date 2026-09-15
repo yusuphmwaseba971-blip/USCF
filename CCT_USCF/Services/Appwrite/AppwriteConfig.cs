@@ -6,7 +6,7 @@ public static class AppwriteConfig
     public const string ProjectId =
         "cct-uscf";
     public const string DatabaseId =
-        "cct-uscf-db";
+        "database-cct-uscf-db";
     public const string StorageBucketId =
         "cct_images";
 }

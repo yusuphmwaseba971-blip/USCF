@@ -188,7 +188,7 @@ public class PrayerService
         System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_AUTH] uid={_auth.CurrentUser?.Uid ?? "none"}");
 
         using var request = new HttpRequestMessage(
-            HttpMethod.Get, $"api/prayers?limit={Math.Clamp(limit, 1, 5)}");
+            HttpMethod.Get, $"api/prayers?limit={Math.Clamp(limit, 1, 100)}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         System.Diagnostics.Debug.WriteLine("[PRAYER_FETCH_REQUEST] database=cct-uscf-db table=cct_prayers");
         using var response = await _http.SendAsync(request);
@@ -206,19 +206,7 @@ public class PrayerService
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         var items = (result?.Rows ?? [])
             .Where(row => !string.IsNullOrWhiteSpace(row.Content))
-            .Select(row => new PrayerRequest
-            {
-                PrayerId = row.Id,
-                AuthorUid = row.UserId,
-                AuthorDisplayName = row.UserId == _auth.CurrentUser?.Uid ? "You" : "Prayer member",
-                IsAnonymous = true,
-                Content = row.Content,
-                Visibility = row.IsPrivate ? PrayerVisibility.Private : PrayerVisibility.NationalPrayerWall,
-                Status = ParseStatus(row.Status),
-                CreatedAtUtc = row.CreatedAtUtc,
-                UpdatedAtUtc = row.UpdatedAtUtc,
-                IsOwnerVisible = row.UserId == _auth.CurrentUser?.Uid
-            })
+            .Select(MapPrayerRow)
             .OrderByDescending(item => item.CreatedAtUtc)
             .ToList();
         System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_RESULT] rows={result?.Rows?.Count ?? 0} displayed={items.Count}");
@@ -405,7 +393,7 @@ public class PrayerService
         string? cursorAfter = null,
         string? newerThan = null)
     {
-        var boundedLimit = Math.Clamp(limit, 1, 5);
+        var boundedLimit = Math.Clamp(limit, 1, 100);
         System.Diagnostics.Debug.WriteLine(
             $"[PRAYER_SYNC_REQUEST] limit={boundedLimit} cursorAfter={cursorAfter ?? "none"} newerThan={newerThan ?? "none"}");
 
@@ -433,19 +421,7 @@ public class PrayerService
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         var rows = (result?.Rows ?? [])
             .Where(row => !string.IsNullOrWhiteSpace(row.Content))
-            .Select(row => new PrayerRequest
-            {
-                PrayerId = row.Id,
-                AuthorUid = row.UserId,
-                AuthorDisplayName = row.UserId == _auth.CurrentUser?.Uid ? "You" : "Prayer member",
-                IsAnonymous = true,
-                Content = row.Content,
-                Visibility = row.IsPrivate ? PrayerVisibility.Private : PrayerVisibility.NationalPrayerWall,
-                Status = ParseStatus(row.Status),
-                CreatedAtUtc = row.CreatedAtUtc,
-                UpdatedAtUtc = row.UpdatedAtUtc,
-                IsOwnerVisible = row.UserId == _auth.CurrentUser?.Uid
-            })
+            .Select(MapPrayerRow)
             .OrderByDescending(row => row.CreatedAtUtc)
             .ToList();
 
@@ -514,6 +490,17 @@ public class PrayerService
         }
     }
 
+    public async Task<List<PrayerRequest>> RefreshPrayersAsync(int limit = 50)
+    {
+        var (rows, cursor) = await FetchPagedPrayersAsync(limit);
+        await SaveOrUpdateCachedPrayersAsync(rows);
+        if (!string.IsNullOrWhiteSpace(cursor))
+            Preferences.Default.Set(UserCacheKey(LastPrayerCursorKey), cursor);
+        Preferences.Default.Set(UserCacheKey(LastPrayerSyncKey), DateTime.UtcNow.ToString("O"));
+        PrayersSynchronized?.Invoke(rows);
+        return rows;
+    }
+
     public async Task<List<PrayerRequest>> LoadMorePrayersAsync(int pageSize = 3)
     {
         if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
@@ -547,10 +534,10 @@ public class PrayerService
         return rows;
     }
 
-    public async Task<bool> PrayForRequestAsync(string prayerId)
+    public async Task<PrayerActionResult> PrayForRequestAsync(string prayerId)
     {
         if (string.IsNullOrWhiteSpace(prayerId))
-            return false;
+            throw new ArgumentException("Prayer ID is required.", nameof(prayerId));
         var token = await _authService.GetCurrentFirebaseIdTokenAsync()
             ?? throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
         System.Diagnostics.Debug.WriteLine($"[PRAYER_I_PRAY_START] prayerId={prayerId}");
@@ -570,7 +557,12 @@ public class PrayerService
             prayer.PrayerCount = summary.Count;
             await SaveOrUpdateCachedPrayersAsync([prayer]);
         }
-        return recorded;
+        return new PrayerActionResult
+        {
+            Recorded = recorded,
+            Count = summary.Count,
+            HasPrayed = summary.HasPrayed
+        };
     }
 
     private async Task<PrayerActionSummary> GetPrayerActionSummaryAsync(string prayerId)
@@ -588,6 +580,23 @@ public class PrayerService
 
     private static PrayerStatus ParseStatus(string? value) =>
         Enum.TryParse<PrayerStatus>(value, true, out var status) ? status : PrayerStatus.Active;
+
+    private PrayerRequest MapPrayerRow(PrayerRow row) =>
+        new()
+        {
+            PrayerId = row.Id,
+            AuthorUid = row.UserId,
+            AuthorDisplayName = row.UserId == _auth.CurrentUser?.Uid ? "You" : "Prayer member",
+            IsAnonymous = true,
+            Content = row.Content,
+            Visibility = row.IsPrivate ? PrayerVisibility.Private : PrayerVisibility.NationalPrayerWall,
+            Status = ParseStatus(row.Status),
+            CreatedAtUtc = row.CreatedAtUtc,
+            UpdatedAtUtc = row.UpdatedAtUtc,
+            IsOwnerVisible = row.UserId == _auth.CurrentUser?.Uid,
+            PrayerCount = row.PrayerCount,
+            IsPrayed = row.IsPrayed
+        };
 
     private sealed class PrayerListResponse
     {
@@ -615,24 +624,37 @@ public class PrayerService
         public string Status { get; set; } = string.Empty;
         public DateTime CreatedAtUtc { get; set; }
         public DateTime UpdatedAtUtc { get; set; }
+        public int PrayerCount { get; set; }
+        public bool IsPrayed { get; set; }
     }
 
     public async Task<IReadOnlyList<PrayerRequest>> GetMyPrayersAsync()
     {
         var uid = _auth.CurrentUser?.Uid;
         if (string.IsNullOrWhiteSpace(uid))
-            return Array.Empty<PrayerRequest>();
+            throw new InvalidOperationException("You must be signed in to view your prayer requests.");
 
-        var snapshot = await _firestore
-            .GetCollection("prayers")
-            .WhereEqualsTo("authorUid", uid)
-            .OrderBy("createdAtUtc", true)
-            .GetDocumentsAsync<PrayerFirestoreDocument>(Source.Default);
+        var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
 
-        return snapshot.Documents
-            .Select(doc => MapFromDocument(doc.Data))
-            .Where(item => item != null)
-            .Cast<PrayerRequest>()
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/prayers?limit=100&mine=true");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        System.Diagnostics.Debug.WriteLine($"[PRAYER_MY_REQUESTS_START] uid={uid}");
+        using var response = await _http.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_MY_REQUESTS_RESPONSE] status={(int)response.StatusCode} bodyLength={body.Length}");
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Your prayer requests could not be loaded ({(int)response.StatusCode}).");
+
+        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerListResponse>(
+            body,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        return (result?.Rows ?? [])
+            .Where(row => !string.IsNullOrWhiteSpace(row.Content) && row.UserId == uid)
+            .Select(MapPrayerRow)
+            .OrderByDescending(item => item.CreatedAtUtc)
             .ToList();
     }
 

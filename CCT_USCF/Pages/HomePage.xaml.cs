@@ -223,9 +223,11 @@ public partial class HomePage : ContentPage
         {
             var service = MauiProgram.Services.GetRequiredService<CommunityService>();
             var cachedPosts = await service.GetCachedPublishedCctPostsAsync(8);
+            System.Diagnostics.Debug.WriteLine($"[PLUS_POSTS] cache count = {cachedPosts.Count}");
             RenderCctPosts(cachedPosts, cachedPosts.Count == 0 ? "Loading posts..." : null);
 
             var posts = await service.GetPublishedCctPostsAsync(8);
+            System.Diagnostics.Debug.WriteLine($"[PLUS_POSTS] HomePage render count = {posts.Count}");
             RenderCctPosts(posts, posts.Count == 0 ? "No posts available yet." : null);
         }
         catch (Exception ex)

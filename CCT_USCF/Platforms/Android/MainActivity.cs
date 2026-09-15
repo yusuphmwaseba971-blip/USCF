@@ -2,6 +2,8 @@ using Android.App;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
+using Android.Content;
+using System.Threading.Tasks;
 using Plugin.Firebase.AppCheck;
 using Plugin.Firebase.Core.Platforms.Android;
 
@@ -20,6 +22,29 @@ namespace CCT_USCF;
         ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+    private static TaskCompletionSource<Intent?>? _googleSignInCompletion;
+
+    public static Task<Intent?> StartGoogleSignInAsync(Intent intent, int requestCode)
+    {
+        _googleSignInCompletion = new TaskCompletionSource<Intent?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var activity = Platform.CurrentActivity
+            ?? throw new InvalidOperationException("No active Android activity is available.");
+        activity.StartActivityForResult(intent, requestCode);
+        return _googleSignInCompletion.Task;
+    }
+
+    protected override void OnActivityResult(int requestCode, Android.App.Result resultCode, Intent? data)
+    {
+        base.OnActivityResult(requestCode, resultCode, data);
+        if (requestCode == 9101)
+        {
+            _googleSignInCompletion?.TrySetResult(
+                resultCode == Android.App.Result.Ok ? data : null);
+            _googleSignInCompletion = null;
+        }
+    }
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
 #if DEBUG

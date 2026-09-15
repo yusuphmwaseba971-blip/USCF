@@ -90,7 +90,7 @@ public class AuthService
         public string Email { get; set; } = string.Empty;
 
         [FirestoreProperty("phoneNumber")]
-        public string PhoneNumber { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
 
         [FirestoreProperty("role")]
         public string Role { get; set; } = string.Empty;
@@ -224,6 +224,66 @@ public class AuthService
         }
     }
 
+    public async Task<AuthResult> SignInWithGoogleAsync()
+    {
+#if ANDROID
+        try
+        {
+            await FirebaseInit.Initialized;
+            if (!await Platforms.Android.GoogleSignInBridge.SignInAsync())
+            {
+                return new AuthResult
+                {
+                    Success = false,
+                    Error = "Google Sign-In was cancelled.",
+                    StatusCode = 499
+                };
+            }
+
+            await _auth.ReloadCurrentUserAsync();
+            var currentUser = await LoadCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return new AuthResult
+                {
+                    Success = false,
+                    Error = "Google Sign-In succeeded, but your CCT-USCF profile is not set up yet.",
+                    StatusCode = 422
+                };
+            }
+
+            MauiProgram.SetCurrentUser(currentUser);
+            return new AuthResult
+            {
+                Success = true,
+                EmailVerified = true,
+                Token = _auth.CurrentUser?.Uid,
+                RefreshToken = _auth.CurrentUser?.Email,
+                ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
+                StatusCode = 200
+            };
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Sign-in failed: {ex}");
+            return new AuthResult
+            {
+                Success = false,
+                Error = GetFirebaseErrorMessage(ex),
+                StatusCode = 401
+            };
+        }
+#else
+        await Task.CompletedTask;
+        return new AuthResult
+        {
+            Success = false,
+            Error = "Google Sign-In is available on Android only.",
+            StatusCode = 501
+        };
+#endif
+    }
+
     // =========================================================
     // LOGOUT
     // =========================================================
@@ -331,7 +391,6 @@ public class AuthService
         string fullName,
         string username,
         string email,
-        string phoneNumber,
         string password,
         string confirm,
         string role,
@@ -349,9 +408,6 @@ public class AuthService
 
         if (string.IsNullOrWhiteSpace(email))
             throw new Exception("Email is required.");
-
-        if (string.IsNullOrWhiteSpace(phoneNumber))
-            throw new Exception("Phone number is required.");
 
         if (string.IsNullOrWhiteSpace(password))
             throw new Exception("Password is required.");
@@ -407,7 +463,6 @@ public class AuthService
                     FullName = fullName.Trim(),
                     Username = normalizedUsername,
                     Email = normalizedEmail,
-                    PhoneNumber = phoneNumber.Trim(),
                     Role = normalizedRole,
                     LeadershipLevel = normalizedLeadershipLevel,
                     LeadershipDuty = normalizedLeadershipDuty,
@@ -444,7 +499,6 @@ public class AuthService
                     !string.IsNullOrWhiteSpace(savedDocument.Data.FullName) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Username) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Email) &&
-                    !string.IsNullOrWhiteSpace(savedDocument.Data.PhoneNumber) &&
                     !string.IsNullOrWhiteSpace(savedDocument.Data.Role) &&
                     profileMatchesCurrentUser &&
                     (savedDocument.Data.RegionId > 0 || savedDocument.Data.DistrictId > 0 || savedDocument.Data.BranchId > 0 || string.Equals(savedDocument.Data.Role, "Member", StringComparison.OrdinalIgnoreCase));
@@ -524,19 +578,42 @@ public class AuthService
     {
         var firebaseUser = _auth.CurrentUser
             ?? throw new InvalidOperationException("No signed-in Firebase user was found.");
-        var normalizedEmail = email.Trim().ToLowerInvariant();
-        if (!normalizedEmail.Contains('@', StringComparison.Ordinal))
-            throw new ArgumentException("Enter a valid email address.", nameof(email));
 
-        await firebaseUser.UpdateEmailAsync(normalizedEmail);
-        await _firestore
-            .GetCollection("users")
-            .GetDocument(firebaseUser.Uid)
-            .SetDataAsync(new Dictionary<string, object>
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        if (!IsValidEmailAddress(normalizedEmail))
+            throw new ArgumentException("Please enter a valid email address.", nameof(email));
+
+        try
+        {
+            await firebaseUser.UpdateEmailAsync(normalizedEmail);
+            await _auth.ReloadCurrentUserAsync();
+
+            var updatedFirebaseUser = _auth.CurrentUser
+                ?? throw new InvalidOperationException("The Firebase session ended while updating your email.");
+
+            await _firestore
+                .GetCollection("users")
+                .GetDocument(updatedFirebaseUser.Uid)
+                .UpdateDataAsync(new Dictionary<object, object>
+                {
+                    ["email"] = updatedFirebaseUser.Email ?? normalizedEmail
+                });
+
+            await updatedFirebaseUser.SendEmailVerificationAsync();
+
+            var updatedProfile = await LoadCurrentUserAsync();
+            if (updatedProfile == null)
             {
-                ["email"] = normalizedEmail
-            });
-        await SendVerificationEmailAsync();
+                throw new InvalidOperationException(
+                    "Your email changed, but your profile could not be refreshed.");
+            }
+
+            MauiProgram.SetCurrentUser(updatedProfile);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception(GetFirebaseErrorMessage(ex), ex);
+        }
     }
 
     public async Task<bool> RefreshEmailVerificationAsync()
@@ -545,10 +622,26 @@ public class AuthService
             ?? throw new InvalidOperationException("No signed-in Firebase user was found.");
 
         await _auth.ReloadCurrentUserAsync();
-        var verified = firebaseUser.IsEmailVerified;
+        var refreshedFirebaseUser = _auth.CurrentUser
+            ?? throw new InvalidOperationException("The Firebase session ended while checking verification.");
+        var verified = refreshedFirebaseUser.IsEmailVerified;
         System.Diagnostics.Debug.WriteLine(
             $"[FIREBASE AUTH] Email verification refreshed: verified={verified}.");
         return verified;
+    }
+
+    private static bool IsValidEmailAddress(string email)
+    {
+        try
+        {
+            return new System.Net.Mail.MailAddress(email).Address.Equals(
+                email,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     public async Task<string> GetCurrentFirebaseIdTokenAsync(
@@ -1375,6 +1468,7 @@ public async Task<bool> PostHolyWordAsync(
         }
 
         if (combined.Contains("This email is already registered", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("EMAIL_EXISTS", StringComparison.OrdinalIgnoreCase) ||
             combined.Contains("already registered", StringComparison.OrdinalIgnoreCase) ||
             (combined.Contains("already", StringComparison.OrdinalIgnoreCase) &&
              combined.Contains("email", StringComparison.OrdinalIgnoreCase)))
@@ -1395,6 +1489,20 @@ public async Task<bool> PostHolyWordAsync(
             combined.Contains("email address is invalid", StringComparison.OrdinalIgnoreCase))
         {
             return "Please enter a valid email address.";
+        }
+
+        if (combined.Contains("requires-recent-login", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("requires recent login", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("recent login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "For security, please sign in again before changing your email.";
+        }
+
+        if (combined.Contains("too many requests", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("too-many-requests", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("rate limit", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Too many requests. Please wait a moment and try again.";
         }
 
         if (combined.Contains("user-not-found", StringComparison.OrdinalIgnoreCase) ||

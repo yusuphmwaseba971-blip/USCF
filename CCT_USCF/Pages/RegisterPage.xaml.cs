@@ -79,7 +79,6 @@ public partial class RegisterPage : ContentPage
             "Full name" => ("Why do we ask for your name?", "Your name helps identify your USCF profile and allows other authorized members to recognize you within appropriate CCT-USCF community features."),
             "Username" => ("Why do we ask for a username?", "Your username provides a convenient identity within CCT-USCF and can help distinguish your account from other members."),
             "Email" => ("Why do we ask for your email?", "Your email is used for account authentication, account-related communication and account recovery where supported."),
-            "Phone number" => ("Why do we ask for your phone number?", "Your phone number helps maintain accurate member contact information and may support account/profile-related communication where the application provides such functionality."),
             "Role" => ("Why do we ask for your role?", "Your role helps CCT-USCF provide the appropriate experience and apply the correct organizational permissions."),
             "USCF location" => ("Why do we ask for your location within USCF?", "This information connects your account to the appropriate USCF organizational structure and allows the application to provide relevant branch, district, regional and community features."),
             _ => ("Why do we ask for leadership information?", "Leadership information helps CCT-USCF determine which organizational responsibilities and leadership features are appropriate for your account.")
@@ -630,9 +629,6 @@ public partial class RegisterPage : ContentPage
         var email =
             EmailEntry.Text?.Trim() ?? string.Empty;
 
-        var phone =
-            PhoneEntry.Text?.Trim() ?? string.Empty;
-
         var password =
             PasswordEntry.Text ?? string.Empty;
 
@@ -658,12 +654,6 @@ public partial class RegisterPage : ContentPage
         if (string.IsNullOrWhiteSpace(email))
         {
             ShowError("Please enter your email address.");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(phone))
-        {
-            ShowError("Please enter your phone number.");
             return;
         }
 
@@ -831,7 +821,6 @@ public partial class RegisterPage : ContentPage
                 fullName,
                 username,
                 email,
-                phone,
                 password,
                 confirm,
                 role,

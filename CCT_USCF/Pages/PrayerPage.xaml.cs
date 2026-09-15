@@ -112,12 +112,11 @@ public partial class PrayerPage : ContentPage
         {
             button.IsEnabled = false;
             button.Text = "Saving...";
-            var recorded = await _prayerService.PrayForRequestAsync(prayerId);
+            var result = await _prayerService.PrayForRequestAsync(prayerId);
             if (button.BindingContext is PrayerRequest prayer)
             {
-                prayer.IsPrayed = true;
-                if (recorded)
-                    prayer.PrayerCount++;
+                prayer.IsPrayed = result.HasPrayed;
+                prayer.PrayerCount = result.Count;
             }
 
             button.Text = "🙏  I PRAYED";
@@ -145,11 +144,10 @@ public partial class PrayerPage : ContentPage
             try
             {
                 System.Diagnostics.Debug.WriteLine("[PRAYER_REFRESH_START]");
-                await _prayerService.SyncNewAndChangedPrayersAsync();
-                var cached = await _prayerService.LoadCachedPrayersAsync(50);
+                var refreshed = await _prayerService.RefreshPrayersAsync(50);
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    AppendOnly(cached);
+                    ReplaceItems(refreshed);
                     PrayerRefreshView.IsRefreshing = false;
                 });
                 System.Diagnostics.Debug.WriteLine("[PRAYER_REFRESH_COMPLETE]");
@@ -214,6 +212,14 @@ public partial class PrayerPage : ContentPage
         foreach (var prayer in prayers)
             if (_items.All(existing => existing.PrayerId != prayer.PrayerId))
                 _items.Add(prayer);
+    }
+
+    private void ReplaceItems(IEnumerable<PrayerRequest> prayers)
+    {
+        _items.Clear();
+        foreach (var prayer in prayers)
+            _items.Add(prayer);
+        PrayerCollectionView.ItemsSource = _items;
     }
 
     private static IEnumerable<PrayerRequest> StableInitialOrder(IEnumerable<PrayerRequest> prayers) =>

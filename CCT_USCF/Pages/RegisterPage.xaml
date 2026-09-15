@@ -37,7 +37,7 @@
                        CharacterSpacing="1.5" TextColor="#1A4D3A" />
                 <Border Padding="14,4" BackgroundColor="White" Stroke="#DCE8DF"
                         StrokeThickness="1" StrokeShape="RoundRectangle 16">
-                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8">
                         <Entry x:Name="FullNameEntry" Placeholder="Full name" />
                         <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Full name"
                                 Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
@@ -46,11 +46,6 @@
                         <Button Grid.Row="1" Grid.Column="1" Text="Why do we ask?" CommandParameter="Username"
                                 Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
                                 SemanticProperties.Description="Why CCT-USCF asks for your username" />
-                        <Entry Grid.Row="2" x:Name="PhoneEntry" Placeholder="Phone number"
-                               Keyboard="Telephone" />
-                        <Button Grid.Row="2" Grid.Column="1" Text="Why do we ask?" CommandParameter="Phone number"
-                                Clicked="OnWhyClicked" Style="{StaticResource LinkButtonStyle}"
-                                SemanticProperties.Description="Why CCT-USCF asks for your phone number" />
                     </Grid>
                 </Border>
             </VerticalStackLayout>

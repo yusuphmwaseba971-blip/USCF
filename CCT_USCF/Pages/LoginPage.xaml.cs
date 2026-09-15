@@ -140,4 +140,49 @@ public partial class LoginPage : ContentPage
     {
         await Shell.Current.GoToAsync("register");
     }
+
+    private async void OnGoogleSignInClicked(object sender, EventArgs e)
+    {
+        if (GoogleSignInButton.IsEnabled == false)
+            return;
+
+        MessageLabel.IsVisible = true;
+        MessageLabel.Text = "Connecting to Google...";
+        GoogleSignInButton.IsEnabled = false;
+
+        try
+        {
+            var result = await _authService.SignInWithGoogleAsync();
+            if (!result.Success)
+            {
+                MessageLabel.Text = result.Error ?? "Google Sign-In could not be completed.";
+                return;
+            }
+
+            var user = await _authService.GetCurrentUserAsync();
+            if (user == null)
+            {
+                MessageLabel.Text = "Google Sign-In succeeded, but your CCT-USCF profile could not be loaded.";
+                return;
+            }
+
+            await TokenStorage.SaveSessionAsync(
+                result.Token,
+                result.RefreshToken,
+                result.ExpiresAtUtc ?? DateTime.UtcNow.AddDays(30));
+            await TokenStorage.SaveCachedUserAsync(user);
+            MauiProgram.SetCurrentUser(user);
+            MauiProgram.NotifyAuthChanged();
+            await Shell.Current.GoToAsync("//home");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Sign-in failed: {ex}");
+            MessageLabel.Text = "Google Sign-In could not be completed. Please try again.";
+        }
+        finally
+        {
+            GoogleSignInButton.IsEnabled = true;
+        }
+    }
 }

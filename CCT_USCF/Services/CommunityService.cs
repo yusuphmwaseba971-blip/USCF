@@ -3989,16 +3989,24 @@ ConversationId =
         public async Task<List<CctPost>> GetPublishedCctPostsAsync(int limit = 8)
         {
             limit = Math.Clamp(limit, 1, 50);
+            LogPlusPosts("PLUS POSTS: request started");
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
                 $"api/community/posts?limit={limit}");
             await AddFirebaseAuthorizationAsync(request);
+            LogPlusPosts($"PLUS POSTS: endpoint = {_httpClient.BaseAddress}{request.RequestUri}");
             try
             {
                 var startedAt = Stopwatch.GetTimestamp();
                 using var response = await _httpClient.SendAsync(request);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                LogPlusPosts(
+                    $"PLUS POSTS: response status = {(int)response.StatusCode}; " +
+                    $"response length = {responseBody.Length}");
                 response.EnsureSuccessStatusCode();
-                var posts = (await response.Content.ReadFromJsonAsync<List<CctPost>>()
+                var posts = (JsonSerializer.Deserialize<List<CctPost>>(
+                        responseBody,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web))
                     ?? new List<CctPost>())
                     .Where(IsPublishedCctPost)
                     .GroupBy(post => post.Id, StringComparer.Ordinal)
@@ -4023,13 +4031,25 @@ ConversationId =
                     $"[PLUS_POSTS] fetched={posts.Count} requestedLimit={limit} " +
                     $"media={mediaCount} responseBytes={response.Content.Headers.ContentLength?.ToString() ?? "unknown"} " +
                     $"elapsedMs={elapsedMs:F0} randomized=true");
+                LogPlusPosts(
+                    $"PLUS POSTS: parsed post count = {posts.Count}; " +
+                    $"post IDs = {string.Join(",", posts.Select(post => post.Id))}");
                 return ShufflePosts(posts);
             }
             catch (Exception ex)
             {
+                LogPlusPosts($"PLUS POSTS: request failed = {ex.GetType().Name}: {ex.Message}");
                 Debug.WriteLine($"[PLUS_POSTS] network fetch failed; using cache. {ex}");
                 return await GetCachedPublishedCctPostsAsync(limit);
             }
+        }
+
+        private static void LogPlusPosts(string message)
+        {
+            Debug.WriteLine($"[PLUS_POSTS] {message}");
+#if ANDROID
+            Android.Util.Log.Debug("CCT_PLUS", message);
+#endif
         }
 
         private static bool IsPublishedCctPost(CctPost post)

@@ -94,6 +94,13 @@ public class PrayerAction
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class PrayerActionResult
+{
+    public bool Recorded { get; init; }
+    public int Count { get; init; }
+    public bool HasPrayed { get; init; }
+}
+
 public class PrayerReport
 {
     public string ReportId { get; set; } = string.Empty;

@@ -111,7 +111,7 @@ public static class CctUsfcKnowledgeBase
             ["profile", "account", "login", "sign in", "register", "registration", "password", "username"],
             """
             VERIFIED: Login accepts Email or Username and Password, with LOGIN and Create Account.
-            Registration collects full name, username, phone number, email, password and confirmation,
+            Registration collects full name, username, email, password and confirmation; a phone number is not needed,
             account type (USCF Member, USCF Leader, or Pastor), and leadership information for leaders.
             The profile model contains role, leadership level/duty, organization, region, district,
             and branch fields. Authentication and profile loading remain Firebase-backed operations.
