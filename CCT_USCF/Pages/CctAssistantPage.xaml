@@ -46,13 +46,16 @@
                         <ActivityIndicator x:Name="ThinkingIndicator" IsVisible="False" IsRunning="False"
                                            HorizontalOptions="Center" Color="{StaticResource BrandGreen}" />
                         <VerticalStackLayout x:Name="ResponseLayout" IsVisible="False" Spacing="8" />
-                        <HorizontalStackLayout x:Name="ActionLayout" IsVisible="False" Spacing="10">
-                            <Button x:Name="ActionButton" Clicked="OnActionClicked"
-                                    BackgroundColor="{StaticResource SoftMint}"
-                                    TextColor="{StaticResource BrandDeepGreen}" />
+                        <Button x:Name="CopyResponseButton" Text="Copy" IsVisible="False"
+                                Clicked="OnCopyResponseClicked"
+                                BackgroundColor="Transparent"
+                                TextColor="{StaticResource BrandGreen}"
+                                HorizontalOptions="Start" Padding="4,2" />
+                        <VerticalStackLayout x:Name="ActionLayout" IsVisible="False" Spacing="8">
+                            <VerticalStackLayout x:Name="ContextualActionsLayout" Spacing="8" />
                             <Button Text="Dismiss" Clicked="OnDismissActionClicked"
                                     BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" />
-                        </HorizontalStackLayout>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </ScrollView>
                 <Grid x:Name="InputGrid" Grid.Row="2"

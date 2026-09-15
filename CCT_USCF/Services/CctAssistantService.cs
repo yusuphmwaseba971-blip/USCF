@@ -6,8 +6,15 @@ public sealed class CctAssistantService : ICctAssistantService
 {
     private const string EnabledKey = "cct.assistant.enabled";
     private readonly CloudflareAiService _ai;
+    private readonly ExternalInformationService _external;
 
-    public CctAssistantService(CloudflareAiService ai) => _ai = ai;
+    public CctAssistantService(
+        CloudflareAiService ai,
+        ExternalInformationService external)
+    {
+        _ai = ai;
+        _external = external;
+    }
 
     public bool IsEnabled => Preferences.Default.Get(EnabledKey, true);
     public event EventHandler? EnabledChanged;
@@ -54,20 +61,38 @@ public sealed class CctAssistantService : ICctAssistantService
 
         var context = GetCurrentPageContext();
         var normalized = prompt.Trim();
-        var navigation = TryGetNavigation(normalized);
-        if (navigation is not null)
-            return new($"I can take you to {navigation}.", navigation);
-
-        if (normalized.Contains("today", StringComparison.OrdinalIgnoreCase) &&
-            normalized.Contains("prayer", StringComparison.OrdinalIgnoreCase))
-            return new("I can open the Prayer Requests page so you can see the prayers available to your account.", "Open Prayer Requests");
-
-        if (normalized.Contains("publish", StringComparison.OrdinalIgnoreCase))
-            return new("I can help prepare an announcement, but publishing always stays in the existing editor and requires your explicit confirmation.", "Open Church Announcement");
-
-        if (normalized.Contains("whatsapp", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("share", StringComparison.OrdinalIgnoreCase))
-            return new("Sharing remains under your control. After publishing, use the normal Android share sheet to choose WhatsApp and the recipient.", "Open Church Announcement");
+        var intent = ClassifyIntent(normalized);
+        var isWritingRequest = IsWritingRequest(normalized);
+        var navigation = intent is CctAssistantIntent.CctFeature
+            or CctAssistantIntent.InAppNavigation
+            or CctAssistantIntent.Troubleshooting
+            ? TryGetNavigation(normalized)
+            : null;
+        if (isWritingRequest && !IsExplicitNavigationRequest(normalized))
+            navigation = null;
+        if (navigation is { Count: > 0 })
+        {
+            var actions = navigation
+                .Select(target => new CctAssistantAction(target, CctNavigation.GetLabel(target)))
+                .ToArray();
+            var explicitRequest = IsExplicitNavigationRequest(normalized);
+            var text = navigation.Count == 1
+                ? explicitRequest
+                    ? $"Sure. I can take you to {CctNavigation.GetLabel(navigation[0]).Replace("Open ", string.Empty, StringComparison.Ordinal)}."
+                    : $"You can find that in {CctNavigation.GetLabel(navigation[0]).Replace("Open ", string.Empty, StringComparison.Ordinal)}. Would you like me to take you there?"
+                : "You can manage your account from your profile or app settings. Which would you like to open?";
+            if (intent == CctAssistantIntent.Troubleshooting)
+            {
+                text = BuildTroubleshootingGuidance(navigation[0]);
+            }
+            return new(
+                text,
+                intent == CctAssistantIntent.Troubleshooting
+                    ? CctAssistantIntent.Troubleshooting
+                    : CctAssistantIntent.InAppNavigation,
+                navigation.Count == 1 ? navigation[0] : null,
+                actions);
+        }
 
         var user = MauiProgram.CurrentUser;
         var runtimeContext = new StringBuilder()
@@ -80,10 +105,23 @@ public sealed class CctAssistantService : ICctAssistantService
             .AppendLine($"Branch ID: {Safe(user?.BranchId)}.")
             .ToString();
         var knowledge = CctUsfcKnowledgeBase.BuildRelevantKnowledge(normalized, context.PageName);
+        var externalSources = intent == CctAssistantIntent.ExternalCurrentInformation
+            ? await _external.SearchAsync(normalized, cancellationToken)
+            : string.Empty;
         var promptWithContext = new StringBuilder()
-            .AppendLine("You are USCF Assistance inside the CCT-USCF Android app.")
-            .AppendLine("Answer only from the VERIFIED CCT-USCF knowledge below and the supplied runtime context.")
-            .AppendLine($"If the answer is not verified, say exactly: \"{CctUsfcKnowledgeBase.UnknownAnswer}\"")
+            .AppendLine("You are the CCT-USCF Assistant inside the Android app.")
+            .AppendLine("Fully support English, Kiswahili, and mixed English/Kiswahili.")
+            .AppendLine("Respond naturally in the user's dominant language. When the user writes Kiswahili, use natural Tanzanian Kiswahili rather than word-for-word translation. Honor explicit requests such as 'Jibu kwa Kiswahili' or 'Please answer in English'.")
+            .AppendLine("Preserve CCT-USCF feature names such as Branch Chat, Prayer Requests, Community, Bible, Profile, Settings, Appwrite, Groq, and Cloudflare.")
+            .AppendLine("You are an assistant, not an autonomous publisher. When asked to write a prayer, encouragement, notice, worship message, community message, branch message, event description, or other content, prepare a draft for review and editing.")
+            .AppendLine("Treat generated content as a draft. Never independently send, publish, submit, delete, edit existing published content, or send a chat message. The user must use the existing application action.")
+            .AppendLine("For rewriting requests, return the revised draft without publishing it.")
+            .AppendLine("Navigation requests may use the existing application navigation/action mechanism; consequential actions always remain under the user's control.")
+            .AppendLine($"Intent category: {intent}.")
+            .AppendLine(intent == CctAssistantIntent.CctFeature ||
+                        intent == CctAssistantIntent.Troubleshooting
+                ? $"If the request is about a CCT-USCF feature not covered by the verified knowledge, explain what information is missing and use this response: \"{CctUsfcKnowledgeBase.UnknownAnswer}\""
+                : "Do not use the unknown CCT-USCF feature response for ordinary general questions.")
             .AppendLine("Never invent pages, buttons, workflows, permissions, data, counts, news, or offline behavior.")
             .AppendLine("The application/backend is authoritative for authentication, authorization, data, and operations.")
             .AppendLine("Never claim to have published, sent, deleted, or changed anything.")
@@ -95,31 +133,180 @@ public sealed class CctAssistantService : ICctAssistantService
             .AppendLine("SAFE CURRENT APPLICATION CONTEXT:")
             .AppendLine(runtimeContext)
             .AppendLine()
+            .AppendLine("EXTERNAL/CURRENT SOURCES:")
+            .AppendLine(string.IsNullOrWhiteSpace(externalSources)
+                ? "Not applicable."
+                : externalSources)
+            .AppendLine()
             .AppendLine($"User request: {normalized}")
             .ToString();
 
-        return await _ai.GenerateAsync(promptWithContext, cancellationToken);
+        var reply = await _ai.GenerateAsync(promptWithContext, cancellationToken);
+        return reply with { Intent = intent };
     }
 
-    private static string? TryGetNavigation(string prompt)
+    private static List<CctNavigationTarget>? TryGetNavigation(string prompt)
     {
-        if (ContainsAny(prompt, "community", "community page")) return "Community";
-        if (ContainsAny(prompt, "bible", "scripture", "passage")) return "Bible";
-        if (ContainsAny(prompt, "prayer", "prayers")) return "Prayer Requests";
-        if (ContainsAny(prompt, "group", "groups")) return "Church Groups";
-        if (ContainsAny(prompt, "profile")) return "Profile";
-        if (ContainsAny(prompt, "settings")) return "Settings";
-        if (ContainsAny(prompt, "home")) return "Home";
-        return null;
+        if (ContainsAny(prompt, "account", "account details", "my account") &&
+            !ContainsAny(prompt, "profile", "settings"))
+        {
+            return [CctNavigationTarget.Profile, CctNavigationTarget.Settings];
+        }
+
+        var targets = new List<CctNavigationTarget>();
+        if (ContainsAny(prompt, "community", "community page", "community posts", "what's happening in the community", "what is happening in the community", "jumuiya"))
+            targets.Add(CctNavigationTarget.Community);
+        if (ContainsAny(prompt, "bible", "scripture", "passage", "read the bible", "read scripture", "biblia", "neno"))
+            targets.Add(CctNavigationTarget.Bible);
+        if (ContainsAny(prompt, "prayer request", "prayer requests", "submit a prayer", "my prayers", "i want to pray", "maombi", "ombi la maombi"))
+            targets.Add(CctNavigationTarget.PrayerRequests);
+        if (ContainsAny(prompt, "church group", "church groups", "my groups", "where can i find my groups", "vikundi", "kikundi"))
+            targets.Add(CctNavigationTarget.ChurchGroups);
+        if (ContainsAny(prompt, "profile", "phone number", "profile details"))
+            targets.Add(CctNavigationTarget.Profile);
+        if (ContainsAny(prompt, "settings", "app settings", "mipangilio"))
+            targets.Add(CctNavigationTarget.Settings);
+        if (ContainsAny(prompt, "sermon", "sermons", "listen to a sermon"))
+            targets.Add(CctNavigationTarget.Sermons);
+        if (ContainsAny(prompt, "notification", "notifications"))
+            targets.Add(CctNavigationTarget.Notifications);
+        if (ContainsAny(prompt, "branch message", "branch messages", "branch chat", "ujumbe wa tawi", "mawasiliano ya tawi"))
+            targets.Add(CctNavigationTarget.BranchChat);
+        if (ContainsAny(prompt, "announcement", "announcements", "church news"))
+            targets.Add(CctNavigationTarget.Announcements);
+        if (ContainsAny(prompt, "home page", "home", "go home"))
+            targets.Add(CctNavigationTarget.Home);
+
+        return targets.Count == 0 ? null : targets.Distinct().ToList();
+    }
+
+    private static string BuildTroubleshootingGuidance(CctNavigationTarget target)
+    {
+        var destination = CctNavigation.GetLabel(target)
+            .Replace("Open ", string.Empty, StringComparison.Ordinal);
+        var guidance = target switch
+        {
+            CctNavigationTarget.PrayerRequests =>
+                "Check that the request form has the required content, then retry and review the form's status message.",
+            CctNavigationTarget.Announcements =>
+                "Check the selected audience, title, and message, then review the existing send status before retrying.",
+            CctNavigationTarget.ChurchGroups =>
+                "Group visibility depends on the organization data and permissions supplied by the app; check your current region, district, and branch context rather than guessing membership.",
+            CctNavigationTarget.Community =>
+                "Check the post or message fields and the status shown by the app. Community posts, group chat, and private messaging are separate features.",
+            _ =>
+                "Review the status message shown by the app and retry the operation."
+        };
+
+        return $"Let's troubleshoot that. {guidance} You can also open {destination} to try again.";
     }
 
     private static bool ContainsAny(string value, params string[] terms) =>
-        terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase)) &&
-        (value.Contains("open", StringComparison.OrdinalIgnoreCase) ||
-         value.Contains("take me", StringComparison.OrdinalIgnoreCase) ||
-         value.Contains("where", StringComparison.OrdinalIgnoreCase) ||
-         value.Contains("go", StringComparison.OrdinalIgnoreCase) ||
-         value.Contains("find", StringComparison.OrdinalIgnoreCase));
+        terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsExplicitNavigationRequest(string prompt) =>
+        prompt.Contains("take me", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("open", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("go to", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("show me", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("go home", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("fungua", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("nenda", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("onyesha", StringComparison.OrdinalIgnoreCase) ||
+        prompt.Contains("peleka", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsWritingRequest(string prompt) =>
+        ContainsAny(
+            prompt,
+            "help me write",
+            "write a",
+            "draft",
+            "rewrite",
+            "shorter",
+            "shorten",
+            "mafupi zaidi",
+            "make it",
+            "improve this",
+            "andika",
+            "niandikie",
+            "nisaidie kuandika",
+            "fanya ... mafupi",
+            "boresha",
+            "rekebisha");
+
+    private static CctAssistantIntent ClassifyIntent(string prompt)
+    {
+        if (IsExplicitNavigationRequest(prompt))
+            return CctAssistantIntent.InAppNavigation;
+
+        if (ContainsAny(
+                prompt,
+                "latest",
+                "current",
+                "today's news",
+                "today news",
+                "regulations",
+                "price",
+                "breaking news",
+                "what is happening today",
+                "what happened today",
+                "admission requirements",
+                "university regulations",
+                "current regulations"))
+        {
+            return CctAssistantIntent.ExternalCurrentInformation;
+        }
+
+        if (ContainsAny(
+                prompt,
+                "can't",
+                "cannot",
+                "not working",
+                "unable",
+                "error",
+                "fails",
+                "failed",
+                "troubleshoot",
+                "problem",
+                "isn't sending",
+                "is not sending",
+                "isn't posting",
+                "is not posting",
+                "can't submit",
+                "cannot submit",
+                "can't see"))
+        {
+            return CctAssistantIntent.Troubleshooting;
+        }
+
+        if (ContainsAny(
+                prompt,
+                "uscf",
+                "cct",
+                "prayer request",
+                "church group",
+                "announcement",
+                "community",
+                "profile",
+                "settings",
+                "bible",
+                "sermon",
+                "notification",
+                "church news",
+                "what's happening in the community",
+                "what is happening in the community",
+                "i want to pray",
+                "where can i find my groups",
+                "read scripture"))
+        {
+            return CctAssistantIntent.CctFeature;
+        }
+
+        if (ContainsAny(prompt, "fungua", "nenda", "onyesha", "peleka", "maombi", "ujumbe wa tawi", "tawi"))
+            return CctAssistantIntent.InAppNavigation;
+
+        return CctAssistantIntent.GeneralKnowledge;
+    }
 
     private static string Safe(object? value) =>
         value?.ToString() is { Length: > 0 } text ? text : "unknown";

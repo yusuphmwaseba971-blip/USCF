@@ -175,6 +175,8 @@ builder.Services.AddSingleton<MediaViewerService>();
 builder.Services.AddSingleton<AppAppearanceService>();
 builder.Services.AddSingleton<CloudflareAiService>(_ =>
     new CloudflareAiService(new HttpClient()));
+builder.Services.AddSingleton<ExternalInformationService>(_ =>
+    new ExternalInformationService(new HttpClient()));
 builder.Services.AddSingleton<ICctAssistantService, CctAssistantService>();
         // =====================================================
         // FIREBASE DATA SEEDERS

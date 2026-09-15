@@ -7,9 +7,9 @@ namespace CCT_USCF.Pages;
 public partial class CctAssistantPage : ContentPage
 {
     private readonly ICctAssistantService _assistant;
-    private string? _pendingAction;
     private bool _isClosing;
     private bool _hasOpened;
+    private string _lastResponseText = string.Empty;
 
     public CctAssistantPage()
     {
@@ -100,23 +100,25 @@ public partial class CctAssistantPage : ContentPage
         AskSurface.IsEnabled = false;
         ThinkingIndicator.IsVisible = ThinkingIndicator.IsRunning = true;
         ResponseLayout.IsVisible = false;
+        CopyResponseButton.IsVisible = false;
         ActionLayout.IsVisible = false;
         try
         {
             var reply = await _assistant.AskAsync(prompt);
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                _lastResponseText = reply.Text;
                 RenderMarkdown(reply.Text);
+                RenderContextualActions(reply.ContextualActions);
                 ResponseLayout.IsVisible = true;
+                CopyResponseButton.IsVisible = !string.IsNullOrWhiteSpace(_lastResponseText);
+                CopyResponseButton.Text = "Copy";
             });
-            _pendingAction = reply.SuggestedAction;
-            if (!string.IsNullOrWhiteSpace(_pendingAction))
-            {
-                ActionButton.Text = _pendingAction;
-                ActionLayout.IsVisible = true;
 
-                if (IsDirectNavigationRequest(prompt, _pendingAction))
-                    await ExecuteActionAsync(_pendingAction);
+            if (reply.ContextualActions.Count > 0 &&
+                IsDirectNavigationRequest(prompt, reply.ContextualActions))
+            {
+                await ExecuteActionAsync(reply.ContextualActions[0].Target);
             }
         }
         finally
@@ -131,41 +133,79 @@ public partial class CctAssistantPage : ContentPage
 
     private async void OnActionClicked(object? sender, EventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(_pendingAction))
-            await ExecuteActionAsync(_pendingAction);
+        if (sender is Button { CommandParameter: CctNavigationTarget target })
+            await ExecuteActionAsync(target);
     }
 
-    private async Task ExecuteActionAsync(string action)
+    private async Task ExecuteActionAsync(CctNavigationTarget target)
     {
-        if (action.Equals("Settings", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync(nameof(SettingsPage));
-        else if (action.Equals("Home", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync("//home");
-        else if (action.Equals("Bible", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync("//bible");
-        else if (action.Equals("Prayer Requests", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync("//prayer");
-        else if (action.Equals("Community", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync("//community");
-        else if (action.Equals("Profile", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync("//profile");
-        else if (action.Equals("Church Groups", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync(nameof(ChurchGroupSelectionPage));
-        else if (action.Equals("Open Church Announcement", StringComparison.OrdinalIgnoreCase))
-            await Shell.Current.GoToAsync(nameof(ChurchAnnouncementPage));
-        else
-            return;
-        await Navigation.PopModalAsync();
+        try
+        {
+            var route = CctNavigation.GetRoute(target);
+            if (Navigation.ModalStack.LastOrDefault() is CctAssistantPage)
+                await Navigation.PopModalAsync(animated: false);
+
+            await Shell.Current.GoToAsync(route);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[USCF ASSISTANCE] navigation_failed target={target} {ex}");
+            RenderMarkdown(
+                $"I couldn't open {CctNavigation.GetLabel(target).Replace("Open ", string.Empty, StringComparison.Ordinal)} right now. " +
+                "Please try opening it from the app's normal navigation.");
+            ResponseLayout.IsVisible = true;
+        }
     }
 
-    private static bool IsDirectNavigationRequest(string prompt, string action) =>
-        action is "Community" or "Bible" or "Prayer Requests" or "Church Groups" or "Profile" or "Settings" or "Home"
-        && (prompt.Contains("take me", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("go to", StringComparison.OrdinalIgnoreCase)
-            || prompt.Contains("open", StringComparison.OrdinalIgnoreCase));
+    private async void OnCopyResponseClicked(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_lastResponseText))
+            return;
+
+        await Clipboard.Default.SetTextAsync(_lastResponseText);
+        CopyResponseButton.Text = "Copied";
+        await Task.Delay(1200);
+        if (!_isClosing)
+            CopyResponseButton.Text = "Copy";
+    }
+
+    private static bool IsDirectNavigationRequest(
+        string prompt,
+        IReadOnlyList<CctAssistantAction> actions) =>
+        actions.Count == 1 &&
+        (prompt.Contains("take me", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("go to", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("open", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("show me", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("go home", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("fungua", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("nenda", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("onyesha", StringComparison.OrdinalIgnoreCase)
+         || prompt.Contains("peleka", StringComparison.OrdinalIgnoreCase));
 
     private void OnDismissActionClicked(object? sender, EventArgs e) =>
         ActionLayout.IsVisible = false;
+
+    private void RenderContextualActions(IReadOnlyList<CctAssistantAction> actions)
+    {
+        ContextualActionsLayout.Children.Clear();
+        foreach (var action in actions)
+        {
+            ContextualActionsLayout.Children.Add(new Button
+            {
+                Text = action.Label,
+                CommandParameter = action.Target,
+                BackgroundColor = Color.FromArgb("#D8F1E2"),
+                TextColor = Color.FromArgb("#123B2A"),
+                CornerRadius = 16,
+                HeightRequest = 48
+            });
+            ((Button)ContextualActionsLayout.Children[^1]).Clicked += OnActionClicked;
+        }
+
+        ActionLayout.IsVisible = actions.Count > 0;
+    }
 
     private async void OnOutsideTapped(object? sender, TappedEventArgs e) =>
         await CloseAsync();

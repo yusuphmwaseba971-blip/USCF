@@ -8,6 +8,7 @@ namespace CCT_USCF.Pages;
 public partial class HomePage : ContentPage
 {
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
+    private readonly SemaphoreSlim _cctPostsLoadGate = new(1, 1);
 
     public HomePage()
     {
@@ -217,59 +218,120 @@ public partial class HomePage : ContentPage
 
     private async Task LoadCctPostsAsync()
     {
+        await _cctPostsLoadGate.WaitAsync();
         try
         {
             var service = MauiProgram.Services.GetRequiredService<CommunityService>();
-            var posts = await service.GetPublishedCctPostsAsync(20);
-            CctPostsStack.Children.Clear();
-            CctPostsStateLabel.Text = posts.Count == 0
-                ? "No PLUS posts yet."
-                : $"{posts.Count} published post{(posts.Count == 1 ? string.Empty : "s")}";
+            var cachedPosts = await service.GetCachedPublishedCctPostsAsync(8);
+            RenderCctPosts(cachedPosts, cachedPosts.Count == 0 ? "Loading posts..." : null);
 
-            foreach (var post in posts)
-            {
-                var card = new Border
-                {
-                    BackgroundColor = Colors.White,
-                    Stroke = Color.FromArgb("#DCEBE0"),
-                    StrokeThickness = 1,
-                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(18) },
-                    Padding = 14
-                };
-                var body = new VerticalStackLayout { Spacing = 6 };
-                var category = GetPlusCategory(post.PostType);
-                body.Children.Add(new Label
-                {
-                    Text = category.Label,
-                    FontSize = 11,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = category.Color
-                });
-                body.Children.Add(new Label { Text = post.Content, FontSize = 15, TextColor = Color.FromArgb("#173323") });
-                var currentUser = MauiProgram.CurrentUser;
-                var author = currentUser is not null &&
-                    string.Equals(post.UserId, MauiProgram.CreateAuthServiceForPages().GetCurrentFirebaseUid(), StringComparison.Ordinal)
-                    ? FirstNonEmpty(currentUser.FullName, currentUser.Username)
-                    : post.UserId;
-                body.Children.Add(new Label
-                {
-                    Text = $"{author}  ·  {post.CreatedAtUtc.ToLocalTime():g}",
-                    FontSize = 11,
-                    TextColor = Color.FromArgb("#64748B")
-                });
-                card.Content = body;
-                CctPostsStack.Children.Add(card);
-            }
+            var posts = await service.GetPublishedCctPostsAsync(8);
+            RenderCctPosts(posts, posts.Count == 0 ? "No posts available yet." : null);
         }
         catch (Exception ex)
         {
-            CctPostsStateLabel.Text = "Community posts are temporarily unavailable.";
+            CctPostsStateLabel.Text = "No posts available offline.";
             System.Diagnostics.Debug.WriteLine($"[HOME_CCT_POSTS] {ex}");
+        }
+        finally
+        {
+            _cctPostsLoadGate.Release();
         }
     }
 
+    private void RenderCctPosts(IReadOnlyList<CCT_USCF.Models.CctPost> posts, string? stateOverride)
+    {
+        CctPostsStack.Children.Clear();
+        CctPostsStateLabel.Text = stateOverride ??
+            $"{posts.Count} published post{(posts.Count == 1 ? string.Empty : "s")}";
+
+        foreach (var post in posts)
+        {
+            var card = new Border
+            {
+                BackgroundColor = Colors.White,
+                Stroke = Color.FromArgb("#DCEBE0"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(18) },
+                Padding = 14
+            };
+            var body = new VerticalStackLayout { Spacing = 8 };
+            var category = GetPlusCategory(post.PostType);
+            body.Children.Add(new Label
+            {
+                Text = category.Label,
+                FontSize = 11,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = category.Color
+            });
+
+            if (!string.IsNullOrWhiteSpace(post.Content))
+            {
+                body.Children.Add(new Label
+                {
+                    Text = post.Content,
+                    FontSize = 15,
+                    TextColor = Color.FromArgb("#173323")
+                });
+            }
+
+            AddCctPostMedia(body, post);
+            body.Children.Add(new Label
+            {
+                Text = $"Posted {post.CreatedAtUtc.ToLocalTime():g}",
+                FontSize = 11,
+                TextColor = Color.FromArgb("#64748B")
+            });
+            card.Content = body;
+            CctPostsStack.Children.Add(card);
+        }
+    }
+
+    private static void AddCctPostMedia(VerticalStackLayout body, CCT_USCF.Models.CctPost post)
+    {
+        if (string.IsNullOrWhiteSpace(post.MediaUrl))
+            return;
+
+        var mediaType = post.MediaType.Trim().ToLowerInvariant();
+        var viewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
+        if (mediaType.StartsWith("image", StringComparison.Ordinal))
+        {
+            var image = new Image
+            {
+                Source = post.MediaUrl,
+                HeightRequest = 170,
+                Aspect = Aspect.AspectFit
+            };
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (_, _) => await viewer.OpenMediaAsync(post.MediaUrl, "image");
+            image.GestureRecognizers.Add(tap);
+            body.Children.Add(image);
+            return;
+        }
+
+        var viewerType = mediaType.StartsWith("video", StringComparison.Ordinal)
+            ? "video"
+            : mediaType.StartsWith("audio", StringComparison.Ordinal)
+                ? "audio"
+                : "pdf";
+        var button = new Button
+        {
+            Text = viewerType switch
+            {
+                "video" => "▶ Open video",
+                "audio" => "▶ Open audio",
+                _ => "↗ Open document"
+            },
+            BackgroundColor = Color.FromArgb("#EAF7EE"),
+            TextColor = Color.FromArgb("#167A4A")
+        };
+        button.Clicked += async (_, _) =>
+            await viewer.OpenMediaAsync(post.MediaUrl, viewerType);
+        body.Children.Add(button);
+    }
+
     private static (string Label, Color Color) GetPlusCategory(string postType)
-        => postType.ToLowerInvariant() switch
+        => postType.Trim().ToLowerInvariant() switch
         {
             "scripture" => ("📖 SCRIPTURE", Color.FromArgb("#17315F")),
             "encouragement" => ("💬 ENCOURAGEMENT", Color.FromArgb("#38216B")),
@@ -277,7 +339,7 @@ public partial class HomePage : ContentPage
             "prayer" => ("🙏 PRAYER", Color.FromArgb("#167A4A")),
             "notice" => ("📢 NOTICE", Color.FromArgb("#684400")),
             "event" => ("📅 EVENT", Color.FromArgb("#167A4A")),
-            _ => (postType.ToUpperInvariant(), Color.FromArgb("#167A4A"))
+            _ => (string.IsNullOrWhiteSpace(postType) ? "POST" : postType.Trim().ToUpperInvariant(), Color.FromArgb("#167A4A"))
         };
 
     private static void AddFeedMediaButtons(

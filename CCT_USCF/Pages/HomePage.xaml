@@ -217,7 +217,7 @@
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="PLUS posts" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="PLUS Posts" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                         <Label Text="Refresh  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="RefreshCctPosts" />

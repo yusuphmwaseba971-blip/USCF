@@ -9,13 +9,26 @@ public static class CctUsfcKnowledgeBase
     [
         new(
             "identity-navigation",
-            ["what is uscf", "what is cct", "home", "navigate", "navigation", "settings"],
+            ["what is uscf", "what is cct", "uscf assistance", "home", "navigate", "navigation"],
             """
-            VERIFIED: CCT-USCF is the Android application represented by this assistant.
-            USCF Assistance is the in-app contextual assistant; it does not perform authorization
-            or silently change application data.
-            The Home page provides Settings, notifications, profile access, announcements,
-            Prayer Requests, Community activity, Events, and shortcuts to application features.
+            VERIFIED: CCT-USCF is the Android church application represented by this assistant.
+            It helps authenticated members access church communication, prayer, Bible reading,
+            sermons, groups, announcements, events, and account features. USCF Assistance is the
+            in-app guide: it explains verified app behavior and can offer a validated destination,
+            but it does not authorize users or silently change application data.
+            The Home page shows the user's church context, Today in USCF activity cards for
+            announcements, prayer requests, and community activity, plus Events and shortcuts.
+            """
+        ),
+        new(
+            "settings",
+            ["settings", "change password", "appearance", "language", "background", "delete account"],
+            """
+            VERIFIED: Settings lets the authenticated user edit full name, username, email, and
+            phone number; change a password with the current password and confirmation; enable or
+            disable USCF Assistance; choose app language and background/appearance; and request
+            permanent account deletion. Saving and deletion are explicit application operations.
+            Never ask for or repeat a password.
             """),
         new(
             "church-groups",
@@ -38,12 +51,14 @@ public static class CctUsfcKnowledgeBase
             """),
         new(
             "prayer-requests",
-            ["prayer request", "submit a prayer", "prayer wall", "my requests", "pray"],
+            ["prayer request", "submit a prayer", "prayer wall", "my requests", "i pray", "pray"],
             """
             VERIFIED: Prayer Requests is presented as a Prayer Community/Prayer Wall. It has Add Prayer
-            Request, My Requests, and Community actions. The page displays existing request cards and
-            supports loading more items. Submission and visibility details must follow the current
-            form and backend; this knowledge does not grant permission or invent privacy rules.
+            Request, My Requests, and Community actions. The page displays existing request cards,
+            supports loading more items, and provides an I PRAY action that records the user's
+            prayer action through the backend. Initial content is loaded local-first and refresh
+            synchronizes cached items. Submission, status, and visibility details must follow the
+            current form and backend; this knowledge does not grant permission or invent privacy rules.
             """),
         new(
             "community-posts",
@@ -61,6 +76,16 @@ public static class CctUsfcKnowledgeBase
             attachment selection, Send Announcement, and Announcement Activity. The page displays the
             user's organization and leadership context. Sending remains an application operation and
             requires the existing backend authorization and explicit user action.
+            """),
+        new(
+            "notifications",
+            ["notification", "notifications", "alerts", "activity", "announcement center"],
+            """
+            VERIFIED: Home notification indicators and the app's notifications action open the
+            Announcement Center. It displays official CCT-USCF announcements by National, Regional,
+            District, and Branch categories, with read-more, sharing, reminder, and attachment
+            actions when available. Notifications are distinct from Community posts, Church Groups,
+            Branch Chat, and private messaging.
             """),
         new(
             "bible",

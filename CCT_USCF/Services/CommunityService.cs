@@ -28,16 +28,6 @@ namespace CCT_USCF.Services
         private const string BiblePostsCollectionId =
             "cct_posts";
 
-        private static readonly string[] PlusPostTypes =
-        {
-            "scripture",
-            "encouragement",
-            "worship",
-            "prayer",
-            "notice",
-            "event"
-        };
-
         // ============================================================
         // SERVICES
         // ============================================================
@@ -109,6 +99,24 @@ public string SenderUid { get; set; } = string.Empty;
             public string ReplyToMessageId { get; set; } = string.Empty;
             public string ReplyToSenderName { get; set; } = string.Empty;
             public string ReplyToPreview { get; set; } = string.Empty;
+        }
+
+        [Table("cct_post_cache")]
+        private sealed class CachedCctPost
+        {
+            [PrimaryKey]
+            public string Id { get; set; } = string.Empty;
+            public string UserId { get; set; } = string.Empty;
+            public string Content { get; set; } = string.Empty;
+            public string PostType { get; set; } = string.Empty;
+            public string MediaType { get; set; } = "none";
+            public string MediaUrl { get; set; } = string.Empty;
+            public string SiaObjectId { get; set; } = string.Empty;
+            public long? MediaSize { get; set; }
+            public string Status { get; set; } = string.Empty;
+            public bool IsPublished { get; set; }
+            public DateTime CreatedAtUtc { get; set; }
+            public DateTime UpdatedAtUtc { get; set; }
         }
 
         [Table("community_chat_history_state")]
@@ -192,6 +200,8 @@ public string SenderUid { get; set; } = string.Empty;
                             .CreateTableAsync<CachedCommunityMessage>();
                         await _messageCacheDatabase
                             .CreateTableAsync<CommunityChatHistoryState>();
+                        await _messageCacheDatabase
+                            .CreateTableAsync<CachedCctPost>();
 
                         // ------------------------------------------------
                         // IMPORTANT:
@@ -3962,22 +3972,119 @@ ConversationId =
             }
         }
 
-        public async Task<List<CctPost>> GetPublishedCctPostsAsync(int limit = 20)
+        public async Task<List<CctPost>> GetCachedPublishedCctPostsAsync(int limit = 8)
         {
+            var database = await GetMessageCacheDatabaseAsync();
+            var cached = await database.Table<CachedCctPost>()
+                .Where(post =>
+                    post.IsPublished &&
+                    post.Status.ToLower() == "published")
+                .OrderByDescending(post => post.UpdatedAtUtc)
+                .Take(Math.Clamp(limit, 1, 50))
+                .ToListAsync();
+
+            return ShufflePosts(cached.Select(ToCctPost));
+        }
+
+        public async Task<List<CctPost>> GetPublishedCctPostsAsync(int limit = 8)
+        {
+            limit = Math.Clamp(limit, 1, 50);
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                $"api/community/posts?limit={Math.Clamp(limit, 1, 50)}");
+                $"api/community/posts?limit={limit}");
             await AddFirebaseAuthorizationAsync(request);
-            using var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var posts = await response.Content.ReadFromJsonAsync<List<CctPost>>()
-                ?? new List<CctPost>();
-            return posts
-                .Where(post => PlusPostTypes.Contains(
-                    post.PostType,
-                    StringComparer.OrdinalIgnoreCase))
-                .ToList();
+            try
+            {
+                var startedAt = Stopwatch.GetTimestamp();
+                using var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                var posts = (await response.Content.ReadFromJsonAsync<List<CctPost>>()
+                    ?? new List<CctPost>())
+                    .Where(IsPublishedCctPost)
+                    .GroupBy(post => post.Id, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .Take(limit)
+                    .ToList();
+
+                var database = await GetMessageCacheDatabaseAsync();
+                await database.RunInTransactionAsync(transaction =>
+                {
+                    transaction.DeleteAll<CachedCctPost>();
+                    foreach (var post in posts)
+                    {
+                        transaction.InsertOrReplace(ToCachedCctPost(post));
+                    }
+                });
+
+                var mediaCount = posts.Count(post =>
+                    !string.IsNullOrWhiteSpace(post.MediaUrl));
+                var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+                Debug.WriteLine(
+                    $"[PLUS_POSTS] fetched={posts.Count} requestedLimit={limit} " +
+                    $"media={mediaCount} responseBytes={response.Content.Headers.ContentLength?.ToString() ?? "unknown"} " +
+                    $"elapsedMs={elapsedMs:F0} randomized=true");
+                return ShufflePosts(posts);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[PLUS_POSTS] network fetch failed; using cache. {ex}");
+                return await GetCachedPublishedCctPostsAsync(limit);
+            }
         }
+
+        private static bool IsPublishedCctPost(CctPost post)
+            => post.IsPublished &&
+               string.Equals(post.Status, "published", StringComparison.OrdinalIgnoreCase);
+
+        private static List<CctPost> ShufflePosts(IEnumerable<CctPost> posts)
+        {
+            var result = posts
+                .GroupBy(post => post.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
+
+            for (var index = result.Count - 1; index > 0; index--)
+            {
+                var swapIndex = Random.Shared.Next(index + 1);
+                (result[index], result[swapIndex]) = (result[swapIndex], result[index]);
+            }
+
+            return result;
+        }
+
+        private static CachedCctPost ToCachedCctPost(CctPost post)
+            => new()
+            {
+                Id = post.Id,
+                UserId = post.UserId,
+                Content = post.Content,
+                PostType = post.PostType,
+                MediaType = post.MediaType,
+                MediaUrl = post.MediaUrl ?? string.Empty,
+                SiaObjectId = post.SiaObjectId ?? string.Empty,
+                MediaSize = post.MediaSize,
+                Status = post.Status,
+                IsPublished = post.IsPublished,
+                CreatedAtUtc = post.CreatedAtUtc,
+                UpdatedAtUtc = post.UpdatedAtUtc
+            };
+
+        private static CctPost ToCctPost(CachedCctPost post)
+            => new()
+            {
+                Id = post.Id,
+                UserId = post.UserId,
+                Content = post.Content,
+                PostType = post.PostType,
+                MediaType = post.MediaType,
+                MediaUrl = string.IsNullOrWhiteSpace(post.MediaUrl) ? null : post.MediaUrl,
+                SiaObjectId = string.IsNullOrWhiteSpace(post.SiaObjectId) ? null : post.SiaObjectId,
+                MediaSize = post.MediaSize,
+                Status = post.Status,
+                IsPublished = post.IsPublished,
+                CreatedAtUtc = post.CreatedAtUtc,
+                UpdatedAtUtc = post.UpdatedAtUtc
+            };
 
         private static CctPost MapCctPost(global::Appwrite.Models.Document document)
         {
@@ -3990,6 +4097,7 @@ ConversationId =
                 PostType = ReadString(data, "post_type"),
                 MediaType = ReadString(data, "media_type", "none"),
                 MediaUrl = ReadNullableString(data, "media_url"),
+                SiaObjectId = ReadNullableString(data, "sia_object_id"),
                 MediaSize = ReadNullableLong(data, "media_size"),
                 Status = ReadString(data, "status"),
                 IsPublished = ReadBool(data, "is_published"),
@@ -3997,6 +4105,11 @@ ConversationId =
                     document.CreatedAt,
                     out var createdAt)
                     ? createdAt.ToUniversalTime()
+                    : DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.TryParse(
+                    document.UpdatedAt,
+                    out var updatedAt)
+                    ? updatedAt.ToUniversalTime()
                     : DateTime.UtcNow
             };
         }

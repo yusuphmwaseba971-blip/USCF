@@ -2458,10 +2458,12 @@ function mapCctPostDocument(document) {
     postType: normalizeString(data.post_type),
     mediaType: normalizeString(data.media_type || "none"),
     mediaUrl: data.media_url || null,
+    siaObjectId: data.sia_object_id || null,
     mediaSize: data.media_size ?? null,
     status: normalizeString(data.status),
     isPublished: data.is_published === true || data.is_published === "true",
-    createdAtUtc: safeIsoDate(document.$createdAt || data.created_at)
+    createdAtUtc: safeIsoDate(document.$createdAt || data.created_at),
+    updatedAtUtc: safeIsoDate(document.$updatedAt || data.updated_at || document.$createdAt)
   };
 }
 
