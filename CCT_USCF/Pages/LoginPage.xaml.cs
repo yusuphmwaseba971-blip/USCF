@@ -159,17 +159,24 @@ public partial class LoginPage : ContentPage
                 return;
             }
 
-            var user = await _authService.GetCurrentUserAsync();
-            if (user == null)
-            {
-                MessageLabel.Text = "Google Sign-In succeeded, but your CCT-USCF profile could not be loaded.";
-                return;
-            }
-
             await TokenStorage.SaveSessionAsync(
                 result.Token,
                 result.RefreshToken,
                 result.ExpiresAtUtc ?? DateTime.UtcNow.AddDays(30));
+
+            var user = await _authService.GetCurrentUserAsync();
+            if (user == null)
+            {
+                if (result.RequiresProfileSetup)
+                {
+                    await Shell.Current.GoToAsync("register?googleOnboarding=true");
+                    return;
+                }
+
+                MessageLabel.Text = "Google Sign-In succeeded, but your CCT-USCF profile could not be loaded.";
+                return;
+            }
+
             await TokenStorage.SaveCachedUserAsync(user);
             MauiProgram.SetCurrentUser(user);
             MauiProgram.NotifyAuthChanged();

@@ -1564,6 +1564,12 @@ function groupBelongsToProfile(group, profile) {
   return String(group.branch_id ?? "") === String(profile.branchId ?? "");
 }
 
+function canManageGroup(group, profile) {
+  return group.created_by_uid === profile.uid ||
+    (canManageScope(profile, group.scope_type) &&
+      groupBelongsToProfile(group, profile));
+}
+
 async function isGroupMember(groupId, uid) {
   const rows = await appwriteCollectionRequest(
     COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
@@ -1612,7 +1618,7 @@ function mapGroupDocument(document, profile, memberCount = 0) {
     createdByUid: data.created_by_uid || "",
     createdAt: data.created_at || null,
     isActive: data.is_active !== false,
-    canManage: data.created_by_uid === profile.uid,
+    canManage: canManageGroup(data, profile),
     memberCount
   };
 }
@@ -1653,6 +1659,45 @@ async function createChurchGroup(req, log) {
   if (name.length < 2 || name.length > 120) {
     throw announcementError("Group name must be between 2 and 120 characters.");
   }
+
+  async function deleteChurchGroup(req, log, groupId) {
+    const firebaseUser = await verifyFirebaseRequest(req, log);
+    const profile = await getAnnouncementProfile(firebaseUser);
+    const document = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "GET",
+      `/${encodeURIComponent(groupId)}`
+    );
+    const data = document.data || document;
+    if (!data || data.is_active === false) {
+      throw announcementError("Group was not found.", 404);
+    }
+
+    const isOwner = data.created_by_uid === profile.uid;
+    const canManage =
+      canManageScope(profile, data.scope_type) &&
+      groupBelongsToProfile(data, profile);
+    if (!isOwner && !canManage) {
+      throw announcementError("You are not authorized to delete this group.", 403);
+    }
+
+    const updated = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "PATCH",
+      `/${encodeURIComponent(groupId)}`,
+      {
+        data: {
+          is_active: false,
+          updated_at: new Date().toISOString()
+        }
+      }
+    );
+    return {
+      success: true,
+      groupId,
+      isActive: (updated.data || updated).is_active !== false
+    };
+  }
   if (!scopeType || !canManageScope(profile, scopeType)) {
     throw announcementError("You are not authorized to create a group in this scope.", 403);
   }
@@ -1689,9 +1734,9 @@ async function createChurchGroup(req, log) {
         : scopeType === "DISTRICT"
           ? `district:${profile.districtId}`
           : `branch:${profile.branchId}`,
-    region_id: profile.regionId,
-    district_id: profile.districtId,
-    branch_id: profile.branchId,
+    region_id: scopeType === "REGIONAL" ? profile.regionId : null,
+    district_id: scopeType === "DISTRICT" ? profile.districtId : null,
+    branch_id: scopeType === "BRANCH" ? profile.branchId : null,
     created_by_uid: profile.uid,
     created_at: now,
     is_active: true
@@ -2751,6 +2796,19 @@ export default async ({
         return jsonResponse(res, await createChurchGroup(req, log), 201);
       }
       return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
+    }
+
+    const groupMutation = route.match(/^\/?api\/community\/groups\/([^/]+)$/);
+    if (groupMutation) {
+      if (req.method !== "DELETE") {
+        return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
+      }
+      currentStage = "DELETE community group";
+      return jsonResponse(
+        res,
+        await deleteChurchGroup(req, log, decodeURIComponent(groupMutation[1])),
+        200
+      );
     }
 
     /*

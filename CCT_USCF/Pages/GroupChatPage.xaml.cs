@@ -21,6 +21,7 @@ namespace CCT_USCF.Pages;
 [QueryProperty(nameof(RegionId), "regionId")]
 [QueryProperty(nameof(DistrictId), "districtId")]
 [QueryProperty(nameof(BranchId), "branchId")]
+[QueryProperty(nameof(CanDelete), "canDelete")]
 public partial class GroupChatPage : ContentPage
 {
     private readonly MediaViewerService _mediaViewer;
@@ -32,16 +33,25 @@ public partial class GroupChatPage : ContentPage
     private readonly IFirebaseFirestore _firestore;
     private readonly CommunityService _communityService;
     private readonly CloudinaryService _cloudinaryService;
+    private readonly ChurchGroupService _groupService;
 
     // ============================================================
     // MESSAGE STATE
     // ============================================================
 
     private readonly List<GroupChatMessageUi> _messages = new();
+    private readonly HashSet<string> _selectedMessageIds = new(StringComparer.Ordinal);
+    private GroupChatMessageUi? _replyingTo;
 
     private bool _chatHistoryEnrolled;
     private bool _realtimeEnabled;
     private bool _realtimeListenerAttached;
+    private bool _isReadingOlderMessages;
+    private int _unreadIncomingCount;
+    private DateTime _pointerPressedAt = DateTime.MinValue;
+    private bool _longPressTriggered;
+
+    private const int LongPressMilliseconds = 650;
 
     // ============================================================
     // REALTIME
@@ -150,6 +160,19 @@ public partial class GroupChatPage : ContentPage
         set => _branchId = value;
     }
 
+    private bool _canDelete;
+
+    public bool CanDelete
+    {
+        get => _canDelete;
+        set
+        {
+            _canDelete = value;
+            if (DeleteGroupButton != null)
+                DeleteGroupButton.IsVisible = value;
+        }
+    }
+
     // ============================================================
     // CONSTRUCTOR
     // ============================================================
@@ -175,6 +198,10 @@ public partial class GroupChatPage : ContentPage
             MauiProgram.Services
                 .GetRequiredService<CloudinaryService>();
 
+        _groupService =
+            MauiProgram.Services
+                .GetRequiredService<ChurchGroupService>();
+
         var membersTap =
             new TapGestureRecognizer();
 
@@ -186,6 +213,35 @@ public partial class GroupChatPage : ContentPage
 
         AddMemberButton.Clicked +=
             AddMemberButton_Clicked;
+    }
+
+    private async void OnDeleteGroupClicked(object? sender, EventArgs e)
+    {
+        if (!CanDelete || string.IsNullOrWhiteSpace(_groupId))
+            return;
+
+        var confirmed = await DisplayAlert(
+            "Delete Group?",
+            "This will remove the group from this scope and members will no longer be able to use it.",
+            "Delete",
+            "Cancel");
+        if (!confirmed)
+            return;
+
+        DeleteGroupButton.IsEnabled = false;
+        try
+        {
+            await _groupService.DeleteGroupAsync(_groupId);
+            await _communityService.RemoveLocalGroupCacheAsync(GetBackendCommunityId());
+            await DisplayAlert("Group deleted", "The group is no longer available.", "OK");
+            await Shell.Current.GoToAsync("..", true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Delete failed: {ex}");
+            DeleteGroupButton.IsEnabled = true;
+            await DisplayAlert("Unable to delete group", ex.Message, "OK");
+        }
     }
 
     // ============================================================
@@ -642,8 +698,29 @@ public partial class GroupChatPage : ContentPage
                         duration,
 
                     CreatedAt =
-                        createdAt
+                        createdAt,
+
+                    IsDeleted =
+                        TryGetBoolean(payload, "is_deleted"),
+
+                    IsEdited =
+                        TryGetBoolean(payload, "is_edited"),
+
+                    UpdatedAt =
+                        TryGetDateTime(payload, "updated_at"),
+
+                    ReplyToMessageId =
+                        TryGetString(payload, "reply_to_message_id"),
+
+                    ReplyToSenderName =
+                        TryGetString(payload, "reply_to_sender_name"),
+
+                    ReplyToPreview =
+                        TryGetString(payload, "reply_to_preview")
                 };
+
+            if (message.IsDeleted)
+                message.Text = "Message deleted";
 
             _ =
                 HandleRealtimeMessageAsync(
@@ -709,6 +786,16 @@ public partial class GroupChatPage : ContentPage
                 () =>
                 {
                     AddOrReplaceMessage(message);
+                    if (_isReadingOlderMessages &&
+                        !string.Equals(
+                            message.SenderUid,
+                            GetCurrentUserUid(),
+                            StringComparison.Ordinal))
+                    {
+                        _unreadIncomingCount++;
+                        NewMessagesButton.Text = $"{_unreadIncomingCount} new messages";
+                        NewMessagesButton.IsVisible = true;
+                    }
                 });
 
             await CacheUiMessageAsync(
@@ -895,7 +982,7 @@ public partial class GroupChatPage : ContentPage
                     : message.SenderName,
 
             Text =
-                message.Content,
+                message.IsDeleted ? "Message deleted" : message.Content,
 
             MessageType =
                 string.IsNullOrWhiteSpace(
@@ -922,8 +1009,28 @@ public partial class GroupChatPage : ContentPage
                 message.Duration,
 
             CreatedAt =
-                EnsureUtc(
-                    message.CreatedAt)
+                EnsureUtc(message.CreatedAt),
+
+            UpdatedAt =
+                message.UpdatedAt,
+
+            IsDeleted =
+                message.IsDeleted,
+
+            IsEdited =
+                message.IsEdited,
+
+            ReplyToMessageId =
+                message.ReplyToMessageId,
+
+            ReplyToSenderName =
+                message.ReplyToSenderName,
+
+            ReplyToPreview =
+                message.ReplyToPreview,
+
+            Status =
+                message.Status
         };
     }
 
@@ -976,7 +1083,25 @@ public partial class GroupChatPage : ContentPage
                         message.Duration,
 
                     CreatedAt =
-                        message.CreatedAt
+                        message.CreatedAt,
+
+                    UpdatedAt =
+                        message.UpdatedAt,
+
+                    IsDeleted =
+                        message.IsDeleted,
+
+                    IsEdited =
+                        message.IsEdited,
+
+                    ReplyToMessageId =
+                        message.ReplyToMessageId,
+
+                    ReplyToSenderName =
+                        message.ReplyToSenderName,
+
+                    ReplyToPreview =
+                        message.ReplyToPreview
                 };
 
             await _communityService
@@ -1030,9 +1155,7 @@ public partial class GroupChatPage : ContentPage
                     StringComparison.Ordinal);
 
             MessagesLayout.Children.Add(
-                CreateMessageBubble(
-                    message,
-                    isCurrentUser));
+                CreateMessageBubble(message, isCurrentUser));
         }
 
         _ =
@@ -1050,9 +1173,6 @@ public partial class GroupChatPage : ContentPage
         var border =
             new Border
             {
-                WidthRequest =
-                    290,
-
                 Padding =
                     new Thickness(
                         12,
@@ -1063,26 +1183,29 @@ public partial class GroupChatPage : ContentPage
                         isCurrentUser ? 24 : 0,
                         0,
                         isCurrentUser ? 0 : 24,
-                        8),
+                        10),
 
                 BackgroundColor =
                     isCurrentUser
                         ? Color.FromArgb("#DBEAFE")
-                        : Colors.White,
+                        : GetSenderColor(message.SenderUid),
+
+                Stroke =
+                    Color.FromArgb("#D9E2F2"),
 
                 StrokeThickness =
-                    0,
+                    _selectedMessageIds.Contains(message.MessageId) ? 3 : 1,
 
                 StrokeShape =
                     new RoundRectangle
                     {
-                        CornerRadius = 12
+                        CornerRadius = 16
                     },
 
                 HorizontalOptions =
-                    isCurrentUser
-                        ? LayoutOptions.End
-                        : LayoutOptions.Start
+                    isCurrentUser ? LayoutOptions.End : LayoutOptions.Start,
+
+                WidthRequest = 300
             };
 
         var stack =
@@ -1105,31 +1228,40 @@ public partial class GroupChatPage : ContentPage
                 FontAttributes =
                     FontAttributes.Bold,
 
-                TextColor =
-                    isCurrentUser
-                        ? Color.FromArgb("#1D4ED8")
-                        : Colors.DarkSlateBlue
+                TextColor = Color.FromArgb("#334155")
             });
 
         AddMessageContent(
             stack,
             message);
 
+        if (!string.IsNullOrWhiteSpace(message.ReplyToMessageId))
+        {
+            stack.Children.Insert(1, new Label
+            {
+                Text = message.ReplyToPreview == "Message deleted"
+                    ? "Replying to deleted message"
+                    : $"Replying to {message.ReplyToSenderName}: {message.ReplyToPreview}",
+                FontSize = 11,
+                TextColor = Color.FromArgb("#64748B"),
+                LineBreakMode = LineBreakMode.TailTruncation
+            });
+        }
+
+        var timestampText = message.CreatedAt.ToLocalTime()
+            .ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (message.IsEdited || message.UpdatedAt.HasValue)
+            timestampText += " · edited";
+
         stack.Children.Add(
             new Label
             {
-                Text =
-                    message.CreatedAt
-                        .ToLocalTime()
-                        .ToString(
-                            "HH:mm",
-                            CultureInfo.InvariantCulture),
+                Text = timestampText,
 
                 FontSize =
                     11,
 
-                TextColor =
-                    Colors.Gray,
+                TextColor = Color.FromArgb("#64748B"),
 
                 HorizontalOptions =
                     LayoutOptions.End
@@ -1138,7 +1270,205 @@ public partial class GroupChatPage : ContentPage
         border.Content =
             stack;
 
+        AttachLongPressGesture(border, message);
+        var pan = new PanGestureRecognizer();
+        pan.PanUpdated += (_, args) =>
+        {
+            if (args.StatusType == GestureStatus.Completed &&
+                args.TotalX >= 80 &&
+                Math.Abs(args.TotalX) > Math.Abs(args.TotalY) * 1.25)
+            {
+                BeginReply(message);
+            }
+        };
+        border.GestureRecognizers.Add(pan);
+
         return border;
+    }
+
+    private static Color GetSenderColor(string senderUid)
+    {
+        var palette = new[] { "#F0F6FF", "#F3F0FF", "#EFFAF7", "#FFF7ED", "#F8F4FF" };
+        var hash = 17;
+        foreach (var character in senderUid ?? string.Empty)
+            hash = unchecked(hash * 31 + character);
+        return Color.FromArgb(palette[(hash & int.MaxValue) % palette.Length]);
+    }
+
+    private void AttachLongPressGesture(
+        Border container,
+        GroupChatMessageUi message)
+    {
+        var pointer = new PointerGestureRecognizer();
+        pointer.PointerPressed += (_, _) =>
+        {
+            _pointerPressedAt = DateTime.UtcNow;
+            _longPressTriggered = false;
+        };
+        pointer.PointerReleased += async (_, _) =>
+        {
+            var elapsed = DateTime.UtcNow - _pointerPressedAt;
+            if (elapsed.TotalMilliseconds >= LongPressMilliseconds &&
+                !_longPressTriggered)
+            {
+                _longPressTriggered = true;
+                await ShowMessageActionsAsync(message);
+            }
+
+            _pointerPressedAt = DateTime.MinValue;
+        };
+        container.GestureRecognizers.Add(pointer);
+    }
+
+    private async Task ShowMessageActionsAsync(GroupChatMessageUi message)
+    {
+        try
+        {
+            var actions = new List<string> { "Reply", "Select" };
+            if (string.Equals(message.SenderUid, GetCurrentUserUid(), StringComparison.Ordinal))
+            {
+                actions.Add("Edit");
+                actions.Add("Delete");
+            }
+
+            var choice = await DisplayActionSheet(
+                "Message options", "Cancel", null, actions.ToArray());
+
+            switch (choice)
+            {
+                case "Reply":
+                    BeginReply(message);
+                    break;
+                case "Select":
+                    ToggleMessageSelection(message);
+                    break;
+                case "Edit":
+                    await EditMessageAsync(message);
+                    break;
+                case "Delete":
+                    await DeleteMessageAsync(message);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Message actions failed: {ex}");
+        }
+    }
+
+    private void BeginReply(GroupChatMessageUi message)
+    {
+        _replyingTo = message;
+        ReplyPreviewLabel.Text = message.IsDeleted
+            ? "Replying to deleted message"
+            : $"Replying to {message.SenderName}: {Shorten(message.Text)}";
+        ReplyPreviewLayout.IsVisible = true;
+        MessageEntry.Focus();
+    }
+
+    private void ToggleMessageSelection(GroupChatMessageUi message)
+    {
+        if (!_selectedMessageIds.Add(message.MessageId))
+            _selectedMessageIds.Remove(message.MessageId);
+
+        GroupStatusLabel.Text = _selectedMessageIds.Count == 0
+            ? $"{_messages.Count} messages in this group"
+            : $"{_selectedMessageIds.Count} message(s) selected";
+        RenderMessages();
+    }
+
+    private static string Shorten(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? "Message"
+            : value.Length <= 80 ? value : value[..77] + "...";
+
+    private async Task EditMessageAsync(GroupChatMessageUi message)
+    {
+        if (message.IsDeleted ||
+            !string.Equals(message.MessageType, "text", StringComparison.OrdinalIgnoreCase))
+        {
+            await DisplayAlert("Edit message", "Only text messages can currently be edited.", "OK");
+            return;
+        }
+
+        var newText = await DisplayPromptAsync(
+            "Edit message",
+            "Change your message:",
+            "Save",
+            "Cancel",
+            "Message",
+            maxLength: 4000,
+            keyboard: Keyboard.Default,
+            initialValue: message.Text);
+
+        if (newText == null)
+            return;
+
+        newText = newText.Trim();
+        if (string.IsNullOrWhiteSpace(newText))
+        {
+            await DisplayAlert("Edit message", "The message cannot be empty.", "OK");
+            return;
+        }
+
+        try
+        {
+            var updated = await _communityService.UpdateCommunityMessageAsync(
+                message.MessageId,
+                newText);
+            ReplaceUiMessage(ToUiMessage(updated));
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await DisplayAlert("Access denied", "You can only edit your own message.", "OK");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Edit failed: {ex}");
+            await DisplayAlert("Edit failed", "The message could not be edited.", "OK");
+        }
+    }
+
+    private async Task DeleteMessageAsync(GroupChatMessageUi message)
+    {
+        if (!await DisplayAlert(
+                "Delete message",
+                "Delete this message permanently?",
+                "Delete",
+                "Cancel"))
+            return;
+
+        try
+        {
+            if (!await _communityService.DeleteCommunityMessageAsync(message.MessageId))
+                return;
+
+            message.IsDeleted = true;
+            message.Text = "Message deleted";
+            message.UpdatedAt = DateTime.UtcNow;
+            ReplaceUiMessage(message);
+            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await DisplayAlert("Access denied", "You can only delete your own message.", "OK");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Delete message failed: {ex}");
+            await DisplayAlert("Delete failed", "The message could not be deleted.", "OK");
+        }
+    }
+
+    private void ReplaceUiMessage(GroupChatMessageUi message)
+    {
+        var index = _messages.FindIndex(existing =>
+            string.Equals(existing.MessageId, message.MessageId, StringComparison.Ordinal));
+        if (index >= 0)
+            _messages[index] = message;
+        else
+            AddOrReplaceMessage(message);
     }
 
     // ============================================================
@@ -1149,6 +1479,18 @@ public partial class GroupChatPage : ContentPage
         VerticalStackLayout stack,
         GroupChatMessageUi message)
     {
+        if (message.IsDeleted)
+        {
+            stack.Children.Add(new Label
+            {
+                Text = "Message deleted",
+                FontSize = 14,
+                FontAttributes = FontAttributes.Italic,
+                TextColor = Color.FromArgb("#64748B")
+            });
+            return;
+        }
+
         var type =
             string.IsNullOrWhiteSpace(
                 message.MessageType)
@@ -1556,7 +1898,21 @@ public partial class GroupChatPage : ContentPage
                                 : null,
 
                         organizationalLevel:
-                            OrganizationalLevel);
+                            OrganizationalLevel,
+
+                        clientMessageId:
+                            Guid.NewGuid().ToString("N"),
+
+                        replyToMessageId:
+                            _replyingTo?.MessageId,
+
+                        replyToSenderName:
+                            _replyingTo?.SenderName,
+
+                        replyToPreview:
+                            _replyingTo?.IsDeleted == true
+                                ? "Message deleted"
+                                : Shorten(_replyingTo?.Text ?? string.Empty));
 
             await _communityService
                 .CacheCommunityMessageAsync(
@@ -1571,6 +1927,8 @@ public partial class GroupChatPage : ContentPage
 
             MessageEntry.Text =
                 string.Empty;
+            _replyingTo = null;
+            ReplyPreviewLayout.IsVisible = false;
         }
         catch (Exception ex)
         {
@@ -2092,7 +2450,18 @@ public partial class GroupChatPage : ContentPage
                             upload.Bytes,
 
                         duration:
-                            upload.Duration);
+                            upload.Duration,
+
+                        replyToMessageId:
+                            _replyingTo?.MessageId,
+
+                        replyToSenderName:
+                            _replyingTo?.SenderName,
+
+                        replyToPreview:
+                            _replyingTo?.IsDeleted == true
+                                ? "Message deleted"
+                                : Shorten(_replyingTo?.Text ?? string.Empty));
 
             await _communityService
                 .CacheCommunityMessageAsync(
@@ -2104,6 +2473,8 @@ public partial class GroupChatPage : ContentPage
 
             MessageEntry.Text =
                 string.Empty;
+            _replyingTo = null;
+            ReplyPreviewLayout.IsVisible = false;
 
             ClearPendingAttachment();
 
@@ -2215,6 +2586,28 @@ public partial class GroupChatPage : ContentPage
             (left, right) =>
                 left.CreatedAt.CompareTo(
                     right.CreatedAt));
+    }
+
+    private void OnMessagesScrolled(object? sender, ScrolledEventArgs e)
+    {
+        var scrollableHeight = Math.Max(
+            0,
+            MessagesScrollView.ContentSize.Height - MessagesScrollView.Height);
+        var distanceFromBottom = e.ScrollY - (scrollableHeight - 24);
+        _isReadingOlderMessages = distanceFromBottom < -80;
+        if (!_isReadingOlderMessages)
+        {
+            _unreadIncomingCount = 0;
+            NewMessagesButton.IsVisible = false;
+        }
+    }
+
+    private async void OnNewMessagesClicked(object? sender, EventArgs e)
+    {
+        _unreadIncomingCount = 0;
+        NewMessagesButton.IsVisible = false;
+        _isReadingOlderMessages = false;
+        await ScrollMessagesToBottomAsync();
     }
 
     // ============================================================
@@ -3169,6 +3562,23 @@ public partial class GroupChatPage : ContentPage
             : default;
     }
 
+    private static bool TryGetBoolean(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+            return false;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String =>
+                bool.TryParse(value.GetString(), out var parsed) && parsed,
+            _ => false
+        };
+    }
+
     private static DateTime EnsureUtc(
         DateTime value)
     {
@@ -3300,6 +3710,14 @@ public partial class GroupChatPage : ContentPage
 
         public DateTime CreatedAt { get; set; } =
             DateTime.UtcNow;
+
+        public DateTime? UpdatedAt { get; set; }
+        public bool IsDeleted { get; set; }
+        public bool IsEdited { get; set; }
+        public string? ReplyToMessageId { get; set; }
+        public string? ReplyToSenderName { get; set; }
+        public string? ReplyToPreview { get; set; }
+        public string Status { get; set; } = "sent";
     }
 
     private sealed class GroupMemberUi

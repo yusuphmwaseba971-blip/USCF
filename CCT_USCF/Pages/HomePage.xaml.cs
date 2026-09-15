@@ -7,6 +7,7 @@ namespace CCT_USCF.Pages;
 
 public partial class HomePage : ContentPage
 {
+    private static readonly TimeSpan CctPostsFreshnessWindow = TimeSpan.FromMinutes(10);
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
     private readonly SemaphoreSlim _cctPostsLoadGate = new(1, 1);
 
@@ -32,7 +33,7 @@ public partial class HomePage : ContentPage
 
     private void OnAppearanceChanged(object? sender, EventArgs e) => MainThread.BeginInvokeOnMainThread(ApplyAppearance);
     private void ApplyAppearance() => BackgroundColor = _appearance.BackgroundColor;
-    private async void OnCctPostCreated(object? sender, EventArgs e) => await LoadCctPostsAsync();
+    private async void OnCctPostCreated(object? sender, EventArgs e) => await LoadCctPostsAsync(true);
 
     protected override void OnDisappearing()
     {
@@ -214,21 +215,31 @@ public partial class HomePage : ContentPage
     }
 
     private async void RefreshCctPosts(object? sender, TappedEventArgs e)
-        => await LoadCctPostsAsync();
+        => await LoadCctPostsAsync(true);
 
-    private async Task LoadCctPostsAsync()
+    private async Task LoadCctPostsAsync(bool forceRefresh = false)
     {
         await _cctPostsLoadGate.WaitAsync();
         try
         {
             var service = MauiProgram.Services.GetRequiredService<CommunityService>();
             var cachedPosts = await service.GetCachedPublishedCctPostsAsync(8);
-            System.Diagnostics.Debug.WriteLine($"[PLUS_POSTS] cache count = {cachedPosts.Count}");
+            System.Diagnostics.Debug.WriteLine($"[PLUS CACHE] loaded {cachedPosts.Count} posts from SQLite");
             RenderCctPosts(cachedPosts, cachedPosts.Count == 0 ? "Loading posts..." : null);
 
-            var posts = await service.GetPublishedCctPostsAsync(8);
-            System.Diagnostics.Debug.WriteLine($"[PLUS_POSTS] HomePage render count = {posts.Count}");
-            RenderCctPosts(posts, posts.Count == 0 ? "No posts available yet." : null);
+            var shouldSync = forceRefresh ||
+                await service.ShouldSyncCctPostsAsync(CctPostsFreshnessWindow);
+            if (!shouldSync)
+            {
+                System.Diagnostics.Debug.WriteLine("[PLUS SYNC] skipped because cache is fresh");
+                return;
+            }
+
+            var posts = await service.GetPublishedCctPostsAsync(8, forceRefresh);
+            System.Diagnostics.Debug.WriteLine($"[PLUS UI] rendering {posts.Count} posts");
+            RenderCctPosts(posts, posts.Count == 0
+                ? cachedPosts.Count == 0 ? "No posts available yet." : null
+                : null);
         }
         catch (Exception ex)
         {
@@ -251,28 +262,61 @@ public partial class HomePage : ContentPage
         {
             var card = new Border
             {
-                BackgroundColor = Colors.White,
-                Stroke = Color.FromArgb("#DCEBE0"),
+                BackgroundColor = Color.FromArgb("#FFFEFA"),
+                Stroke = Color.FromArgb("#E4D7B4"),
                 StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(18) },
-                Padding = 14
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(22) },
+                Padding = new Thickness(16, 15)
             };
-            var body = new VerticalStackLayout { Spacing = 8 };
-            var category = GetPlusCategory(post.PostType);
-            body.Children.Add(new Label
+            card.Shadow = new Shadow
             {
-                Text = category.Label,
-                FontSize = 11,
-                FontAttributes = FontAttributes.Bold,
-                TextColor = category.Color
+                Brush = Color.FromArgb("#243B2A"),
+                Offset = new Point(0, 4),
+                Radius = 14,
+                Opacity = 0.12f
+            };
+            var body = new VerticalStackLayout { Spacing = 11 };
+            var category = GetPlusCategory(post.PostType);
+            var header = new Grid { ColumnDefinitions = new ColumnDefinitionCollection
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Auto)
+            }};
+            header.Children.Add(new Border
+            {
+                BackgroundColor = category.Color,
+                StrokeThickness = 0,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(12) },
+                Padding = new Thickness(10, 5),
+                Content = new Label
+                {
+                    Text = category.Label,
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = Colors.White
+                }
             });
+            var sourceLabel = new Label
+            {
+                Text = "USCF COMMUNITY",
+                FontSize = 10,
+                FontAttributes = FontAttributes.Bold,
+                CharacterSpacing = 1.2,
+                TextColor = Color.FromArgb("#8B7650"),
+                VerticalOptions = LayoutOptions.Center
+            };
+            Grid.SetColumn(sourceLabel, 1);
+            header.Children.Add(sourceLabel);
+            body.Children.Add(header);
 
             if (!string.IsNullOrWhiteSpace(post.Content))
             {
                 body.Children.Add(new Label
                 {
                     Text = post.Content,
-                    FontSize = 15,
+                    FontSize = 16,
+                    LineHeight = 1.25,
+                    MaxLines = 7,
                     TextColor = Color.FromArgb("#173323")
                 });
             }
@@ -280,9 +324,9 @@ public partial class HomePage : ContentPage
             AddCctPostMedia(body, post);
             body.Children.Add(new Label
             {
-                Text = $"Posted {post.CreatedAtUtc.ToLocalTime():g}",
+                Text = $"Posted {post.CreatedAtUtc.ToLocalTime():MMM d, yyyy · h:mm tt}",
                 FontSize = 11,
-                TextColor = Color.FromArgb("#64748B")
+                TextColor = Color.FromArgb("#8B7650")
             });
             card.Content = body;
             CctPostsStack.Children.Add(card);

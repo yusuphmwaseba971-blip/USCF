@@ -7,7 +7,7 @@
         <VerticalStackLayout Padding="20" Spacing="15">
             <Label Text="Login to USCF" FontAttributes="Bold" FontSize="24" HorizontalOptions="Center" />
 
-            <Entry x:Name="UsernameEntry" Placeholder="Email or Username" />
+            <Entry x:Name="UsernameEntry" Placeholder="Email address" Keyboard="Email" />
             <Entry x:Name="PasswordEntry" IsPassword="True" Placeholder="Password" />
 
             <Button x:Name="LoginButton" Text="LOGIN" Clicked="OnLoginClicked" BackgroundColor="#009E2C" TextColor="White" />

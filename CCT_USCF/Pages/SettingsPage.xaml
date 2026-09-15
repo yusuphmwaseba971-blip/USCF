@@ -16,7 +16,8 @@
                 <VerticalStackLayout Spacing="12">
                     <Entry x:Name="FullNameEntry" Placeholder="Full name" />
                     <Entry x:Name="UsernameEntry" Placeholder="Username" />
-                    <Entry x:Name="EmailEntry" Placeholder="Email" Keyboard="Email" />
+                    <Entry x:Name="EmailEntry" Placeholder="Email (managed by Firebase)"
+                           Keyboard="Email" IsReadOnly="True" />
                     <Entry x:Name="PhoneNumberEntry" Placeholder="Phone number" Keyboard="Telephone" />
                 </VerticalStackLayout>
             </Frame>

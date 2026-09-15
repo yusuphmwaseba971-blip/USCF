@@ -62,35 +62,6 @@
             "buildCommands": "npm install --omit=dev",
             "scopes": [],
             "path": "appwrite-function"
-        },
-        {
-            "$id": "6a9ade08000d0a17360d",
-            "name": "CCT API",
-            "runtime": "node-26",
-            "path": "functions/cct-api",
-            "previewDomainTarget": "region",
-            "previewDomainLabel": "6a9ade0a003b6bd60240",
-            "entrypoint": "src/index.js",
-            "execute": [
-                "any"
-            ],
-            "enabled": true,
-            "logging": true,
-            "events": [],
-            "schedule": "",
-            "timeout": 30,
-            "commands": "npm install --omit=dev",
-            "scopes": [],
-            "installationId": "6a9adc757d546e112eb5",
-            "providerRepositoryId": "1346163332",
-            "providerBranch": "main",
-            "providerSilentMode": false,
-            "providerRootDirectory": "CCT_USCF/appwrite-function",
-            "providerBranches": [],
-            "providerPaths": [],
-            "buildSpecification": "s-2vcpu-2gb",
-            "runtimeSpecification": "s-0.5vcpu-512mb",
-            "deploymentRetention": 0
         }
     ]
 }

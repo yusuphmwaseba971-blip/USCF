@@ -58,6 +58,21 @@ public sealed class ChurchGroupService
         return group ?? throw new InvalidOperationException("The group service returned an empty group.");
     }
 
+    public async Task DeleteGroupAsync(
+        string groupId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            throw new ArgumentException("A group id is required.", nameof(groupId));
+
+        using var request = await CreateRequestAsync(
+            HttpMethod.Delete,
+            $"api/community/groups/{Uri.EscapeDataString(groupId.Trim())}",
+            cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response);
+    }
+
     private async Task<HttpRequestMessage> CreateRequestAsync(
         HttpMethod method,
         string relativePath,

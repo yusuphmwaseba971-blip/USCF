@@ -41,6 +41,8 @@ public class AuthService
         public string? Error { get; set; }
 
         public int StatusCode { get; set; }
+
+        public bool RequiresProfileSetup { get; set; }
     }
 
     // =========================================================
@@ -246,9 +248,13 @@ public class AuthService
             {
                 return new AuthResult
                 {
-                    Success = false,
-                    Error = "Google Sign-In succeeded, but your CCT-USCF profile is not set up yet.",
-                    StatusCode = 422
+                    Success = true,
+                    EmailVerified = true,
+                    RequiresProfileSetup = true,
+                    Token = _auth.CurrentUser?.Uid,
+                    RefreshToken = _auth.CurrentUser?.Email,
+                    ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
+                    StatusCode = 200
                 };
             }
 
@@ -263,6 +269,7 @@ public class AuthService
                 StatusCode = 200
             };
         }
+
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Sign-in failed: {ex}");
@@ -282,6 +289,63 @@ public class AuthService
             StatusCode = 501
         };
 #endif
+    }
+
+    public async Task<CCT_USCF.Models.CurrentUser> CompleteGoogleProfileAsync(
+        string fullName,
+        string username,
+        string role,
+        int? regionId,
+        int? districtId,
+        int? branchId,
+        string? leadershipLevel = null,
+        string? leadershipDuty = null)
+    {
+        var firebaseUser = _auth.CurrentUser
+            ?? throw new InvalidOperationException("No signed-in Google user was found.");
+        if (string.IsNullOrWhiteSpace(fullName))
+            throw new ArgumentException("Full name is required.", nameof(fullName));
+
+        var normalizedUsername = NormalizeUsername(username);
+        if (normalizedUsername.Length < 3)
+            throw new ArgumentException("Username must be at least 3 characters.", nameof(username));
+
+        var existing = await _firestore
+            .GetCollection("users")
+            .GetDocument(firebaseUser.Uid)
+            .GetDocumentSnapshotAsync<FirestoreUserProfileDocument>(Source.Default);
+        if (existing?.Data != null)
+        {
+            var loaded = await LoadCurrentUserAsync();
+            if (loaded != null)
+                return loaded;
+            throw new InvalidOperationException("The existing CCT-USCF profile could not be loaded.");
+        }
+
+        var normalizedRole = string.IsNullOrWhiteSpace(role) ? "Member" : role.Trim();
+        var profile = new FirestoreUserProfileDocument
+        {
+            DocumentId = firebaseUser.Uid,
+            Uid = firebaseUser.Uid,
+            FullName = fullName.Trim(),
+            Username = normalizedUsername,
+            Email = firebaseUser.Email ?? string.Empty,
+            Role = normalizedRole,
+            LeadershipLevel = leadershipLevel?.Trim() ?? string.Empty,
+            LeadershipDuty = leadershipDuty?.Trim() ?? string.Empty,
+            ExistingRole = string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole,
+            Organization = BuildOrganizationValue(regionId, districtId, branchId, leadershipLevel?.Trim() ?? string.Empty),
+            RegionId = regionId ?? 0,
+            DistrictId = districtId ?? 0,
+            BranchId = branchId ?? 0,
+            CreatedAt = DateTime.UtcNow.ToString("O")
+        };
+
+        await _firestore.GetCollection("users").GetDocument(firebaseUser.Uid).SetDataAsync(profile);
+        var currentUser = await LoadCurrentUserAsync()
+            ?? throw new InvalidOperationException("The Google profile could not be loaded after saving.");
+        MauiProgram.SetCurrentUser(currentUser);
+        return currentUser;
     }
 
     // =========================================================
@@ -608,7 +672,8 @@ public class AuthService
                     "Your email changed, but your profile could not be refreshed.");
             }
 
-            MauiProgram.SetCurrentUser(updatedProfile);
+            await TokenStorage.SaveCachedUserAsync(updatedProfile);
+            MauiProgram.SetCurrentUser(updatedProfile, notify: true);
         }
         catch (Exception ex)
         {
@@ -1210,8 +1275,16 @@ public class AuthService
         if (!string.IsNullOrWhiteSpace(username))
             updates["username"] = username.Trim();
 
-        if (!string.IsNullOrWhiteSpace(email))
-            updates["email"] = email.Trim();
+        if (!string.IsNullOrWhiteSpace(email) &&
+            !string.Equals(
+                email.Trim(),
+                firebaseUser.Email,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep Firebase Auth and the profile document aligned. Firebase
+            // may require a recent sign-in before allowing this operation.
+            await UpdateCurrentEmailAsync(email);
+        }
 
         if (phoneNumber != null)
             updates["phoneNumber"] = phoneNumber.Trim();

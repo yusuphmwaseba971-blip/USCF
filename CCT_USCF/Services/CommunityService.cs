@@ -119,6 +119,14 @@ public string SenderUid { get; set; } = string.Empty;
             public DateTime UpdatedAtUtc { get; set; }
         }
 
+        [Table("cct_post_cache_state")]
+        private sealed class CachedCctPostState
+        {
+            [PrimaryKey]
+            public string Key { get; set; } = string.Empty;
+            public DateTime LastSyncUtc { get; set; }
+        }
+
         [Table("community_chat_history_state")]
         private sealed class CommunityChatHistoryState
         {
@@ -202,6 +210,8 @@ public string SenderUid { get; set; } = string.Empty;
                             .CreateTableAsync<CommunityChatHistoryState>();
                         await _messageCacheDatabase
                             .CreateTableAsync<CachedCctPost>();
+                        await _messageCacheDatabase
+                            .CreateTableAsync<CachedCctPostState>();
 
                         // ------------------------------------------------
                         // IMPORTANT:
@@ -754,6 +764,19 @@ SenderUid =
             };
             await database.InsertOrReplaceAsync(state);
             Debug.WriteLine($"[COMMUNITY_CHAT_STATE] UserUid={uid} GroupId={normalizedGroupId} LocalHistoryCleared=true");
+        }
+
+        public async Task RemoveLocalGroupCacheAsync(string groupId)
+        {
+            var uid = GetCacheUserUid();
+            var normalizedGroupId = groupId.Trim();
+            var database = await GetMessageCacheDatabaseAsync();
+            await database.ExecuteAsync(
+                "DELETE FROM community_message_cache WHERE UserUid = ? AND CommunityId = ?",
+                uid, normalizedGroupId);
+            await database.ExecuteAsync(
+                "DELETE FROM community_chat_history_state WHERE UserUid = ? AND GroupId = ?",
+                uid, normalizedGroupId);
         }
 
         // ============================================================
@@ -3986,9 +4009,29 @@ ConversationId =
             return ShufflePosts(cached.Select(ToCctPost));
         }
 
-        public async Task<List<CctPost>> GetPublishedCctPostsAsync(int limit = 8)
+        public async Task<bool> ShouldSyncCctPostsAsync(
+            TimeSpan freshnessWindow)
+        {
+            var database = await GetMessageCacheDatabaseAsync();
+            var state = await database.Table<CachedCctPostState>()
+                .Where(item => item.Key == "published")
+                .FirstOrDefaultAsync();
+            return state is null ||
+                DateTime.UtcNow - state.LastSyncUtc >= freshnessWindow;
+        }
+
+        public async Task<List<CctPost>> GetPublishedCctPostsAsync(
+            int limit = 8,
+            bool forceRefresh = false)
         {
             limit = Math.Clamp(limit, 1, 50);
+            if (!forceRefresh &&
+                !await ShouldSyncCctPostsAsync(TimeSpan.FromMinutes(10)))
+            {
+                LogPlusPosts("PLUS SYNC: skipped because cache is fresh");
+                return await GetCachedPublishedCctPostsAsync(limit);
+            }
+
             LogPlusPosts("PLUS POSTS: request started");
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
@@ -4015,13 +4058,36 @@ ConversationId =
                     .ToList();
 
                 var database = await GetMessageCacheDatabaseAsync();
+                var existing = await database.Table<CachedCctPost>().ToListAsync();
+                var existingById = existing.ToDictionary(post => post.Id, StringComparer.Ordinal);
+                var inserted = 0;
+                var updated = 0;
+                var unchanged = 0;
                 await database.RunInTransactionAsync(transaction =>
                 {
-                    transaction.DeleteAll<CachedCctPost>();
                     foreach (var post in posts)
                     {
-                        transaction.InsertOrReplace(ToCachedCctPost(post));
+                        var cached = ToCachedCctPost(post);
+                        if (!existingById.TryGetValue(post.Id, out var previous))
+                        {
+                            transaction.InsertOrReplace(cached);
+                            inserted++;
+                        }
+                        else if (!CachedPostEquals(previous, cached))
+                        {
+                            transaction.InsertOrReplace(cached);
+                            updated++;
+                        }
+                        else
+                        {
+                            unchanged++;
+                        }
                     }
+                    transaction.InsertOrReplace(new CachedCctPostState
+                    {
+                        Key = "published",
+                        LastSyncUtc = DateTime.UtcNow
+                    });
                 });
 
                 var mediaCount = posts.Count(post =>
@@ -4034,15 +4100,41 @@ ConversationId =
                 LogPlusPosts(
                     $"PLUS POSTS: parsed post count = {posts.Count}; " +
                     $"post IDs = {string.Join(",", posts.Select(post => post.Id))}");
+                LogPlusPosts(
+                    $"PLUS CACHE: inserted {inserted} new posts; " +
+                    $"updated {updated} posts; skipped {unchanged} unchanged posts");
                 return ShufflePosts(posts);
             }
+
             catch (Exception ex)
             {
+                var database = await GetMessageCacheDatabaseAsync();
+                await database.InsertOrReplaceAsync(new CachedCctPostState
+                {
+                    Key = "published",
+                    LastSyncUtc = DateTime.UtcNow
+                });
+                LogPlusPosts("PLUS SYNC: attempt recorded; cached posts remain authoritative");
                 LogPlusPosts($"PLUS POSTS: request failed = {ex.GetType().Name}: {ex.Message}");
                 Debug.WriteLine($"[PLUS_POSTS] network fetch failed; using cache. {ex}");
                 return await GetCachedPublishedCctPostsAsync(limit);
             }
         }
+
+        private static bool CachedPostEquals(
+            CachedCctPost left,
+            CachedCctPost right)
+            => left.UserId == right.UserId &&
+               left.Content == right.Content &&
+               left.PostType == right.PostType &&
+               left.MediaType == right.MediaType &&
+               left.MediaUrl == right.MediaUrl &&
+               left.SiaObjectId == right.SiaObjectId &&
+               left.MediaSize == right.MediaSize &&
+               left.Status == right.Status &&
+               left.IsPublished == right.IsPublished &&
+               left.CreatedAtUtc == right.CreatedAtUtc &&
+               left.UpdatedAtUtc == right.UpdatedAtUtc;
 
         private static void LogPlusPosts(string message)
         {

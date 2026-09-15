@@ -1,6 +1,7 @@
 using Microsoft.Maui.Controls.Shapes;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
+using CCT_USCF.Controls;
 using CCT_USCF.Services;
 
 namespace CCT_USCF.Pages;
@@ -80,114 +81,74 @@ public partial class ChurchGroupSelectionPage : ContentPage
             }
             _loadedUser = user;
 
+            AddGroupButton.IsVisible = CanCreateGroups(level, user);
             var groups = await GetGroupsForLevelAsync(level, user);
             if (groups.Count == 0)
             {
-                StatusLabel.Text = $"No {level.ToLowerInvariant()} groups are available for your profile.";
+                StatusLabel.Text = $"No {level.ToLowerInvariant()} groups yet. Groups created for your {level.ToLowerInvariant()} scope will appear here.";
                 return;
             }
 
             StatusLabel.Text = $"{level} groups";
-            AddGroupButton.IsVisible = CanCreateGroups(level, user);
             foreach (var group in groups)
             {
-                var accent = level switch
+                var (accent, accentBorder, accentBackground, icon) = GetGroupTheme(group, level);
+                var card = new ChurchGroupCard
                 {
-                    "National" => Color.FromArgb("#2A7F8E"),
-                    "Regional" => Color.FromArgb("#6657A6"),
-                    "District" => Color.FromArgb("#B7791F"),
-                    _ => Color.FromArgb("#2F7D52")
+                    GroupName = group.Name,
+                    ScopeLabel = $"{group.Level} • {group.GroupType}",
+                    MemberSummary = await BuildGroupMetaAsync(group, user),
+                    Icon = icon,
+                    Accent = accent,
+                    AccentBorder = accentBorder,
+                    AccentBackground = accentBackground,
+                    Margin = new Thickness(0, 0, 0, 2)
                 };
-
-                var accentBorder = level switch
-                {
-                    "National" => Color.FromArgb("#B9DDE0"),
-                    "Regional" => Color.FromArgb("#D2CBEA"),
-                    "District" => Color.FromArgb("#EAD5AE"),
-                    _ => Color.FromArgb("#BFD8C8")
-                };
-
-                var panel = new Border
-                {
-                    Padding = new Thickness(16, 14),
-                    Margin = new Thickness(0, 0, 0, 2),
-                    BackgroundColor = Colors.White,
-                    Stroke = accentBorder,
-                    StrokeThickness = 1,
-                    StrokeShape = new RoundRectangle { CornerRadius = 16 },
-                    Shadow = new Shadow
-                    {
-                        Brush = new SolidColorBrush(Color.FromArgb("#180F2418")),
-                        Offset = new Point(0, 2),
-                        Radius = 8,
-                        Opacity = 0.18f
-                    }
-                };
-
-                var icon = level switch
-                {
-                    "National" => "◎",
-                    "Regional" => "⌖",
-                    "District" => "⌂",
-                    _ => "✝"
-                };
-
-                var layout = new Grid
-                {
-                    ColumnDefinitions = new ColumnDefinitionCollection
-                    {
-                        new ColumnDefinition { Width = 48 },
-                        new ColumnDefinition { Width = GridLength.Star },
-                        new ColumnDefinition { Width = 28 }
-                    },
-                    ColumnSpacing = 12
-                };
-
-                layout.Add(new Label
-                {
-                    Text = icon,
-                    FontSize = 28,
-                    TextColor = accent,
-                    HorizontalTextAlignment = TextAlignment.Center,
-                    VerticalTextAlignment = TextAlignment.Center
-                }, 0, 0);
-
-                var stack = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center };
-                stack.Children.Add(new Label
-                {
-                    Text = group.Name,
-                    FontAttributes = FontAttributes.Bold,
-                    FontSize = 16,
-                    TextColor = Color.FromArgb("#26362E")
-                });
-                stack.Children.Add(new Label
-                {
-                    Text = await BuildGroupMetaAsync(group, user),
-                    FontSize = 12,
-                    TextColor = Color.FromArgb("#7A8981")
-                });
-                layout.Add(stack, 1, 0);
-                layout.Add(new Label
-                {
-                    Text = "›",
-                    FontSize = 26,
-                    TextColor = Color.FromArgb("#B8986B"),
-                    VerticalTextAlignment = TextAlignment.Center
-                }, 2, 0);
-                panel.Content = layout;
-
-                var tap = new TapGestureRecognizer();
-                tap.Tapped += async (_, _) => await SelectGroupAsync(group, user);
-                panel.GestureRecognizers.Add(tap);
-
-                GroupsLayout.Add(panel);
+                card.Clicked += async (_, _) => await SelectGroupAsync(group, user);
+                GroupsLayout.Add(card);
             }
         }
+
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Loading {level} groups failed: {ex}");
             StatusLabel.Text = "Unable to connect to the Church Group right now. Please check your internet connection and try again.";
         }
+    }
+
+    private static (Color Accent, Color Border, Color Background, string Icon) GetGroupTheme(
+        FirestoreGroupDocument group,
+        string level)
+    {
+        var type = group.GroupType ?? string.Empty;
+        if (type.Contains("PRAYER", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#2F7D52"), Color.FromArgb("#BFD8C8"), Color.FromArgb("#EEF7F0"), "✦");
+        if (type.Contains("CHOIR", StringComparison.OrdinalIgnoreCase) ||
+            type.Contains("MUSIC", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#8A5A2B"), Color.FromArgb("#E5C9A8"), Color.FromArgb("#FFF7ED"), "♫");
+        if (type.Contains("YOUTH", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#2A7F8E"), Color.FromArgb("#B9DDE0"), Color.FromArgb("#EEF9FA"), "◉");
+        if (type.Contains("LEADER", StringComparison.OrdinalIgnoreCase) ||
+            type.Contains("PASTOR", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#51458A"), Color.FromArgb("#D2CBEA"), Color.FromArgb("#F5F3FF"), "★");
+        if (type.Contains("WOMEN", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#A34D78"), Color.FromArgb("#E7C3D5"), Color.FromArgb("#FFF3F8"), "✿");
+        if (type.Contains("MEN", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#315B7D"), Color.FromArgb("#C2D7E7"), Color.FromArgb("#F1F7FC"), "◆");
+        if (type.Contains("EVANGEL", StringComparison.OrdinalIgnoreCase) ||
+            type.Contains("MISSION", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#C05A2A"), Color.FromArgb("#F0C7B0"), Color.FromArgb("#FFF5EF"), "➤");
+        if (type.Contains("GENERAL", StringComparison.OrdinalIgnoreCase) ||
+            type.Contains("MAIN", StringComparison.OrdinalIgnoreCase))
+            return (Color.FromArgb("#315E50"), Color.FromArgb("#C6DDD5"), Color.FromArgb("#F0F8F5"), "✚");
+
+        return level switch
+        {
+            "National" => (Color.FromArgb("#2A7F8E"), Color.FromArgb("#B9DDE0"), Color.FromArgb("#EEF9FA"), "◎"),
+            "Regional" => (Color.FromArgb("#6657A6"), Color.FromArgb("#D2CBEA"), Color.FromArgb("#F5F3FF"), "⌖"),
+            "District" => (Color.FromArgb("#B7791F"), Color.FromArgb("#EAD5AE"), Color.FromArgb("#FFFBEB"), "⌂"),
+            _ => (Color.FromArgb("#2F7D52"), Color.FromArgb("#BFD8C8"), Color.FromArgb("#EEF7F0"), "✝")
+        };
     }
 
     private bool CanCreateGroups(string level, CCT_USCF.Models.CurrentUser user)
@@ -234,6 +195,10 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 "Youth",
                 "Media",
                 "Bible Study",
+                "Women",
+                "Men",
+                "Evangelism",
+                "Leaders",
                 "Custom");
             if (string.IsNullOrWhiteSpace(type) || type == "Cancel")
                 return;
@@ -262,12 +227,16 @@ public partial class ChurchGroupSelectionPage : ContentPage
                     Name = group.GroupName,
                     Level = group.ScopeType,
                     GroupType = group.GroupType,
+                    CanManage = true,
                     RegionId = group.RegionId ?? 0,
                     DistrictId = group.DistrictId ?? 0,
                     BranchId = group.BranchId,
                     IsCustom = true,
                     MemberUids = new List<string> { GetFirebaseUid() }
                 };
+                // Refresh the selected scope from the backend before opening the
+                // group so persistence and filtering use the same source of truth.
+                await LoadGroupsAsync(_selectedLevel);
                 await SelectGroupAsync(created, _loadedUser);
             }
             catch (Exception ex)
@@ -284,7 +253,6 @@ public partial class ChurchGroupSelectionPage : ContentPage
     private async Task<List<FirestoreGroupDocument>> GetGroupsForLevelAsync(string level, CCT_USCF.Models.CurrentUser user)
     {
         IReadOnlyList<CCT_USCF.Models.ChurchGroup> registeredGroups;
-        var usingOfflineGroups = false;
 
         try
         {
@@ -292,22 +260,21 @@ public partial class ChurchGroupSelectionPage : ContentPage
         }
         catch (HttpRequestException ex)
         {
-            usingOfflineGroups = true;
             registeredGroups = Array.Empty<CCT_USCF.Models.ChurchGroup>();
             System.Diagnostics.Debug.WriteLine(
-                $"[CHURCH GROUP] {level} registry unavailable; using offline groups. {ex}");
+                $"[CHURCH GROUP] {level} registry unavailable; no offline groups will be synthesized. {ex}");
         }
         catch (InvalidOperationException ex) when (
             ex.Message.StartsWith("Group request failed", StringComparison.Ordinal))
         {
-            usingOfflineGroups = true;
             registeredGroups = Array.Empty<CCT_USCF.Models.ChurchGroup>();
             System.Diagnostics.Debug.WriteLine(
-                $"[CHURCH GROUP] {level} registry returned an error; using offline groups. {ex}");
+                $"[CHURCH GROUP] {level} registry returned an error; no offline groups will be synthesized. {ex}");
         }
 
         var groups = registeredGroups
             .Where(group => group.IsActive)
+            .Where(group => GroupMatchesScope(level, group, user))
             .Select(group => new FirestoreGroupDocument
             {
                 DocumentId = group.GroupId,
@@ -317,136 +284,28 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 DistrictId = group.DistrictId ?? 0,
                 BranchId = group.BranchId,
                 GroupType = group.GroupType,
+                CanManage = group.CanManage,
                 IsCustom = string.Equals(group.GroupType, "CUSTOM", StringComparison.OrdinalIgnoreCase),
                 MemberUids = new List<string> { GetFirebaseUid() }
             })
             .ToList();
 
-        if (usingOfflineGroups)
-            groups.AddRange(BuildFallbackGroups(level, user));
-
-        var mainGroup = CreateMainGroup(level, user);
-        if (mainGroup != null &&
-            !groups.Any(group => string.Equals(group.DocumentId, mainGroup.DocumentId, StringComparison.OrdinalIgnoreCase)))
-        {
-            groups.Insert(0, mainGroup);
-        }
-
         return groups.OrderBy(group => group.IsCustom ? 1 : 0).ThenBy(group => group.Name).ToList();
     }
 
-    private static FirestoreGroupDocument? CreateMainGroup(
-        string level,
-        CCT_USCF.Models.CurrentUser user) =>
-        level switch
+    private static bool GroupMatchesScope(string level, CCT_USCF.Models.ChurchGroup group, CCT_USCF.Models.CurrentUser user)
+    {
+        if (!string.Equals(group.ScopeType, level, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return level.ToUpperInvariant() switch
         {
-            "National" => new FirestoreGroupDocument
-            {
-                DocumentId = "national-main",
-                Name = "National Main Group",
-                Level = "National"
-            },
-            "Regional" when user.RegionId.HasValue => new FirestoreGroupDocument
-            {
-                DocumentId = $"regional-main-{user.RegionId.Value}",
-                Name = $"{user.Region ?? "Regional"} Main Group",
-                Level = "Regional",
-                RegionId = user.RegionId.Value
-            },
-            "District" when user.DistrictId.HasValue => new FirestoreGroupDocument
-            {
-                DocumentId = $"district-main-{user.DistrictId.Value}",
-                Name = $"{user.District ?? "District"} Main Group",
-                Level = "District",
-                DistrictId = user.DistrictId.Value
-            },
-            "Branch" when user.BranchId.HasValue => new FirestoreGroupDocument
-            {
-                DocumentId = $"branch-{user.BranchId.Value}",
-                Name = user.Branch ?? "Branch Group",
-                Level = "Branch",
-                BranchId = user.BranchId.Value
-            },
-            _ => null
+            "NATIONAL" => true,
+            "REGIONAL" => user.RegionId.HasValue && group.RegionId == user.RegionId,
+            "DISTRICT" => user.DistrictId.HasValue && group.DistrictId == user.DistrictId,
+            "BRANCH" => user.BranchId.HasValue && group.BranchId == user.BranchId,
+            _ => false
         };
-
-    private static List<FirestoreGroupDocument> BuildFallbackGroups(string level, CCT_USCF.Models.CurrentUser user)
-    {
-        var groups = new List<FirestoreGroupDocument>();
-
-        switch (level.Trim())
-        {
-            case "National":
-                groups.Add(new FirestoreGroupDocument { DocumentId = "national-prayer-team", Name = "National Prayer Team", Level = "National" });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "national-choir-team", Name = "National Choir Team", Level = "National" });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "national-huamsho-team", Name = "National HUAMSHO Team", Level = "National" });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "national-leader-group", Name = "National Leader Group", Level = "National" });
-                break;
-
-            case "Regional":
-                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-prayer-team", Name = "Regional Prayer Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-choir-team", Name = "Regional Choir Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-huamsho-team", Name = "Regional HUAMSHO Team", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "regional-leader-group", Name = "Regional Leader Group", Level = "Regional", RegionId = user.RegionId ?? 0 });
-                break;
-
-            case "District":
-                groups.Add(new FirestoreGroupDocument { DocumentId = "district-prayer-team", Name = "District Prayer Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "district-choir-team", Name = "District Choir Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "district-huamsho-team", Name = "District HUAMSHO Team", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                groups.Add(new FirestoreGroupDocument { DocumentId = "district-leader-group", Name = "District Leader Group", Level = "District", DistrictId = user.DistrictId ?? 0 });
-                break;
-
-            case "Branch":
-                groups.Add(new FirestoreGroupDocument { DocumentId = $"branch-{user.BranchId ?? 0}", Name = user.Branch ?? "Branch Group", Level = "Branch", BranchId = user.BranchId ?? 0 });
-                break;
-        }
-
-        return groups;
-    }
-
-    private static bool GroupMatchesLevel(string level, FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
-    {
-        var normalizedLevel = level.Trim();
-        var groupLevel = group.Level ?? string.Empty;
-
-        if (string.Equals(groupLevel, normalizedLevel, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(groupLevel, $"{normalizedLevel} Group", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(groupLevel, $"{normalizedLevel} Groups", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (string.Equals(normalizedLevel, "National", StringComparison.OrdinalIgnoreCase))
-        {
-            return group.Name.Contains("National", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(group.Name, "National Prayer Team", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(group.Name, "National Choir Team", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(group.Name, "National HUAMSHO Team", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(group.Name, "National Leader Group", StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (string.Equals(normalizedLevel, "Regional", StringComparison.OrdinalIgnoreCase))
-        {
-            return (user.RegionId.HasValue && group.RegionId == user.RegionId.Value) ||
-                   group.Name.Contains("Regional", StringComparison.OrdinalIgnoreCase) ||
-                   group.Name.Contains("Region", StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (string.Equals(normalizedLevel, "District", StringComparison.OrdinalIgnoreCase))
-        {
-            return (user.DistrictId.HasValue && group.DistrictId == user.DistrictId.Value) ||
-                   group.Name.Contains("District", StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (string.Equals(normalizedLevel, "Branch", StringComparison.OrdinalIgnoreCase))
-        {
-            return user.BranchId.HasValue &&
-                   group.BranchId.HasValue &&
-                   group.BranchId.Value == user.BranchId.Value;
-        }
-
-        return false;
     }
 
     private async Task<string> BuildGroupMetaAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
@@ -577,7 +436,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
             : group.Name.Replace(" ", "-").Replace("/", "-").Trim('-');
 
         await Shell.Current.GoToAsync(
-            $"{nameof(GroupChatPage)}?groupId={Uri.EscapeDataString(groupId)}&groupName={Uri.EscapeDataString(group.Name)}&groupType={Uri.EscapeDataString(group.Name)}&organizationalLevel={Uri.EscapeDataString(group.Level)}&regionId={group.RegionId}&districtId={group.DistrictId}&branchId={group.BranchId ?? user.BranchId ?? 0}");
+            $"{nameof(GroupChatPage)}?groupId={Uri.EscapeDataString(groupId)}&groupName={Uri.EscapeDataString(group.Name)}&groupType={Uri.EscapeDataString(group.GroupType)}&organizationalLevel={Uri.EscapeDataString(group.Level)}&regionId={group.RegionId}&districtId={group.DistrictId}&branchId={group.BranchId ?? user.BranchId ?? 0}&canDelete={group.CanManage}");
     }
 
     private bool IsMemberOfGroup(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
@@ -680,6 +539,8 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         [FirestoreProperty("groupType")]
         public string GroupType { get; set; } = string.Empty;
+
+        public bool CanManage { get; set; }
 
         [FirestoreProperty("isCustom")]
         public bool IsCustom { get; set; }

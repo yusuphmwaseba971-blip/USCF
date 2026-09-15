@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Controls.ChurchGroupCard"
+    x:Name="Card">
+    <Border
+        x:Name="CardBorder"
+        Padding="16,14"
+        BackgroundColor="White"
+        Stroke="{Binding AccentBorder, Source={x:Reference Card}}"
+        StrokeThickness="1"
+        StrokeShape="RoundRectangle 16">
+        <Border.Shadow>
+            <Shadow
+                Brush="#180F2418"
+                Offset="0,2"
+                Radius="8"
+                Opacity="0.18" />
+        </Border.Shadow>
+        <Grid ColumnDefinitions="48,*,28" ColumnSpacing="12">
+            <Border
+                Grid.Column="0"
+                WidthRequest="44"
+                HeightRequest="44"
+                BackgroundColor="{Binding AccentBackground, Source={x:Reference Card}}"
+                StrokeThickness="0"
+                StrokeShape="RoundRectangle 14"
+                VerticalOptions="Center">
+                <Label
+                    Text="{Binding Icon, Source={x:Reference Card}}"
+                    FontSize="24"
+                    TextColor="{Binding Accent, Source={x:Reference Card}}"
+                    HorizontalTextAlignment="Center"
+                    VerticalTextAlignment="Center" />
+            </Border>
+            <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                <Label
+                    Text="{Binding GroupName, Source={x:Reference Card}}"
+                    FontAttributes="Bold"
+                    FontSize="16"
+                    TextColor="#26362E"
+                    LineBreakMode="TailTruncation" />
+                <Label
+                    Text="{Binding ScopeLabel, Source={x:Reference Card}}"
+                    FontSize="12"
+                    TextColor="#7A8981"
+                    LineBreakMode="TailTruncation" />
+                <Label
+                    Text="{Binding MemberSummary, Source={x:Reference Card}}"
+                    FontSize="12"
+                    TextColor="#52635A"
+                    LineBreakMode="TailTruncation" />
+            </VerticalStackLayout>
+            <Label
+                Grid.Column="2"
+                Text="›"
+                FontSize="26"
+                TextColor="{Binding Accent, Source={x:Reference Card}}"
+                VerticalTextAlignment="Center" />
+        </Grid>
+    </Border>
+</ContentView>

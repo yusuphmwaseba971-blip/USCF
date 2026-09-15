@@ -4,8 +4,20 @@ using CCT_USCF.Services;
 
 namespace CCT_USCF.Pages;
 
+[QueryProperty(nameof(GoogleOnboardingQuery), "googleOnboarding")]
 public partial class RegisterPage : ContentPage
 {
+    private bool _googleOnboarding;
+
+    public string GoogleOnboardingQuery
+    {
+        set
+        {
+            _googleOnboarding = bool.TryParse(Uri.UnescapeDataString(value), out var enabled) && enabled;
+            ApplyGoogleOnboardingMode();
+        }
+    }
+
     private readonly Services.AuthService _authService;
 
     private List<AuthLocation> _regions = new();
@@ -58,6 +70,22 @@ public partial class RegisterPage : ContentPage
         // =====================================================
 
         _ = LoadRegionsAsync();
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        ApplyGoogleOnboardingMode();
+    }
+
+    private void ApplyGoogleOnboardingMode()
+    {
+        if (AuthenticationCredentialsSection == null)
+            return;
+
+        AuthenticationCredentialsSection.IsVisible = !_googleOnboarding;
+        Title = _googleOnboarding ? "Complete your USCF profile" : "Create USCF Account";
+        CreateAccountButton.Text = _googleOnboarding ? "CONTINUE" : "CREATE ACCOUNT";
     }
 
     // =========================================================
@@ -651,19 +679,19 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(email))
+        if (!_googleOnboarding && string.IsNullOrWhiteSpace(email))
         {
             ShowError("Please enter your email address.");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(password))
+        if (!_googleOnboarding && string.IsNullOrWhiteSpace(password))
         {
             ShowError("Please enter a password.");
             return;
         }
 
-        if (password != confirm)
+        if (!_googleOnboarding && password != confirm)
         {
             ShowError("Passwords do not match.");
             return;
@@ -817,18 +845,25 @@ public partial class RegisterPage : ContentPage
         {
             SetLoading(true);
 
-            await _authService.RegisterAsync(
-                fullName,
-                username,
-                email,
-                password,
-                confirm,
-                role,
-                regionId,
-                districtId,
-                branchId,
-                leadershipLevel,
-                leadershipDuty);
+            if (_googleOnboarding)
+            {
+                var completedUser = await _authService.CompleteGoogleProfileAsync(
+                    fullName,
+                    username,
+                    role,
+                    regionId,
+                    districtId,
+                    branchId,
+                    leadershipLevel,
+                    leadershipDuty);
+                await TokenStorage.SaveCachedUserAsync(completedUser);
+                MauiProgram.SetCurrentUser(completedUser, notify: true);
+                await Shell.Current.GoToAsync("//home");
+                return;
+            }
+
+            await _authService.RegisterAsync(fullName, username, email, password, confirm,
+                role, regionId, districtId, branchId, leadershipLevel, leadershipDuty);
 
             // =================================================
             // SUCCESS
