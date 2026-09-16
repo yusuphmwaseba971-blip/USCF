@@ -1,0 +1,350 @@
+[1mdiff --git a/CCT_USCF/Pages/ChurchGroupSelectionPage.xaml.cs b/CCT_USCF/Pages/ChurchGroupSelectionPage.xaml.cs[m
+[1mindex 81b38e7..d1db34d 100644[m
+[1m--- a/CCT_USCF/Pages/ChurchGroupSelectionPage.xaml.cs[m
+[1m+++ b/CCT_USCF/Pages/ChurchGroupSelectionPage.xaml.cs[m
+[36m@@ -183,14 +183,27 @@[m [mpublic partial class ChurchGroupSelectionPage : ContentPage[m
+                 "Youth",[m
+                 "Media",[m
+                 "Bible Study",[m
+[31m-                "Women",[m
+[31m-                "Men",[m
+[32m+[m[32m                "Women's",[m
+[32m+[m[32m                "Men's",[m
+                 "Evangelism",[m
+                 "Leaders",[m
+                 "Custom");[m
+             if (string.IsNullOrWhiteSpace(type) || type == "Cancel")[m
+                 return;[m
+ [m
+[32m+[m[32m            var standardType = NormalizeGroupType(type);[m
+[32m+[m[32m            if (standardType is "CHOIR" or "PRAYER_TEAM" or "BIBLE_STUDY" or "LEADERS")[m
+[32m+[m[32m            {[m
+[32m+[m[32m                var existingStandard = (await GetGroupsForLevelAsync(_selectedLevel, _loadedUser))[m
+[32m+[m[32m                    .FirstOrDefault(group =>[m
+[32m+[m[32m                        NormalizeGroupType(group.GroupType) == standardType);[m
+[32m+[m[32m                if (existingStandard != null)[m
+[32m+[m[32m                {[m
+[32m+[m[32m                    await SelectGroupAsync(existingStandard, _loadedUser);[m
+[32m+[m[32m                    return;[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m
+             var confirmed = await DisplayAlert([m
+                 "Create group",[m
+                 $"{name.Trim()}\n\nScope: {_selectedLevel}\n\nThe group will be created under your verified {_selectedLevel.ToLowerInvariant()} scope.",[m
+[36m@@ -205,7 +218,7 @@[m [mpublic partial class ChurchGroupSelectionPage : ContentPage[m
+                 var group = await _groupService.CreateGroupAsync([m
+                     name.Trim(),[m
+                     description?.Trim() ?? string.Empty,[m
+[31m-                    type.ToUpperInvariant(),[m
+[32m+[m[32m                    standardType,[m
+                     _selectedLevel.ToUpperInvariant());[m
+ [m
+                 await DisplayAlert("Group created", "Your group is ready.", "Open");[m
+[36m@@ -239,6 +252,11 @@[m [mpublic partial class ChurchGroupSelectionPage : ContentPage[m
+             }[m
+         }[m
+ [m
+[32m+[m[32m    private static string NormalizeGroupType(string value) =>[m
+[32m+[m[32m        (value ?? string.Empty).Trim().ToUpperInvariant()[m
+[32m+[m[32m            .Replace(" ", "_")[m
+[32m+[m[32m            .Replace("-", "_");[m
+[32m+[m
+     private async Task<List<FirestoreGroupDocument>> GetGroupsForLevelAsync(string level, CCT_USCF.Models.CurrentUser user)[m
+     {[m
+         IReadOnlyList<CCT_USCF.Models.ChurchGroup> registeredGroups;[m
+[1mdiff --git a/CCT_USCF/appwrite-function/src/index.js b/CCT_USCF/appwrite-function/src/index.js[m
+[1mindex 8dc776a..62af899 100644[m
+[1m--- a/CCT_USCF/appwrite-function/src/index.js[m
+[1m+++ b/CCT_USCF/appwrite-function/src/index.js[m
+[36m@@ -173,6 +173,10 @@[m [mconst CHURCH_DEVICE_TOKENS_COLLECTION_ID =[m
+   process.env.APPWRITE_DEVICE_TOKENS_COLLECTION_ID ||[m
+   "device_tokens";[m
+ [m
+[32m+[m[32mconst SUPPORT_REQUESTS_COLLECTION_ID =[m
+[32m+[m[32m  process.env.APPWRITE_SUPPORT_REQUESTS_COLLECTION_ID ||[m
+[32m+[m[32m  "support_requests";[m
+[32m+[m
+ const firebaseDb = getFirestore(firebaseApp);[m
+ const firebaseMessaging = getMessaging(firebaseApp);[m
+ [m
+[36m@@ -984,6 +988,38 @@[m [masync function ensureChurchAnnouncementCollections() {[m
+     "church_device_tokens": {[m
+       string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],[m
+       integer: ["region_id", "district_id", "branch_id"][m
+[32m+[m[32m    },[m
+[32m+[m[32m    [SUPPORT_REQUESTS_COLLECTION_ID]: {[m
+[32m+[m[32m      string: [[m
+[32m+[m[32m        ["user_id", 255],[m
+[32m+[m[32m        ["user_email", 255],[m
+[32m+[m[32m        ["user_name", 255],[m
+[32m+[m[32m        ["category", 64],[m
+[32m+[m[32m        ["subject", 255],[m
+[32m+[m[32m        ["message", 5000],[m
+[32m+[m[32m        ["status", 32],[m
+[32m+[m[32m        ["app_version", 128],[m
+[32m+[m[32m        ["platform", 32],[m
+[32m+[m[32m        ["created_at", 64],[m
+[32m+[m[32m        ["updated_at", 64][m
+[32m+[m[32m      ],[m
+[32m+[m[32m      integer: [][m
+[32m+[m[32m    },[m
+[32m+[m[32m    "support_requests": {[m
+[32m+[m[32m      string: [[m
+[32m+[m[32m        ["user_id", 255],[m
+[32m+[m[32m        ["user_email", 255],[m
+[32m+[m[32m        ["user_name", 255],[m
+[32m+[m[32m        ["category", 64],[m
+[32m+[m[32m        ["subject", 255],[m
+[32m+[m[32m        ["message", 5000],[m
+[32m+[m[32m        ["status", 32],[m
+[32m+[m[32m        ["app_version", 128],[m
+[32m+[m[32m        ["platform", 32],[m
+[32m+[m[32m        ["created_at", 64],[m
+[32m+[m[32m        ["updated_at", 64][m
+[32m+[m[32m      ],[m
+[32m+[m[32m      integer: [][m
+     }[m
+   };[m
+ [m
+[36m@@ -1573,6 +1609,110 @@[m [mfunction canManageGroup(group, profile) {[m
+       groupBelongsToProfile(group, profile));[m
+ }[m
+ [m
+[32m+[m[32mconst STANDARD_GROUP_TYPES = [[m
+[32m+[m[32m  { key: "CHOIR", label: "Choir" },[m
+[32m+[m[32m  { key: "PRAYER_TEAM", label: "Prayer Team" },[m
+[32m+[m[32m  { key: "BIBLE_STUDY", label: "Bible Study" },[m
+[32m+[m[32m  { key: "LEADERS", label: "Leaders" }[m
+[32m+[m[32m];[m
+[32m+[m
+[32m+[m[32mfunction normalizeGroupType(value) {[m
+[32m+[m[32m  return normalizeString(value)[m
+[32m+[m[32m    .toUpperCase()[m
+[32m+[m[32m    .replace(/[\s-]+/g, "_");[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction standardGroupType(value) {[m
+[32m+[m[32m  const normalized = normalizeGroupType(value);[m
+[32m+[m[32m  return STANDARD_GROUP_TYPES.find(type =>[m
+[32m+[m[32m    type.key === normalized ||[m
+[32m+[m[32m    (type.key === "PRAYER_TEAM" && normalized === "PRAYER") ||[m
+[32m+[m[32m    (type.key === "BIBLE_STUDY" && normalized === "BIBLESTUDY") ||[m
+[32m+[m[32m    (type.key === "LEADERS" && normalized === "LEADER")[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction groupMatchesScopeIdentity(group, profile, scopeType) {[m
+[32m+[m[32m  const scope = normalizeScopeType(scopeType);[m
+[32m+[m[32m  if (normalizeScopeType(group.scope_type) !== scope) return false;[m
+[32m+[m[32m  if (scope === "NATIONAL") return true;[m
+[32m+[m[32m  if (scope === "REGIONAL") return String(group.region_id ?? "") === String(profile.regionId ?? "");[m
+[32m+[m[32m  if (scope === "DISTRICT") return String(group.district_id ?? "") === String(profile.districtId ?? "");[m
+[32m+[m[32m  return String(group.branch_id ?? "") === String(profile.branchId ?? "");[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction standardGroupName(scopeType, standardType) {[m
+[32m+[m[32m  const scopeLabel = scopeType.charAt(0) + scopeType.slice(1).toLowerCase();[m
+[32m+[m[32m  return `${scopeLabel} ${standardType.label}`;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function ensureStandardGroups(profile, scopeType, documents) {[m
+[32m+[m[32m  const existingDocuments = documents || [];[m
+[32m+[m[32m  const createdDocuments = [];[m
+[32m+[m
+[32m+[m[32m  for (const standardType of STANDARD_GROUP_TYPES) {[m
+[32m+[m[32m    const existing = existingDocuments.find(document => {[m
+[32m+[m[32m      const data = document.data || document;[m
+[32m+[m[32m      return data.is_active !== false &&[m
+[32m+[m[32m        groupMatchesScopeIdentity(data, profile, scopeType) &&[m
+[32m+[m[32m        standardGroupType(data.group_type)?.key === standardType.key;[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (existing) {[m
+[32m+[m[32m      continue;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const scope = normalizeScopeType(scopeType);[m
+[32m+[m[32m    const now = new Date().toISOString();[m
+[32m+[m[32m    const groupId = randomUUID();[m
+[32m+[m[32m    const data = {[m
+[32m+[m[32m      group_name: standardGroupName(scope, standardType),[m
+[32m+[m[32m      description: `${standardGroupName(scope, standardType)} group`,[m
+[32m+[m[32m      group_type: standardType.key,[m
+[32m+[m[32m      scope_type: scope,[m
+[32m+[m[32m      parent_group_id: scope === "NATIONAL"[m
+[32m+[m[32m        ? "national"[m
+[32m+[m[32m        : scope === "REGIONAL"[m
+[32m+[m[32m          ? `region:${profile.regionId}`[m
+[32m+[m[32m          : scope === "DISTRICT"[m
+[32m+[m[32m            ? `district:${profile.districtId}`[m
+[32m+[m[32m            : `branch:${profile.branchId}`,[m
+[32m+[m[32m      region_id: scope === "REGIONAL" ? profile.regionId : null,[m
+[32m+[m[32m      district_id: scope === "DISTRICT" ? profile.districtId : null,[m
+[32m+[m[32m      branch_id: scope === "BRANCH" ? profile.branchId : null,[m
+[32m+[m[32m      created_by_uid: profile.uid,[m
+[32m+[m[32m      created_at: now,[m
+[32m+[m[32m      is_active: true[m
+[32m+[m[32m    };[m
+[32m+[m
+[32m+[m[32m    const document = await appwriteCollectionRequest([m
+[32m+[m[32m      COMMUNITY_GROUPS_COLLECTION_ID,[m
+[32m+[m[32m      "POST",[m
+[32m+[m[32m      "",[m
+[32m+[m[32m      { documentId: groupId, data }[m
+[32m+[m[32m    );[m
+[32m+[m[32m    await appwriteCollectionRequest([m
+[32m+[m[32m      COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,[m
+[32m+[m[32m      "POST",[m
+[32m+[m[32m      "",[m
+[32m+[m[32m      {[m
+[32m+[m[32m        documentId: `${groupId}:${profile.uid}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 36),[m
+[32m+[m[32m        data: {[m
+[32m+[m[32m          group_id: groupId,[m
+[32m+[m[32m          user_uid: profile.uid,[m
+[32m+[m[32m          role: "administrator",[m
+[32m+[m[32m          joined_at: now,[m
+[32m+[m[32m          is_active: true[m
+[32m+[m[32m        }[m
+[32m+[m[32m      }[m
+[32m+[m[32m    );[m
+[32m+[m[32m    createdDocuments.push(document);[m
+[32m+[m[32m    existingDocuments.push(document);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return createdDocuments;[m
+[32m+[m[32m}[m
+[32m+[m
+ async function countGroupMembers(groupId) {[m
+   const rows = await appwriteCollectionRequest([m
+     COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,[m
+[36m@@ -1652,13 +1792,28 @@[m [masync function listChurchGroups(req, log) {[m
+     undefined,[m
+     [{ method: "limit", values: [500] }][m
+   );[m
+[32m+[m[32m  rows.documents = rows.documents || [];[m
+[32m+[m[32m  if (requestedScope && canManageScope(profile, requestedScope)) {[m
+[32m+[m[32m    await ensureStandardGroups(profile, requestedScope, rows.documents || []);[m
+[32m+[m[32m    if (rows.documents.length < 500) {[m
+[32m+[m[32m      const refreshed = await appwriteCollectionRequest([m
+[32m+[m[32m        COMMUNITY_GROUPS_COLLECTION_ID,[m
+[32m+[m[32m        "GET",[m
+[32m+[m[32m        "",[m
+[32m+[m[32m        undefined,[m
+[32m+[m[32m        [{ method: "limit", values: [500] }][m
+[32m+[m[32m      );[m
+[32m+[m[32m      rows.documents = refreshed.documents || [];[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+   const groups = [];[m
+   for (const document of (rows.documents || [])) {[m
+       const data = document.data || document;[m
+       if ((requestedScope && normalizeScopeType(data.scope_type) !== requestedScope) ||[m
+           !groupBelongsToProfile(data, profile)) continue;[m
+       const isCreator = data.created_by_uid === profile.uid;[m
+[31m-      if (!isCreator &&[m
+[32m+[m[32m      const isStandard = Boolean(standardGroupType(data.group_type));[m
+[32m+[m[32m      if (!isCreator && !isStandard &&[m
+           !(await isGroupMember(document.$id || data.group_id, profile.uid))) continue;[m
+       groups.push(mapGroupDocument([m
+         document,[m
+[36m@@ -1731,6 +1886,20 @@[m [masync function createChurchGroup(req, log) {[m
+     undefined,[m
+     [{ method: "limit", values: [500] }][m
+   );[m
+[32m+[m[32m  const existingStandard = (existing.documents || []).find(document => {[m
+[32m+[m[32m    const data = document.data || document;[m
+[32m+[m[32m    return data.is_active !== false &&[m
+[32m+[m[32m      groupMatchesScopeIdentity(data, profile, scopeType) &&[m
+[32m+[m[32m      standardGroupType(data.group_type)?.key === normalizeGroupType(groupType);[m
+[32m+[m[32m  });[m
+[32m+[m[32m  if (existingStandard) {[m
+[32m+[m[32m    const data = existingStandard.data || existingStandard;[m
+[32m+[m[32m    return mapGroupDocument([m
+[32m+[m[32m      existingStandard,[m
+[32m+[m[32m      profile,[m
+[32m+[m[32m      await countGroupMembers(existingStandard.$id || data.group_id)[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+   const normalizedName = name.toLowerCase();[m
+   const duplicate = (existing.documents || []).some(document => {[m
+     const data = document.data || document;[m
+[36m@@ -2600,6 +2769,65 @@[m [masync function createCctPost(req, log) {[m
+   return mapCctPostDocument(document);[m
+ }[m
+ [m
+[32m+[m[32masync function submitSupportRequest(req, log) {[m
+[32m+[m[32m  const firebaseUser = await verifyFirebaseRequest(req, log);[m
+[32m+[m[32m  const body = getRequestBody(req);[m
+[32m+[m
+[32m+[m[32m  const category = normalizeString(body.category || body.type || "");[m
+[32m+[m[32m  const subject = normalizeString(body.subject || "");[m
+[32m+[m[32m  const message = normalizeString(body.message || "");[m
+[32m+[m
+[32m+[m[32m  if (!category) {[m
+[32m+[m[32m    throw announcementError("Please choose a support category.", 400);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (!subject) {[m
+[32m+[m[32m    throw announcementError("Please add a subject.", 400);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (!message) {[m
+[32m+[m[32m    throw announcementError("Please add a message.", 400);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const userId = normalizeString(body.userId || body.user_id || firebaseUser.uid || "");[m
+[32m+[m[32m  const userEmail = normalizeString(body.userEmail || body.user_email || firebaseUser.email || "");[m
+[32m+[m[32m  const userName = normalizeString(body.userName || body.user_name || firebaseUser.name || firebaseUser.email || "");[m
+[32m+[m[32m  const appVersion = normalizeString(body.appVersion || body.app_version || "");[m
+[32m+[m[32m  const platform = normalizeString(body.platform || "Android");[m
+[32m+[m[32m  const now = new Date().toISOString();[m
+[32m+[m[32m  const documentId = randomUUID();[m
+[32m+[m
+[32m+[m[32m  const document = await appwriteCollectionRequest([m
+[32m+[m[32m    SUPPORT_REQUESTS_COLLECTION_ID,[m
+[32m+[m[32m    "POST",[m
+[32m+[m[32m    "",[m
+[32m+[m[32m    {[m
+[32m+[m[32m      documentId,[m
+[32m+[m[32m      data: {[m
+[32m+[m[32m        user_id: userId || firebaseUser.uid,[m
+[32m+[m[32m        user_email: userEmail || firebaseUser.email || "",[m
+[32m+[m[32m        user_name: userName,[m
+[32m+[m[32m        category: category.slice(0, 64),[m
+[32m+[m[32m        subject: subject.slice(0, 255),[m
+[32m+[m[32m        message: message.slice(0, 5000),[m
+[32m+[m[32m        status: "new",[m
+[32m+[m[32m        app_version: appVersion.slice(0, 128),[m
+[32m+[m[32m        platform: platform.slice(0, 32),[m
+[32m+[m[32m        created_at: now,[m
+[32m+[m[32m        updated_at: now[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  log(`[CCT_SUPPORT_REQUEST] uid=${firebaseUser.uid} category=${category} subject=${subject}`);[m
+[32m+[m
+[32m+[m[32m  return {[m
+[32m+[m[32m    success: true,[m
+[32m+[m[32m    id: document.$id || document.id || documentId,[m
+[32m+[m[32m    status: "new"[m
+[32m+[m[32m  };[m
+[32m+[m[32m}[m
+[32m+[m
+ [m
+ /* ============================================================[m
+  * ROUTE RESOLUTION[m
+[36m@@ -2799,6 +3027,12 @@[m [mexport default async ({[m
+       throw announcementError("Method not allowed.", 405);[m
+     }[m
+ [m
+[32m+[m[32m    if (route === "/api/support/feedback" || route === "api/support/feedback") {[m
+[32m+[m[32m      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);[m
+[32m+[m[32m      currentStage = "POST support request";[m
+[32m+[m[32m      return jsonResponse(res, await submitSupportRequest(req, log), 201);[m
+[32m+[m[32m    }[m
+[32m+[m
+     /*[m
+      * ========================================================[m
+      * COMMUNITY GROUP REGISTRY ROUTE[m

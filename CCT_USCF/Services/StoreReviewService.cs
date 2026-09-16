@@ -48,7 +48,7 @@ public sealed class StoreReviewService
             if (await TryLaunchInAppReviewFlowAsync())
                 return true;
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[RATE_USCF] Play review unavailable: {ex}");
         }
@@ -58,18 +58,22 @@ public sealed class StoreReviewService
 
     private static async Task<bool> TryLaunchInAppReviewFlowAsync()
     {
-        var context = Application.Context;
+        var context = Android.App.Application.Context;
         if (context == null)
             return false;
 
         var reviewManagerFactoryType = Java.Lang.Class.ForName("com.google.android.play.core.review.ReviewManagerFactory");
-        var createMethod = reviewManagerFactoryType.GetMethod("create", new[] { context.GetType() });
+        var createMethod = reviewManagerFactoryType.GetMethod(
+            "create",
+            new[] { Java.Lang.Class.FromType(context.GetType()) });
         var reviewManager = createMethod.Invoke(null, new[] { context });
         if (reviewManager == null)
             return false;
 
         var requestReviewFlowMethod = reviewManager.Class.GetMethod("requestReviewFlow");
-        var reviewInfoTask = requestReviewFlowMethod.Invoke(reviewManager, null) as Task;
+        var reviewInfoTask = requestReviewFlowMethod.Invoke(
+            reviewManager,
+            Array.Empty<Java.Lang.Object>()) as Android.Gms.Tasks.Task;
         if (reviewInfoTask == null)
             return false;
 
@@ -83,7 +87,7 @@ public sealed class StoreReviewService
             "launchReviewFlow",
             new[] { Java.Lang.Class.FromType(typeof(Activity)), reviewInfoType });
 
-        var launchTask = launchReviewFlowMethod.Invoke(reviewManager, new Java.Lang.Object[] { activity, reviewInfo }) as Task;
+        var launchTask = launchReviewFlowMethod.Invoke(reviewManager, new Java.Lang.Object[] { activity, reviewInfo }) as Android.Gms.Tasks.Task;
         if (launchTask == null)
             return false;
 
@@ -91,7 +95,7 @@ public sealed class StoreReviewService
         return true;
     }
 
-    private static async Task<Java.Lang.Object?> AwaitGoogleTaskAsync(Task googleTask)
+    private static async Task<Java.Lang.Object?> AwaitGoogleTaskAsync(Android.Gms.Tasks.Task googleTask)
     {
         var completionSource = new TaskCompletionSource<Java.Lang.Object?>();
         googleTask.AddOnCompleteListener(new GoogleTaskCompletionListener(completionSource));
@@ -101,7 +105,7 @@ public sealed class StoreReviewService
     private sealed class GoogleTaskCompletionListener(TaskCompletionSource<Java.Lang.Object?> completionSource)
         : Java.Lang.Object, IOnCompleteListener
     {
-        public void OnComplete(Task task)
+        public void OnComplete(Android.Gms.Tasks.Task task)
         {
             if (task == null)
             {
@@ -133,7 +137,7 @@ public sealed class StoreReviewService
             await Browser.Default.OpenAsync(fallbackUrl, BrowserLaunchMode.SystemPreferred);
             return true;
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[RATE_USCF] Store listing open failed: {ex}");
             return false;

@@ -1574,6 +1574,14 @@ function normalizeScopeType(value) {
 
 function canManageScope(profile, scopeType) {
   const scope = normalizeScopeType(scopeType);
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return profile.regionId !== null;
+  if (scope === "DISTRICT") return profile.districtId !== null;
+  if (scope === "BRANCH") return profile.branchId !== null;
+  return false;
+}
+
+function canDeleteScope(profile, scopeType) {
   const leadershipValues = [
     profile.role,
     profile.leadershipLevel,
@@ -1583,12 +1591,7 @@ function canManageScope(profile, scopeType) {
     ["leader", "admin", "administrator", "chairman", "pastor", "priest", "coordinator"]
       .some(token => value.includes(token))
   );
-  if (!isLeader) return false;
-  if (scope === "NATIONAL") return true;
-  if (scope === "REGIONAL") return profile.regionId !== null;
-  if (scope === "DISTRICT") return profile.districtId !== null;
-  if (scope === "BRANCH") return profile.branchId !== null;
-  return false;
+  return isLeader && canManageScope(profile, scopeType);
 }
 
 function groupBelongsToProfile(group, profile) {
@@ -1602,8 +1605,127 @@ function groupBelongsToProfile(group, profile) {
 
 function canManageGroup(group, profile) {
   return group.created_by_uid === profile.uid ||
-    (canManageScope(profile, group.scope_type) &&
+    (canDeleteScope(profile, group.scope_type) &&
       groupBelongsToProfile(group, profile));
+}
+
+const STANDARD_GROUP_TYPES = [
+  { key: "CHOIR", label: "Choir" },
+  { key: "PRAYER_TEAM", label: "Prayer Team" },
+  { key: "BIBLE_STUDY", label: "Bible Study" },
+  { key: "LEADERS", label: "Leaders" }
+];
+
+function normalizeGroupType(value) {
+  return normalizeString(value)
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function standardGroupType(value) {
+  const normalized = normalizeGroupType(value);
+  return STANDARD_GROUP_TYPES.find(type =>
+    type.key === normalized ||
+    (type.key === "PRAYER_TEAM" && normalized === "PRAYER") ||
+    (type.key === "BIBLE_STUDY" && normalized === "BIBLESTUDY") ||
+    (type.key === "LEADERS" && normalized === "LEADER")
+  );
+}
+
+function groupMatchesScopeIdentity(group, profile, scopeType) {
+  const scope = normalizeScopeType(scopeType);
+  if (normalizeScopeType(group.scope_type) !== scope) return false;
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return String(group.region_id ?? "") === String(profile.regionId ?? "");
+  if (scope === "DISTRICT") return String(group.district_id ?? "") === String(profile.districtId ?? "");
+  return String(group.branch_id ?? "") === String(profile.branchId ?? "");
+}
+
+function standardGroupName(scopeType, standardType) {
+  const scopeLabel = scopeType.charAt(0) + scopeType.slice(1).toLowerCase();
+  return `${scopeLabel} ${standardType.label}`;
+}
+
+async function ensureStandardGroups(profile, scopeType, documents) {
+  const existingDocuments = documents || [];
+  const createdDocuments = [];
+
+  for (const standardType of STANDARD_GROUP_TYPES) {
+    const existing = existingDocuments.find(document => {
+      const data = document.data || document;
+      return data.is_active !== false &&
+        groupMatchesScopeIdentity(data, profile, scopeType) &&
+        standardGroupType(data.group_type)?.key === standardType.key;
+    });
+
+    if (existing) {
+      continue;
+    }
+
+    const scope = normalizeScopeType(scopeType);
+    const now = new Date().toISOString();
+    const groupId = randomUUID();
+    const data = {
+      group_name: standardGroupName(scope, standardType),
+      description: `${standardGroupName(scope, standardType)} group`,
+      group_type: standardType.key,
+      scope_type: scope,
+      parent_group_id: scope === "NATIONAL"
+        ? "national"
+        : scope === "REGIONAL"
+          ? `region:${profile.regionId}`
+          : scope === "DISTRICT"
+            ? `district:${profile.districtId}`
+            : `branch:${profile.branchId}`,
+      region_id: scope === "REGIONAL" ? profile.regionId : null,
+      district_id: scope === "DISTRICT" ? profile.districtId : null,
+      branch_id: scope === "BRANCH" ? profile.branchId : null,
+      created_by_uid: profile.uid,
+      created_at: now,
+      is_active: true
+    };
+
+    const document = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "POST",
+      "",
+      { documentId: groupId, data }
+    );
+    await appwriteCollectionRequest(
+      COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+      "POST",
+      "",
+      {
+        documentId: `${groupId}:${profile.uid}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 36),
+        data: {
+          group_id: groupId,
+          user_uid: profile.uid,
+          role: "administrator",
+          joined_at: now,
+          is_active: true
+        }
+      }
+    );
+    createdDocuments.push(document);
+    existingDocuments.push(document);
+  }
+
+  return createdDocuments;
+}
+
+async function countGroupMembers(groupId) {
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [groupId] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [500] }
+    ]
+  );
+  return (rows.documents || []).length;
 }
 
 async function isGroupMember(groupId, uid) {
@@ -1670,15 +1792,34 @@ async function listChurchGroups(req, log) {
     undefined,
     [{ method: "limit", values: [500] }]
   );
+  rows.documents = rows.documents || [];
+  if (requestedScope && canManageScope(profile, requestedScope)) {
+    await ensureStandardGroups(profile, requestedScope, rows.documents || []);
+    if (rows.documents.length < 500) {
+      const refreshed = await appwriteCollectionRequest(
+        COMMUNITY_GROUPS_COLLECTION_ID,
+        "GET",
+        "",
+        undefined,
+        [{ method: "limit", values: [500] }]
+      );
+      rows.documents = refreshed.documents || [];
+    }
+  }
   const groups = [];
   for (const document of (rows.documents || [])) {
       const data = document.data || document;
       if ((requestedScope && normalizeScopeType(data.scope_type) !== requestedScope) ||
           !groupBelongsToProfile(data, profile)) continue;
       const isCreator = data.created_by_uid === profile.uid;
-      if (!isCreator &&
+      const isStandard = Boolean(standardGroupType(data.group_type));
+      if (!isCreator && !isStandard &&
           !(await isGroupMember(document.$id || data.group_id, profile.uid))) continue;
-      groups.push(mapGroupDocument(document, profile));
+      groups.push(mapGroupDocument(
+        document,
+        profile,
+        await countGroupMembers(document.$id || data.group_id)
+      ));
   }
   return { groups };
 }
@@ -1711,7 +1852,7 @@ async function createChurchGroup(req, log) {
 
     const isOwner = data.created_by_uid === profile.uid;
     const canManage =
-      canManageScope(profile, data.scope_type) &&
+      canDeleteScope(profile, data.scope_type) &&
       groupBelongsToProfile(data, profile);
     if (!isOwner && !canManage) {
       throw announcementError("You are not authorized to delete this group.", 403);
@@ -1745,6 +1886,20 @@ async function createChurchGroup(req, log) {
     undefined,
     [{ method: "limit", values: [500] }]
   );
+  const existingStandard = (existing.documents || []).find(document => {
+    const data = document.data || document;
+    return data.is_active !== false &&
+      groupMatchesScopeIdentity(data, profile, scopeType) &&
+      standardGroupType(data.group_type)?.key === normalizeGroupType(groupType);
+  });
+  if (existingStandard) {
+    const data = existingStandard.data || existingStandard;
+    return mapGroupDocument(
+      existingStandard,
+      profile,
+      await countGroupMembers(existingStandard.$id || data.group_id)
+    );
+  }
   const normalizedName = name.toLowerCase();
   const duplicate = (existing.documents || []).some(document => {
     const data = document.data || document;
