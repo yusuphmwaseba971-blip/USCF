@@ -225,6 +225,59 @@ const announcementTables = Array.from(new Set([preferredAnnouncementTable, "chur
 const notificationTables = Array.from(new Set([preferredNotificationTable, "church_notifications"]));
 const deviceTokenTables = Array.from(new Set([preferredDeviceTokenTable, "church_device_tokens"]));
 
+/*
+ * ============================================================
+ * 0. COMMUNITY GROUP REGISTRY
+ * ============================================================
+ */
+
+const groupsTable = process.env.APPWRITE_GROUPS_TABLE_ID || "cct_groups";
+const groupMembersTable = process.env.APPWRITE_GROUP_MEMBERS_TABLE_ID || "cct_group_members";
+
+await ensureTable(groupsTable, "CCT Groups");
+for (const [key, size] of [
+  ["group_id", 128],
+  ["name", 255],
+  ["group_type", 64],
+  ["scope_type", 32],
+  ["scope_id", 128],
+  ["region_id", 128],
+  ["district_id", 128],
+  ["branch_id", 128],
+  ["created_by_uid", 255],
+  ["icon_key", 64],
+  ["created_at", 64],
+  ["updated_at", 64]
+]) {
+  await ensureVarchar(groupsTable, key, size);
+}
+await ensureText(groupsTable, "description");
+await ensureBoolean(groupsTable, "is_standard", false, false);
+await ensureBoolean(groupsTable, "is_active", false, true);
+await ensureIndex(groupsTable, "groups_group_id_unique", "unique", ["group_id"]);
+await ensureIndex(
+  groupsTable,
+  "groups_scope_identity_unique",
+  "unique",
+  ["scope_type", "scope_id", "group_type"]
+);
+await ensureIndex(groupsTable, "groups_scope", "key", ["scope_type", "scope_id"]);
+await ensureIndex(groupsTable, "groups_group_type", "key", ["group_type"]);
+await ensureIndex(groupsTable, "groups_active", "key", ["is_active"]);
+
+await ensureTable(groupMembersTable, "Community Group Members");
+for (const [key, size] of [
+  ["group_id", 128],
+  ["user_uid", 255],
+  ["role", 64],
+  ["joined_at", 64]
+]) {
+  await ensureVarchar(groupMembersTable, key, size);
+}
+await ensureBoolean(groupMembersTable, "is_active", false, true);
+await ensureIndex(groupMembersTable, "group_user_unique", "unique", ["group_id", "user_uid"]);
+await ensureIndex(groupMembersTable, "group_members_active", "key", ["group_id", "user_uid", "is_active"]);
+
 await ensureTable(prayerActionsTable, "Prayer Actions");
 await ensureVarchar(prayerActionsTable, "prayer_id", 255, true);
 await ensureVarchar(prayerActionsTable, "user_uid", 255, true);
@@ -320,6 +373,8 @@ for (const tableId of Array.from(new Set([
   ...notificationTables,
   preferredDeviceTokenTable,
   ...deviceTokenTables,
+  groupsTable,
+  groupMembersTable,
   prayerActionsTable
 ])) ) {
   console.log(`  - ${tableId}`);

@@ -225,6 +225,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 {
                     DocumentId = group.GroupId,
                     Name = group.GroupName,
+                    Description = group.Description,
                     Level = group.ScopeType,
                     GroupType = group.GroupType,
                     CanManage = true,
@@ -252,25 +253,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private async Task<List<FirestoreGroupDocument>> GetGroupsForLevelAsync(string level, CCT_USCF.Models.CurrentUser user)
     {
-        IReadOnlyList<CCT_USCF.Models.ChurchGroup> registeredGroups;
-
-        try
-        {
-            registeredGroups = await _groupService.GetGroupsAsync(level.ToUpperInvariant());
-        }
-        catch (HttpRequestException ex)
-        {
-            registeredGroups = Array.Empty<CCT_USCF.Models.ChurchGroup>();
-            System.Diagnostics.Debug.WriteLine(
-                $"[CHURCH GROUP] {level} registry unavailable; no offline groups will be synthesized. {ex}");
-        }
-        catch (InvalidOperationException ex) when (
-            ex.Message.StartsWith("Group request failed", StringComparison.Ordinal))
-        {
-            registeredGroups = Array.Empty<CCT_USCF.Models.ChurchGroup>();
-            System.Diagnostics.Debug.WriteLine(
-                $"[CHURCH GROUP] {level} registry returned an error; no offline groups will be synthesized. {ex}");
-        }
+        var registeredGroups = await _groupService.GetGroupsAsync(level.ToUpperInvariant());
 
         var groups = registeredGroups
             .Where(group => group.IsActive)
@@ -285,6 +268,8 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 BranchId = group.BranchId,
                 GroupType = group.GroupType,
                 CanManage = group.CanManage,
+                MemberCount = group.MemberCount,
+                IsStandard = group.IsStandard,
                 IsCustom = string.Equals(group.GroupType, "CUSTOM", StringComparison.OrdinalIgnoreCase),
                 MemberUids = new List<string> { GetFirebaseUid() }
             })
@@ -308,13 +293,14 @@ public partial class ChurchGroupSelectionPage : ContentPage
         };
     }
 
-    private async Task<string> BuildGroupMetaAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
+    private Task<string> BuildGroupMetaAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
     {
-        var memberNames = await GetMembersForGroupAsync(group, user);
-        if (memberNames.Count > 0)
-            return $"{memberNames.Count} real members • {string.Join(", ", memberNames.Take(2))}{(memberNames.Count > 2 ? ", ..." : string.Empty)}";
-
-        return "community group • no real members assigned yet";
+        return Task.FromResult(
+            group.MemberCount > 0
+                ? group.MemberCount == 1
+                    ? "1 member"
+                    : $"{group.MemberCount} members"
+                : string.Empty);
     }
 
     private async Task<List<string>> GetMembersForGroupAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
@@ -405,29 +391,8 @@ public partial class ChurchGroupSelectionPage : ContentPage
         var isMember = IsMemberOfGroup(group, user);
         if (!isMember)
         {
-            var memberNames = await GetMembersForGroupAsync(group, user);
-            var summary = memberNames.Count > 0
-                ? $"Currently visible members: {string.Join(", ", memberNames.Take(6))}."
-                : "No members are currently assigned to this group in Firebase.";
-
             await DisplayAlert("Membership required",
-                $"You are not a member of the {group.Name} group.\n\n{summary}\n\nPlease communicate with your leader or Chairman.", "OK");
-            return;
-        }
-
-        if (!group.IsCustom &&
-            (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) ||
-            group.Name.Contains("Branch", StringComparison.OrdinalIgnoreCase))
-           )
-        {
-            var branchId = group.BranchId ?? user.BranchId ?? 0;
-            if (branchId <= 0)
-            {
-                await DisplayAlert("Branch unavailable", "Your branch assignment could not be verified.", "OK");
-                return;
-            }
-            var branchName = !string.IsNullOrWhiteSpace(group.Name) ? group.Name : (user.Branch ?? "Branch Group");
-            await Shell.Current.GoToAsync($"{nameof(BranchChatPage)}?branchId={branchId}&branchName={Uri.EscapeDataString(branchName)}");
+                $"You are not a member of the {group.Name} group. Please communicate with your leader or Chairman.", "OK");
             return;
         }
 
@@ -441,6 +406,18 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private bool IsMemberOfGroup(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
     {
+        if (group.IsStandard &&
+            GroupMatchesScope(group.Level, new CCT_USCF.Models.ChurchGroup
+            {
+                ScopeType = group.Level,
+                RegionId = group.RegionId > 0 ? group.RegionId : null,
+                DistrictId = group.DistrictId > 0 ? group.DistrictId : null,
+                BranchId = group.BranchId
+            }, user))
+        {
+            return true;
+        }
+
         var firebaseUid = GetFirebaseUid();
 
         var isInMemberIds = group.MemberIds?.Contains(user.Id.ToString(), StringComparer.OrdinalIgnoreCase) == true;
@@ -539,6 +516,15 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         [FirestoreProperty("groupType")]
         public string GroupType { get; set; } = string.Empty;
+
+        [FirestoreProperty("description")]
+        public string Description { get; set; } = string.Empty;
+
+        [FirestoreProperty("memberCount")]
+        public int MemberCount { get; set; }
+
+        [FirestoreProperty("isStandard")]
+        public bool IsStandard { get; set; }
 
         public bool CanManage { get; set; }
 

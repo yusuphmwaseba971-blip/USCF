@@ -1929,6 +1929,10 @@ public partial class GroupChatPage : ContentPage
                 string.Empty;
             _replyingTo = null;
             ReplyPreviewLayout.IsVisible = false;
+            await DisplayAlert(
+                "Message sent",
+                "Your message was sent.",
+                "OK");
         }
         catch (Exception ex)
         {
@@ -1936,7 +1940,7 @@ public partial class GroupChatPage : ContentPage
                 $"[GROUP_CHAT] Send text failed: {ex}");
 
             await DisplayAlert(
-                "Message not sent",
+                "Message failed to send",
                 ex.Message,
                 "OK");
         }
@@ -3316,60 +3320,9 @@ public partial class GroupChatPage : ContentPage
 
     private string GetBackendCommunityId()
     {
-        // Registered custom groups use UUID identities. Never collapse them
-        // onto the numeric branch/district/region community id.
-        if (Guid.TryParse(_groupId, out _))
-            return _groupId;
-
-        var level =
-            NormalizeLevel(
-                OrganizationalLevel);
-
-        if (string.Equals(
-                level,
-                "Branch",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            if (_branchId > 0)
-            {
-                return _branchId.ToString();
-            }
-
-            var parsedBranchId =
-                TryParseBranchIdFromGroupId(
-                    _groupId);
-
-            if (parsedBranchId > 0)
-            {
-                return parsedBranchId.ToString();
-            }
-        }
-
-        if (string.Equals(
-                level,
-                "District",
-                StringComparison.OrdinalIgnoreCase) &&
-            _districtId > 0)
-        {
-            return _districtId.ToString();
-        }
-
-        if ((string.Equals(
-                level,
-                "Regional",
-                StringComparison.OrdinalIgnoreCase)
-             ||
-             string.Equals(
-                 level,
-                 "Region",
-                 StringComparison.OrdinalIgnoreCase))
-            &&
-            _regionId > 0)
-        {
-            return _regionId.ToString();
-        }
-
-        return _groupId;
+        // A selected Group record owns the chat identity. Scope IDs remain
+        // metadata for authorization and display, never the conversation key.
+        return _groupId.Trim();
     }
 
     // ============================================================
