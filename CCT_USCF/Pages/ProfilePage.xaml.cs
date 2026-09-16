@@ -3,11 +3,13 @@ namespace CCT_USCF.Pages;
 public partial class ProfilePage : ContentPage
 {
     private readonly Services.AuthService _authService;
+    private readonly Services.StoreReviewService _storeReviewService;
 
     public ProfilePage()
     {
         InitializeComponent();
         _authService = LoginRegisterHelpers.GetAuthService();
+        _storeReviewService = MauiProgram.Services.GetRequiredService<Services.StoreReviewService>();
     }
 
     protected override void OnAppearing()
@@ -73,6 +75,23 @@ public partial class ProfilePage : ContentPage
         MauiProgram.SetCurrentUser(null);
         MauiProgram.NotifyAuthChanged();
         await Shell.Current.GoToAsync("//home");
+    }
+
+    private async void OnRateUsClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            await _storeReviewService.RequestReviewAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PROFILE] Rate USCF failed: {ex}");
+        }
+    }
+
+    private async void OnHelpSupportClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync(nameof(Pages.HelpSupportPage));
     }
 
     private async void OnSettingsClicked(object sender, EventArgs e)

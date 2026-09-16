@@ -80,6 +80,10 @@ public partial class AppShell : Shell
             typeof(VerifyEmailPage));
 
         Routing.RegisterRoute(
+            nameof(HelpSupportPage),
+            typeof(HelpSupportPage));
+
+        Routing.RegisterRoute(
             nameof(PrivacyPolicyPage),
             typeof(PrivacyPolicyPage));
 

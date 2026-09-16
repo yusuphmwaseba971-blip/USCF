@@ -847,9 +847,6 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            await EnsureCurrentUserMembershipAsync(
-                currentUser);
-
             List<GroupMemberUi> members;
             try
             {
@@ -3040,20 +3037,11 @@ public partial class GroupChatPage : ContentPage
     private bool IsAuthorizedToManageMembers(
         CCT_USCF.Models.CurrentUser currentUser)
     {
-        var level =
-            NormalizeLevel(
-                OrganizationalLevel);
-
-        if (string.IsNullOrWhiteSpace(
-                level))
-        {
-            return false;
-        }
-
-        return string.Equals(
-            currentUser.LeadershipLevel,
-            level,
-            StringComparison.OrdinalIgnoreCase);
+        // Group access has already established that this user is a member of
+        // the selected group. Membership, not organizational leadership, grants
+        // the ability to invite another member.
+        return !string.IsNullOrWhiteSpace(_groupId) &&
+               !string.IsNullOrWhiteSpace(GetCurrentUserUid());
     }
 
     private async Task<(
@@ -3080,6 +3068,27 @@ public partial class GroupChatPage : ContentPage
             return (
                 false,
                 "The group could not be identified.");
+        }
+
+        try
+        {
+            var registeredGroups = await _groupService.GetGroupsAsync(
+                level.ToUpperInvariant());
+            if (!registeredGroups.Any(group =>
+                    string.Equals(group.GroupId, _groupId, StringComparison.Ordinal)))
+            {
+                return (
+                    false,
+                    "You are not a member of this group.");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP_CHAT] Membership validation failed: {ex}");
+            return (
+                false,
+                "The group membership could not be verified.");
         }
 
         if (IsLeaderGroup())
@@ -3232,144 +3241,18 @@ public partial class GroupChatPage : ContentPage
     // ENSURE MEMBERSHIP
     // ============================================================
 
-    private async Task EnsureCurrentUserMembershipAsync(
-        CCT_USCF.Models.CurrentUser currentUser)
-    {
-        try
-        {
-            var currentUid =
-                GetCurrentUserUid();
-
-            if (string.IsNullOrWhiteSpace(
-                    currentUid))
-            {
-                return;
-            }
-
-            var member =
-                new FirestoreGroupMemberDocument
-                {
-                    DocumentId =
-                        currentUid,
-
-                    Uid =
-                        currentUid,
-
-                    FullName =
-                        !string.IsNullOrWhiteSpace(
-                            currentUser.FullName)
-                            ? currentUser.FullName
-                            : currentUser.Username,
-
-                    Username =
-                        currentUser.Username,
-
-                    Role =
-                        currentUser.Role,
-
-                    LeadershipLevel =
-                        currentUser.LeadershipLevel,
-
-                    GroupName =
-                        GroupName,
-
-                    OrganizationalLevel =
-                        OrganizationalLevel,
-
-                    RegionId =
-                        currentUser.RegionId
-                        ?? RegionId,
-
-                    DistrictId =
-                        currentUser.DistrictId
-                        ?? DistrictId,
-
-                    BranchId =
-                        currentUser.BranchId
-                        ?? BranchId,
-
-                    Status =
-                        "active",
-
-                    CreatedAt =
-                        DateTime.UtcNow
-                };
-
-            await _firestore
-                .GetCollection(
-                    $"groups/{_groupId}/members")
-                .GetDocument(
-                    currentUid)
-                .SetDataAsync(
-                    member);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Ensure membership failed: {ex}");
-        }
-    }
-
     // ============================================================
     // COMMUNITY ID
     // ============================================================
 
     private string GetBackendCommunityId()
     {
-        // Registered custom groups use UUID identities. Never collapse them
-        // onto the numeric branch/district/region community id.
-        if (Guid.TryParse(_groupId, out _))
-            return _groupId;
+        if (string.IsNullOrWhiteSpace(_groupId))
+            throw new InvalidOperationException("The selected group has no stable group ID.");
 
-        var level =
-            NormalizeLevel(
-                OrganizationalLevel);
-
-        if (string.Equals(
-                level,
-                "Branch",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            if (_branchId > 0)
-            {
-                return _branchId.ToString();
-            }
-
-            var parsedBranchId =
-                TryParseBranchIdFromGroupId(
-                    _groupId);
-
-            if (parsedBranchId > 0)
-            {
-                return parsedBranchId.ToString();
-            }
-        }
-
-        if (string.Equals(
-                level,
-                "District",
-                StringComparison.OrdinalIgnoreCase) &&
-            _districtId > 0)
-        {
-            return _districtId.ToString();
-        }
-
-        if ((string.Equals(
-                level,
-                "Regional",
-                StringComparison.OrdinalIgnoreCase)
-             ||
-             string.Equals(
-                 level,
-                 "Region",
-                 StringComparison.OrdinalIgnoreCase))
-            &&
-            _regionId > 0)
-        {
-            return _regionId.ToString();
-        }
-
-        return _groupId;
+        // Organizational IDs are metadata only. They must never become the
+        // destination identity for messages, cache rows, or realtime events.
+        return _groupId.Trim();
     }
 
     // ============================================================

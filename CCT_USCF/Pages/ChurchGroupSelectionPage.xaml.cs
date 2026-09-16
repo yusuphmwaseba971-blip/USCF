@@ -151,31 +151,19 @@ public partial class ChurchGroupSelectionPage : ContentPage
         };
     }
 
-    private bool CanCreateGroups(string level, CCT_USCF.Models.CurrentUser user)
+    private static bool CanCreateGroups(string level, CCT_USCF.Models.CurrentUser user)
+    {
+        // Any authenticated user may create a group, but only inside an
+        // organizational scope that is present on their verified profile.
+        return level switch
         {
-            var values = new[] { user.Role, user.LeadershipLevel, user.LeadershipDuty }
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value!.ToLowerInvariant())
-                .ToList();
-            var isLeader = values.Any(value =>
-                value.Contains("leader") ||
-                value.Contains("admin") ||
-                value.Contains("chairman") ||
-                value.Contains("pastor") ||
-                value.Contains("priest") ||
-                value.Contains("coordinator"));
-            if (!isLeader)
-                return false;
-
-            return level switch
-            {
-                "National" => true,
-                "Regional" => user.RegionId.HasValue,
-                "District" => user.DistrictId.HasValue,
-                "Branch" => user.BranchId.HasValue,
-                _ => false
-            };
-        }
+            "National" => true,
+            "Regional" => user.RegionId.HasValue,
+            "District" => user.DistrictId.HasValue,
+            "Branch" => user.BranchId.HasValue,
+            _ => false
+        };
+    }
 
         private async void OnAddGroupClicked(object sender, EventArgs e)
         {
@@ -231,6 +219,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                     RegionId = group.RegionId ?? 0,
                     DistrictId = group.DistrictId ?? 0,
                     BranchId = group.BranchId,
+                    MemberCount = group.MemberCount,
                     IsCustom = true,
                     MemberUids = new List<string> { GetFirebaseUid() }
                 };
@@ -285,6 +274,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 BranchId = group.BranchId,
                 GroupType = group.GroupType,
                 CanManage = group.CanManage,
+                MemberCount = group.MemberCount,
                 IsCustom = string.Equals(group.GroupType, "CUSTOM", StringComparison.OrdinalIgnoreCase),
                 MemberUids = new List<string> { GetFirebaseUid() }
             })
@@ -310,11 +300,16 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private async Task<string> BuildGroupMetaAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
     {
+        if (group.MemberCount > 0)
+            return group.MemberCount == 1
+                ? "1 member"
+                : $"{group.MemberCount} members";
+
         var memberNames = await GetMembersForGroupAsync(group, user);
         if (memberNames.Count > 0)
-            return $"{memberNames.Count} real members • {string.Join(", ", memberNames.Take(2))}{(memberNames.Count > 2 ? ", ..." : string.Empty)}";
+            return $"{memberNames.Count} members • {string.Join(", ", memberNames.Take(2))}{(memberNames.Count > 2 ? ", ..." : string.Empty)}";
 
-        return "community group • no real members assigned yet";
+        return "community group • no members assigned yet";
     }
 
     private async Task<List<string>> GetMembersForGroupAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
@@ -366,37 +361,6 @@ public partial class ChurchGroupSelectionPage : ContentPage
         if (group.MemberUids != null && group.MemberUids.Contains(profile.DocumentId, StringComparer.OrdinalIgnoreCase))
             return true;
 
-        if (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) &&
-            profile.BranchId > 0 &&
-            user.BranchId.HasValue &&
-            profile.BranchId == user.BranchId.Value)
-        {
-            return true;
-        }
-
-        if (string.Equals(group.Level, "Regional", StringComparison.OrdinalIgnoreCase) &&
-            profile.RegionId > 0 &&
-            user.RegionId.HasValue &&
-            profile.RegionId == user.RegionId.Value)
-        {
-            return true;
-        }
-
-        if (string.Equals(group.Level, "District", StringComparison.OrdinalIgnoreCase) &&
-            profile.DistrictId > 0 &&
-            user.DistrictId.HasValue &&
-            profile.DistrictId == user.DistrictId.Value)
-        {
-            return true;
-        }
-
-        if (group.Name.Contains("Leader Group", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(profile.LeadershipLevel) &&
-            string.Equals(profile.LeadershipLevel, group.Level, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
         return false;
     }
 
@@ -412,22 +376,6 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
             await DisplayAlert("Membership required",
                 $"You are not a member of the {group.Name} group.\n\n{summary}\n\nPlease communicate with your leader or Chairman.", "OK");
-            return;
-        }
-
-        if (!group.IsCustom &&
-            (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) ||
-            group.Name.Contains("Branch", StringComparison.OrdinalIgnoreCase))
-           )
-        {
-            var branchId = group.BranchId ?? user.BranchId ?? 0;
-            if (branchId <= 0)
-            {
-                await DisplayAlert("Branch unavailable", "Your branch assignment could not be verified.", "OK");
-                return;
-            }
-            var branchName = !string.IsNullOrWhiteSpace(group.Name) ? group.Name : (user.Branch ?? "Branch Group");
-            await Shell.Current.GoToAsync($"{nameof(BranchChatPage)}?branchId={branchId}&branchName={Uri.EscapeDataString(branchName)}");
             return;
         }
 
@@ -448,35 +396,6 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         if (isInMemberIds || isInMemberUids)
             return true;
-
-        if (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) &&
-            user.BranchId.HasValue &&
-            group.BranchId.HasValue &&
-            user.BranchId.Value == group.BranchId.Value)
-        {
-            return true;
-        }
-
-        if (string.Equals(group.Level, "Regional", StringComparison.OrdinalIgnoreCase) &&
-            user.RegionId.HasValue &&
-            group.RegionId == user.RegionId.Value)
-        {
-            return true;
-        }
-
-        if (string.Equals(group.Level, "District", StringComparison.OrdinalIgnoreCase) &&
-            user.DistrictId.HasValue &&
-            group.DistrictId == user.DistrictId.Value)
-        {
-            return true;
-        }
-
-        if (group.Name.Contains("Leader Group", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(user.LeadershipLevel) &&
-            string.Equals(user.LeadershipLevel, group.Level, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
 
         return false;
     }
@@ -541,6 +460,8 @@ public partial class ChurchGroupSelectionPage : ContentPage
         public string GroupType { get; set; } = string.Empty;
 
         public bool CanManage { get; set; }
+
+        public int MemberCount { get; set; }
 
         [FirestoreProperty("isCustom")]
         public bool IsCustom { get; set; }

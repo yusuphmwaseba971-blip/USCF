@@ -46,7 +46,7 @@ public partial class VerifyEmailPage : ContentPage
                 return;
             }
 
-            ShowStatus("Your email hasn't been verified yet. Please check your inbox and try again.");
+            ShowStatus("Your email is not verified yet. Please open the verification email and try again.");
         }
         catch (Exception ex)
         {
@@ -61,8 +61,14 @@ public partial class VerifyEmailPage : ContentPage
 
     private async void OnResendClicked(object sender, EventArgs e)
     {
-        if (_busy || _resendSecondsRemaining > 0)
+        if (_busy)
             return;
+
+        if (_resendSecondsRemaining > 0)
+        {
+            ShowStatus("Please wait before requesting another verification email.", isError: false);
+            return;
+        }
 
         if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
         {
@@ -74,7 +80,7 @@ public partial class VerifyEmailPage : ContentPage
         try
         {
             await _authService.SendVerificationEmailAsync();
-            ShowStatus("Verification email sent. Please check your inbox.", isError: false);
+            ShowStatus("Verification email sent.", isError: false);
             StartResendCooldown();
         }
         catch (Exception ex)

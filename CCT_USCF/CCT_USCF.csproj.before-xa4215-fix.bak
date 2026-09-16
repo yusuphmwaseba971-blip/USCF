@@ -135,9 +135,6 @@
     <PackageReference Include="Plugin.Firebase.Auth" Version="5.0.1" />
     <PackageReference Include="Plugin.Firebase.Firestore" Version="4.0.0" />
     <PackageReference Include="Plugin.Firebase.CloudMessaging" Version="4.0.1" />
-    <!-- Prevent the legacy Xamarin.GoogleAndroid.Annotations binding from generating duplicate
-         android.annotation.* Java types that are already supplied by Mono.Android. -->
-    <PackageReference Include="Xamarin.GoogleAndroid.Annotations" Version="4.1.1.16" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Xamarin.GooglePlayServices.Auth" Version="121.2.0.2" />
 
     <!-- Logging -->

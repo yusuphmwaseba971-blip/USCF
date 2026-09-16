@@ -234,7 +234,35 @@
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="EventsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnEventsClicked" />
                     </Grid>
-                    <Grid x:Name="SettingsCard" Row="4" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                    <Grid x:Name="RateUsCard" Row="4" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Grid.ColumnSpan="3" BackgroundColor="#FFFFFF" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                            <Border.Shadow><Shadow Brush="#173B28" Offset="0,2" Radius="8" Opacity="0.06" /></Border.Shadow>
+                        </Border>
+                        <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="#F9F2D8" StrokeThickness="0" StrokeShape="RoundRectangle 16">
+                            <Label Text="⭐" FontSize="24" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="Rate USCF" FontSize="16" FontAttributes="Bold" TextColor="#172B23" />
+                            <Label Text="Enjoying CCT-USCF? Share your experience." FontSize="12" TextColor="#52645B" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                        <Button x:Name="RateUsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnRateUsClicked" />
+                    </Grid>
+                    <Grid x:Name="SupportCard" Row="5" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Grid.ColumnSpan="3" BackgroundColor="#FFFFFF" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                            <Border.Shadow><Shadow Brush="#173B28" Offset="0,2" Radius="8" Opacity="0.06" /></Border.Shadow>
+                        </Border>
+                        <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="#EAF3ED" StrokeThickness="0" StrokeShape="RoundRectangle 16">
+                            <Label Text="💬" FontSize="24" TextColor="#1A4D3A" HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="Help &amp; Support" FontSize="16" FontAttributes="Bold" TextColor="#172B23" />
+                            <Label Text="Get help, ask a question, or share feedback." FontSize="12" TextColor="#52645B" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                        <Button x:Name="HelpSupportButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnHelpSupportClicked" />
+                    </Grid>
+                    <Grid x:Name="SettingsCard" Row="6" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
                         <Border Grid.ColumnSpan="3" BackgroundColor="#FFFFFF" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 16">
                             <Border.Shadow><Shadow Brush="#173B28" Offset="0,2" Radius="8" Opacity="0.06" /></Border.Shadow>
                         </Border>

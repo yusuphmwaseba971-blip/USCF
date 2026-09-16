@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.HelpSupportPage"
+    Title="Help &amp; Support"
+    BackgroundColor="#F7F4EF">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20,28,20,32" Spacing="18">
+            <Label
+                Text="Help &amp; Support"
+                FontSize="30"
+                FontAttributes="Bold"
+                TextColor="#173B28"
+                HorizontalTextAlignment="Center" />
+
+            <Label
+                Text="How can we help?"
+                FontSize="18"
+                FontAttributes="Bold"
+                TextColor="#1A4D3A"
+                HorizontalTextAlignment="Center" />
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="#FFFFFF"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="12">
+                    <Label
+                        Text="Category"
+                        FontSize="12"
+                        FontAttributes="Bold"
+                        CharacterSpacing="1.2"
+                        TextColor="#1A4D3A" />
+
+                    <Picker
+                        x:Name="CategoryPicker"
+                        Title="Select a category"
+                        TextColor="#173B28"
+                        BackgroundColor="#F7F4EF" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="#FFFFFF"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Subject" FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="#1A4D3A" />
+                    <Entry
+                        x:Name="SubjectEntry"
+                        Placeholder="Brief summary"
+                        BackgroundColor="#F7F4EF"
+                        TextColor="#173B28" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="#FFFFFF"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Message" FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="#1A4D3A" />
+                    <Editor
+                        x:Name="MessageEditor"
+                        HeightRequest="170"
+                        Placeholder="Describe your issue or suggestion..."
+                        BackgroundColor="#F7F4EF"
+                        TextColor="#173B28"
+                        AutoSize="TextChanges" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button
+                x:Name="SubmitButton"
+                Text="SEND FEEDBACK"
+                Clicked="OnSendFeedbackClicked"
+                BackgroundColor="#1A4D3A"
+                TextColor="#FFFFFF"
+                FontAttributes="Bold"
+                CornerRadius="16"
+                HeightRequest="56" />
+
+            <Label
+                x:Name="StatusLabel"
+                IsVisible="False"
+                TextColor="#B42318"
+                FontSize="14"
+                LineBreakMode="WordWrap"
+                HorizontalTextAlignment="Center" />
+
+            <BoxView HeightRequest="1" Color="#EAE1D4" />
+
+            <Label
+                Text="Contact Support"
+                FontSize="15"
+                FontAttributes="Bold"
+                TextColor="#1A4D3A"
+                HorizontalTextAlignment="Center" />
+
+            <Button
+                x:Name="ContactSupportButton"
+                Text="Contact Support"
+                Clicked="OnContactSupportClicked"
+                BackgroundColor="Transparent"
+                BorderColor="#1A4D3A"
+                BorderWidth="1"
+                TextColor="#1A4D3A"
+                CornerRadius="14"
+                HeightRequest="50" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

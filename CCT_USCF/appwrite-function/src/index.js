@@ -1538,6 +1538,14 @@ function normalizeScopeType(value) {
 
 function canManageScope(profile, scopeType) {
   const scope = normalizeScopeType(scopeType);
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return profile.regionId !== null;
+  if (scope === "DISTRICT") return profile.districtId !== null;
+  if (scope === "BRANCH") return profile.branchId !== null;
+  return false;
+}
+
+function canDeleteScope(profile, scopeType) {
   const leadershipValues = [
     profile.role,
     profile.leadershipLevel,
@@ -1547,12 +1555,7 @@ function canManageScope(profile, scopeType) {
     ["leader", "admin", "administrator", "chairman", "pastor", "priest", "coordinator"]
       .some(token => value.includes(token))
   );
-  if (!isLeader) return false;
-  if (scope === "NATIONAL") return true;
-  if (scope === "REGIONAL") return profile.regionId !== null;
-  if (scope === "DISTRICT") return profile.districtId !== null;
-  if (scope === "BRANCH") return profile.branchId !== null;
-  return false;
+  return isLeader && canManageScope(profile, scopeType);
 }
 
 function groupBelongsToProfile(group, profile) {
@@ -1566,8 +1569,23 @@ function groupBelongsToProfile(group, profile) {
 
 function canManageGroup(group, profile) {
   return group.created_by_uid === profile.uid ||
-    (canManageScope(profile, group.scope_type) &&
+    (canDeleteScope(profile, group.scope_type) &&
       groupBelongsToProfile(group, profile));
+}
+
+async function countGroupMembers(groupId) {
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [groupId] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [500] }
+    ]
+  );
+  return (rows.documents || []).length;
 }
 
 async function isGroupMember(groupId, uid) {
@@ -1642,7 +1660,11 @@ async function listChurchGroups(req, log) {
       const isCreator = data.created_by_uid === profile.uid;
       if (!isCreator &&
           !(await isGroupMember(document.$id || data.group_id, profile.uid))) continue;
-      groups.push(mapGroupDocument(document, profile));
+      groups.push(mapGroupDocument(
+        document,
+        profile,
+        await countGroupMembers(document.$id || data.group_id)
+      ));
   }
   return { groups };
 }
@@ -1675,7 +1697,7 @@ async function createChurchGroup(req, log) {
 
     const isOwner = data.created_by_uid === profile.uid;
     const canManage =
-      canManageScope(profile, data.scope_type) &&
+      canDeleteScope(profile, data.scope_type) &&
       groupBelongsToProfile(data, profile);
     if (!isOwner && !canManage) {
       throw announcementError("You are not authorized to delete this group.", 403);

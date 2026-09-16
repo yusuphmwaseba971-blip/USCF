@@ -21,7 +21,7 @@
                 <Label Text="Verify Your Email" FontSize="30"
                        FontAttributes="Bold" TextColor="#173B28"
                        HorizontalTextAlignment="Center" />
-                <Label Text="One quick step to secure your CCT-USCF account."
+                <Label Text="We've sent a verification link to your email address."
                        FontSize="15" TextColor="#52645B"
                        HorizontalTextAlignment="Center" />
             </VerticalStackLayout>
@@ -29,13 +29,14 @@
             <Border Padding="20" BackgroundColor="White" Stroke="#DCE8DF"
                     StrokeThickness="1" StrokeShape="RoundRectangle 18">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="We've sent a verification link to"
+                    <Label Text="Please check your Inbox. If you don't see it after a few minutes, check Spam/Junk or Promotions."
                            FontSize="14" TextColor="#52645B"
+                           LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" />
                     <Label x:Name="EmailLabel" FontSize="18"
                            FontAttributes="Bold" TextColor="#1A4D3A"
                            HorizontalTextAlignment="Center" />
-                    <Label Text="Open your email and tap the Firebase verification link. Then return here to complete your registration."
+                    <Label Text="Open the verification link and then return here to continue."
                            FontSize="14" TextColor="#52645B"
                            LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" />
@@ -46,11 +47,11 @@
                    IsVisible="False" LineBreakMode="WordWrap"
                    HorizontalTextAlignment="Center" />
 
-            <Button x:Name="CheckButton" Text="I've Verified My Email"
+            <Button x:Name="CheckButton" Text="I'VE VERIFIED MY EMAIL"
                     Clicked="OnCheckClicked" BackgroundColor="#1A4D3A"
                     TextColor="White" CornerRadius="14"
                     HeightRequest="54" FontAttributes="Bold" />
-            <Button x:Name="ResendButton" Text="Resend Email"
+            <Button x:Name="ResendButton" Text="RESEND VERIFICATION EMAIL"
                     Clicked="OnResendClicked" BackgroundColor="Transparent"
                     TextColor="#1A4D3A" BorderColor="#1A4D3A"
                     BorderWidth="1" CornerRadius="14"

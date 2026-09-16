@@ -155,6 +155,12 @@ public static class MauiProgram
         builder.Services.AddSingleton<
             CCT_USCF.Services.AuthService>();
 
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.SupportService>();
+
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.StoreReviewService>();
+
        builder.Services.AddSingleton<
            CCT_USCF.Services.PrayerService>();
 
