@@ -1614,6 +1614,16 @@ function canManageScope(profile, scopeType) {
   return false;
 }
 
+function canCreateScope(profile, scopeType) {
+  const scope = normalizeScopeType(scopeType);
+  if (!profile || !profile.uid) return false;
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return profile.regionId !== null;
+  if (scope === "DISTRICT") return profile.districtId !== null;
+  if (scope === "BRANCH") return profile.branchId !== null;
+  return false;
+}
+
 function groupBelongsToProfile(group, profile) {
   if (group.is_active === false) return false;
   const scope = normalizeScopeType(group.scope_type);
@@ -1627,9 +1637,8 @@ function groupBelongsToProfile(group, profile) {
 }
 
 function canManageGroup(group, profile) {
-  return group.created_by_uid === profile.uid ||
-    (canManageScope(profile, group.scope_type) &&
-      groupBelongsToProfile(group, profile));
+  return canManageScope(profile, group.scope_type) &&
+    groupBelongsToProfile(group, profile);
 }
 
 async function isGroupMember(groupId, uid) {
@@ -1646,6 +1655,13 @@ async function isGroupMember(groupId, uid) {
     ]
   );
   return (rows.rows || []).length > 0;
+}
+
+function groupMemberRowId(groupId, uid) {
+  return `member_${createHash("sha256")
+    .update(`${groupId}:${uid}`)
+    .digest("hex")
+    .slice(0, 29)}`;
 }
 
 async function getGroupByLogicalId(groupId) {
@@ -1674,14 +1690,57 @@ async function authorizeGroupAccess(groupId, profile) {
   const row = await getGroupByLogicalId(groupId);
   const group = row;
   if (!group || group.is_active === false ||
-      (!(standardGroupHasImplicitAccess(group) && groupBelongsToProfile(group, profile)) &&
-        group.created_by_uid !== profile.uid &&
-        !(await isGroupMember(groupId, profile.uid)))) {
+      !groupBelongsToProfile(group, profile)) {
     const error = new Error("You are not authorized to access this group.");
     error.statusCode = 403;
     throw error;
   }
   return group;
+}
+
+async function joinChurchGroup(req, log, groupId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const group = await authorizeGroupAccess(groupId, profile);
+  const existing = await appwriteTableRowRequest(
+    GROUP_MEMBERS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [group.group_id] },
+      { method: "equal", attribute: "user_uid", values: [profile.uid] },
+      { method: "limit", values: [1] }
+    ]
+  );
+  const now = new Date().toISOString();
+  const current = existing.rows?.[0];
+  if (current) {
+    if (current.is_active === false) {
+      return await appwriteTableRowRequest(
+        GROUP_MEMBERS_TABLE_ID,
+        "PATCH",
+        `/${encodeURIComponent(current.$id)}`,
+        { data: { is_active: true, joined_at: now, updated_at: now } }
+      );
+    }
+    return current;
+  }
+  return await appwriteTableRowRequest(
+    GROUP_MEMBERS_TABLE_ID,
+    "POST",
+    "",
+    {
+      rowId: groupMemberRowId(group.group_id, profile.uid),
+      data: {
+        group_id: group.group_id,
+        user_uid: profile.uid,
+        role: "member",
+        joined_at: now,
+        is_active: true
+      }
+    }
+  );
 }
 
 function mapGroupDocument(document, profile, memberCount = 0, canAccess = true) {
@@ -1762,8 +1821,8 @@ function standardGroupDefinitions(profile, scopeType) {
 }
 
 async function ensureStandardGroups(profile, scopeType) {
-  const standardGroups = [];
-  for (const definition of standardGroupDefinitions(profile, scopeType)) {
+  const standardGroups = await Promise.all(
+    standardGroupDefinitions(profile, scopeType).map(async definition => {
     const existingRows = await appwriteTableRowRequest(
       GROUPS_TABLE_ID,
       "GET",
@@ -1789,16 +1848,15 @@ async function ensureStandardGroups(profile, scopeType) {
     }
     if (existing) {
       if (existing.is_active === false) {
-        standardGroups.push(await appwriteTableRowRequest(
+        return await appwriteTableRowRequest(
           GROUPS_TABLE_ID,
           "PATCH",
           `/${encodeURIComponent(existing.$id)}`,
           { data: { is_active: true, updated_at: new Date().toISOString() } }
-        ));
+        );
       } else {
-        standardGroups.push(existing);
+        return existing;
       }
-      continue;
     }
     try {
       const created = await appwriteTableRowRequest(
@@ -1826,7 +1884,7 @@ async function ensureStandardGroups(profile, scopeType) {
           }
         }
       );
-      standardGroups.push(created);
+      return created;
     } catch (error) {
       if (error.statusCode !== 409) throw error;
       const concurrentRows = await appwriteTableRowRequest(
@@ -1837,9 +1895,10 @@ async function ensureStandardGroups(profile, scopeType) {
         [{ method: "equal", attribute: "group_id", values: [definition.groupId] }, { method: "limit", values: [1] }]
       );
       if (!concurrentRows.rows?.[0]) throw error;
-      standardGroups.push(concurrentRows.rows[0]);
+      return concurrentRows.rows[0];
     }
-  }
+    })
+  );
   return standardGroups;
 }
 
@@ -1850,7 +1909,7 @@ async function listChurchGroups(req, log) {
     getQueryValue(req, "scopeType") ?? getQueryValue(req, "scope_type")
   );
   if (!requestedScope) throw announcementError("A valid group scope is required.", 400);
-  log(`[CCT_GROUP_PROFILE] scope=${requestedScope} uid=${profile.uid} branchId=${profile.branchId ?? "none"} institution=${profile.institutionName || "none"}`);
+  log(`[CCT_GROUP_PROFILE] scope=${requestedScope} uid=${profile.uid} branchId=${profile.branchId ?? "none"} institution=${profile.institutionName || "none"} role=${profile.role || "none"} leadershipLevel=${profile.leadershipLevel || "none"} leadershipDuty=${profile.leadershipDuty || "none"}`);
   const standardGroups = await ensureStandardGroups(profile, requestedScope);
   const rows = await appwriteTableRowRequest(
     GROUPS_TABLE_ID,
@@ -1859,6 +1918,21 @@ async function listChurchGroups(req, log) {
     undefined,
     [{ method: "limit", values: [500] }]
   );
+  const memberRows = await appwriteTableRowRequest(
+    GROUP_MEMBERS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "equal", attribute: "is_active", values: [true] }, { method: "limit", values: [500] }]
+  );
+  const membersByGroup = new Map();
+  for (const member of memberRows.rows || []) {
+    const groupId = member.group_id || "";
+    if (!groupId) continue;
+    const members = membersByGroup.get(groupId) || [];
+    members.push(member);
+    membersByGroup.set(groupId, members);
+  }
   const groups = [];
   const allRows = [
     ...standardGroups,
@@ -1869,21 +1943,10 @@ async function listChurchGroups(req, log) {
   for (const row of allRows) {
     if ((requestedScope && normalizeScopeType(row.scope_type) !== requestedScope) ||
         !groupBelongsToProfile(row, profile)) continue;
-    const isStandard = row.is_standard === true;
-    const isCreator = row.created_by_uid === profile.uid;
-    if (!isStandard && !isCreator &&
-        !(await isGroupMember(row.group_id || row.$id, profile.uid))) continue;
-    const members = await appwriteTableRowRequest(
-      GROUP_MEMBERS_TABLE_ID,
-      "GET",
-      "",
-      undefined,
-      [{ method: "equal", attribute: "group_id", values: [row.group_id || row.$id] }, { method: "equal", attribute: "is_active", values: [true] }, { method: "limit", values: [500] }]
-    );
-    const canAccess = isCreator ||
-      (standardGroupHasImplicitAccess(row) && groupBelongsToProfile(row, profile)) ||
-      await isGroupMember(row.group_id || row.$id, profile.uid);
-    groups.push(mapGroupDocument(row, profile, (members.rows || []).length, canAccess));
+    const groupId = row.group_id || row.$id;
+    const members = membersByGroup.get(groupId) || [];
+    const canAccess = groupBelongsToProfile(row, profile);
+    groups.push(mapGroupDocument(row, profile, members.length, canAccess));
   }
   return { groups };
 }
@@ -1901,7 +1964,7 @@ async function createChurchGroup(req, log) {
     throw announcementError("Group name must be between 2 and 120 characters.");
   }
 
-  if (!scopeType || !canManageScope(profile, scopeType)) {
+  if (!scopeType || !canCreateScope(profile, scopeType)) {
     throw announcementError("You are not authorized to create a group in this scope.", 403);
   }
 
@@ -1965,7 +2028,7 @@ async function createChurchGroup(req, log) {
       "POST",
       "",
       {
-        rowId: `${groupId}:${profile.uid}`.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 36),
+        rowId: groupMemberRowId(groupId, profile.uid),
         data: {
           group_id: groupId,
           user_uid: profile.uid,
@@ -2000,10 +2063,9 @@ async function deleteChurchGroup(req, log, groupId) {
   if (row.is_standard === true || isBranchMainGroup(row)) {
     throw announcementError("Standard groups cannot be deleted.", 409);
   }
-  const isOwner = row.created_by_uid === profile.uid;
   const canManage = canManageScope(profile, row.scope_type) &&
     groupBelongsToProfile(row, profile);
-  if (!isOwner && !canManage) {
+  if (!canManage) {
     throw announcementError("You are not authorized to delete this group.", 403);
   }
   const updated = await appwriteTableRowRequest(
@@ -2661,22 +2723,36 @@ async function createGroupMessage(
 }
 
 async function notifyBranchMessageRecipients(message, senderUid, log) {
-  const branchId = normalizeString(message.branchId);
-  if (!branchId) return;
+  const groupId = normalizeString(message.communityId);
+  if (!groupId) return;
 
   try {
+    const memberPage = await appwriteTableRowRequest(
+      GROUP_MEMBERS_TABLE_ID,
+      "GET",
+      "",
+      undefined,
+      [
+        { method: "equal", attribute: "group_id", values: [groupId] },
+        { method: "equal", attribute: "is_active", values: [true] },
+        { method: "limit", values: [100] }
+      ]
+    );
+    const memberUids = new Set(
+      (memberPage.rows || [])
+        .map(member => normalizeString(member.user_uid))
+        .filter(uid => uid && uid !== senderUid)
+    );
+    if (!memberUids.size) return;
     const tokenPage = await appwriteTableRowRequest(
       CHURCH_DEVICE_TOKENS_COLLECTION_ID,
       "GET",
       "",
       undefined,
-      [
-        { method: "equal", attribute: "branch_id", values: [branchId] },
-        { method: "limit", values: [100] }
-      ]
+      [{ method: "limit", values: [500] }]
     );
     const tokens = (tokenPage.rows || tokenPage.documents || [])
-      .filter(token => normalizeString(token.user_uid) !== senderUid)
+      .filter(token => memberUids.has(normalizeString(token.user_uid)))
       .map(token => normalizeString(token.token))
       .filter(Boolean);
     if (!tokens.length) return;
@@ -2691,14 +2767,14 @@ async function notifyBranchMessageRecipients(message, senderUid, log) {
         body: preview
       },
       data: {
-        type: "branch_message",
-        groupId: branchId,
+        type: "group_message",
+        groupId,
         messageId: normalizeString(message.messageId)
       }
     });
-    log(`[FCM] Branch notification target group=${branchId} sent=${result.successCount} failed=${result.failureCount}`);
+    log(`[FCM] Group notification target group=${groupId} sent=${result.successCount} failed=${result.failureCount}`);
   } catch (error) {
-    log(`[FCM] Branch notification failed group=${branchId}: ${error.message}`);
+    log(`[FCM] Group notification failed group=${groupId}: ${error.message}`);
   }
 }
 
@@ -3103,6 +3179,14 @@ export default async ({
 
     const groupMutation = route.match(/^\/?api\/community\/groups\/([^/]+)$/);
     if (groupMutation) {
+      if (req.method === "POST") {
+        currentStage = "POST join community group";
+        return jsonResponse(
+          res,
+          await joinChurchGroup(req, log, decodeURIComponent(groupMutation[1])),
+          200
+        );
+      }
       if (req.method !== "DELETE") {
         return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
       }

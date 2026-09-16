@@ -73,6 +73,21 @@ public sealed class ChurchGroupService
         await EnsureSuccessAsync(response);
     }
 
+    public async Task JoinGroupAsync(
+        string groupId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            throw new ArgumentException("A group id is required.", nameof(groupId));
+
+        using var request = await CreateRequestAsync(
+            HttpMethod.Post,
+            $"api/community/groups/{Uri.EscapeDataString(groupId.Trim())}",
+            cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response);
+    }
+
     private async Task<HttpRequestMessage> CreateRequestAsync(
         HttpMethod method,
         string relativePath,

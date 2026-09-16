@@ -82,10 +82,10 @@ public partial class ChurchGroupSelectionPage : ContentPage
             _loadedUser = user;
 
             var groups = await GetGroupsForLevelAsync(level, user);
-            // The API is authoritative for scope-management permission. This
-            // avoids hiding the creation flow when the client profile has
-            // stale or differently-cased leadership fields.
-            AddGroupButton.IsVisible = groups.Any(group => group.CanManage);
+            // Any authenticated user with an assigned scope can create a group.
+            AddGroupButton.IsVisible =
+                CanCreateGroups(level, user) ||
+                (level == "Branch" && user.BranchId.HasValue);
             if (groups.Count == 0)
             {
                 StatusLabel.Text = $"No {level.ToLowerInvariant()} groups yet. Groups created for your {level.ToLowerInvariant()} scope will appear here.";
@@ -155,21 +155,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
     }
 
     private bool CanCreateGroups(string level, CCT_USCF.Models.CurrentUser user)
-        {
-            var values = new[] { user.Role, user.LeadershipLevel, user.LeadershipDuty }
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value!.ToLowerInvariant())
-                .ToList();
-            var isLeader = values.Any(value =>
-                value.Contains("leader") ||
-                value.Contains("admin") ||
-                value.Contains("chairman") ||
-                value.Contains("pastor") ||
-                value.Contains("priest") ||
-                value.Contains("coordinator"));
-            if (!isLeader)
-                return false;
-
+    {
             return level switch
             {
                 "National" => true,
@@ -231,7 +217,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                     Description = group.Description,
                     Level = group.ScopeType,
                     GroupType = group.GroupType,
-                    CanManage = true,
+                    CanManage = false,
                     RegionId = group.RegionId ?? 0,
                     DistrictId = group.DistrictId ?? 0,
                     BranchId = group.BranchId,
@@ -399,17 +385,27 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private async Task SelectGroupAsync(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
     {
-        var isMember = IsMemberOfGroup(group, user);
-        if (!isMember)
+        if (!group.CanAccess)
         {
-            await DisplayAlert("Membership required",
-                $"You are not a member of the {group.Name} group. Please communicate with your leader or Chairman.", "OK");
+            await DisplayAlert("Group unavailable",
+                $"The {group.Name} group is outside your assigned {group.Level.ToLowerInvariant()} scope.", "OK");
             return;
         }
 
         var groupId = !string.IsNullOrWhiteSpace(group.DocumentId)
             ? group.DocumentId
             : group.Name.Replace(" ", "-").Replace("/", "-").Trim('-');
+
+        try
+        {
+            await _groupService.JoinGroupAsync(groupId);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Join failed: {ex}");
+            await DisplayAlert("Unable to join group", ex.Message, "OK");
+            return;
+        }
 
         await Shell.Current.GoToAsync(
             $"{nameof(GroupChatPage)}?groupId={Uri.EscapeDataString(groupId)}&groupName={Uri.EscapeDataString(group.Name)}&groupType={Uri.EscapeDataString(group.GroupType)}&organizationalLevel={Uri.EscapeDataString(group.Level)}&regionId={group.RegionId}&districtId={group.DistrictId}&branchId={group.BranchId ?? user.BranchId ?? 0}&canDelete={group.CanManage}");
