@@ -17,5 +17,6 @@ public sealed class ChurchGroup
     public bool CanManage { get; set; }
     public int MemberCount { get; set; }
     public bool IsStandard { get; set; }
+    public bool CanAccess { get; set; }
     public string IconKey { get; set; } = string.Empty;
 }

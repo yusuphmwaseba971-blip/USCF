@@ -81,8 +81,11 @@ public partial class ChurchGroupSelectionPage : ContentPage
             }
             _loadedUser = user;
 
-            AddGroupButton.IsVisible = CanCreateGroups(level, user);
             var groups = await GetGroupsForLevelAsync(level, user);
+            // The API is authoritative for scope-management permission. This
+            // avoids hiding the creation flow when the client profile has
+            // stale or differently-cased leadership fields.
+            AddGroupButton.IsVisible = groups.Any(group => group.CanManage);
             if (groups.Count == 0)
             {
                 StatusLabel.Text = $"No {level.ToLowerInvariant()} groups yet. Groups created for your {level.ToLowerInvariant()} scope will appear here.";
@@ -233,12 +236,19 @@ public partial class ChurchGroupSelectionPage : ContentPage
                     DistrictId = group.DistrictId ?? 0,
                     BranchId = group.BranchId,
                     IsCustom = true,
+                    IsStandard = false,
+                    CanAccess = true,
                     MemberUids = new List<string> { GetFirebaseUid() }
                 };
                 // Refresh the selected scope from the backend before opening the
                 // group so persistence and filtering use the same source of truth.
                 await LoadGroupsAsync(_selectedLevel);
-                await SelectGroupAsync(created, _loadedUser);
+                var persisted = (await GetGroupsForLevelAsync(_selectedLevel, _loadedUser))
+                    .FirstOrDefault(item => string.Equals(
+                        item.DocumentId,
+                        group.GroupId,
+                        StringComparison.Ordinal));
+                await SelectGroupAsync(persisted ?? created, _loadedUser);
             }
             catch (Exception ex)
             {
@@ -270,6 +280,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 CanManage = group.CanManage,
                 MemberCount = group.MemberCount,
                 IsStandard = group.IsStandard,
+                CanAccess = group.CanAccess,
                 IsCustom = string.Equals(group.GroupType, "CUSTOM", StringComparison.OrdinalIgnoreCase),
                 MemberUids = new List<string> { GetFirebaseUid() }
             })
@@ -406,17 +417,8 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private bool IsMemberOfGroup(FirestoreGroupDocument group, CCT_USCF.Models.CurrentUser user)
     {
-        if (group.IsStandard &&
-            GroupMatchesScope(group.Level, new CCT_USCF.Models.ChurchGroup
-            {
-                ScopeType = group.Level,
-                RegionId = group.RegionId > 0 ? group.RegionId : null,
-                DistrictId = group.DistrictId > 0 ? group.DistrictId : null,
-                BranchId = group.BranchId
-            }, user))
-        {
+        if (group.CanAccess)
             return true;
-        }
 
         var firebaseUid = GetFirebaseUid();
 
@@ -425,35 +427,6 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         if (isInMemberIds || isInMemberUids)
             return true;
-
-        if (string.Equals(group.Level, "Branch", StringComparison.OrdinalIgnoreCase) &&
-            user.BranchId.HasValue &&
-            group.BranchId.HasValue &&
-            user.BranchId.Value == group.BranchId.Value)
-        {
-            return true;
-        }
-
-        if (string.Equals(group.Level, "Regional", StringComparison.OrdinalIgnoreCase) &&
-            user.RegionId.HasValue &&
-            group.RegionId == user.RegionId.Value)
-        {
-            return true;
-        }
-
-        if (string.Equals(group.Level, "District", StringComparison.OrdinalIgnoreCase) &&
-            user.DistrictId.HasValue &&
-            group.DistrictId == user.DistrictId.Value)
-        {
-            return true;
-        }
-
-        if (group.Name.Contains("Leader Group", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(user.LeadershipLevel) &&
-            string.Equals(user.LeadershipLevel, group.Level, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
 
         return false;
     }
@@ -525,6 +498,9 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
         [FirestoreProperty("isStandard")]
         public bool IsStandard { get; set; }
+
+        [FirestoreProperty("canAccess")]
+        public bool CanAccess { get; set; }
 
         public bool CanManage { get; set; }
 

@@ -1066,6 +1066,13 @@ async function getAnnouncementProfile(firebaseUser) {
     process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
   ).doc(firebaseUser.uid).get();
   const profile = snapshot.exists ? snapshot.data() : {};
+  const branchId = parseOptionalInt(profile.branchId);
+  let branchName = normalizeString(
+    profile.institutionName || profile.institution || profile.branchName || ""
+  );
+  if (!branchName && branchId !== null) {
+    branchName = await resolveBranchName(branchId);
+  }
   return {
     uid: firebaseUser.uid,
     name: normalizeString(profile.fullName || firebaseUser.name || firebaseUser.email || "Church leader"),
@@ -1073,13 +1080,43 @@ async function getAnnouncementProfile(firebaseUser) {
     leadershipLevel: normalizeString(profile.leadershipLevel || firebaseUser.leadershipLevel),
     leadershipDuty: normalizeString(profile.leadershipDuty || firebaseUser.leadershipDuty),
     organization: normalizeString(profile.organization || ""),
+    institutionName: branchName,
+    organizationName: normalizeString(profile.organizationName || ""),
     regionId: parseOptionalInt(profile.regionId),
     districtId: parseOptionalInt(profile.districtId),
-    branchId: parseOptionalInt(profile.branchId),
+    branchId,
     createdAt: typeof (profile.createdAt || profile.created_at) === "string"
       ? (profile.createdAt || profile.created_at)
       : profile.createdAt?.toDate?.()?.toISOString?.() || null
   };
+}
+
+async function resolveBranchName(branchId) {
+  const branches = firebaseDb.collection(
+    process.env.FIREBASE_BRANCHES_COLLECTION || "branches"
+  );
+  const candidates = [
+    ["Id", branchId],
+    ["id", branchId],
+    ["branchId", branchId],
+    ["Id", String(branchId)],
+    ["id", String(branchId)],
+    ["branchId", String(branchId)]
+  ];
+  for (const [field, value] of candidates) {
+    const snapshot = await branches.where(field, "==", value).limit(1).get();
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data() || {};
+      const name = normalizeString(data.Name || data.name || data.branchName || data.institution);
+      if (name) return name;
+    }
+  }
+  const byDocumentId = await branches.doc(String(branchId)).get();
+  if (byDocumentId.exists) {
+    const data = byDocumentId.data() || {};
+    return normalizeString(data.Name || data.name || data.branchName || data.institution);
+  }
+  return "";
 }
 
 function isAnnouncementLeader(profile) {
@@ -1611,15 +1648,33 @@ async function isGroupMember(groupId, uid) {
   return (rows.rows || []).length > 0;
 }
 
-async function authorizeGroupAccess(groupId, profile) {
-  const row = await appwriteTableRowRequest(
+async function getGroupByLogicalId(groupId) {
+  const rows = await appwriteTableRowRequest(
     GROUPS_TABLE_ID,
     "GET",
-    `/${encodeURIComponent(groupId)}`
+    "",
+    undefined,
+    [{ method: "equal", attribute: "group_id", values: [groupId] }, { method: "limit", values: [1] }]
   );
+  return rows.rows?.[0] || null;
+}
+
+function isBranchMainGroup(group) {
+  return normalizeScopeType(group.scope_type) === "BRANCH" &&
+    normalizeString(group.group_type).toUpperCase() === "BRANCH";
+}
+
+function standardGroupHasImplicitAccess(group) {
+  if (group.is_standard !== true) return false;
+  if (normalizeScopeType(group.scope_type) !== "BRANCH") return true;
+  return isBranchMainGroup(group);
+}
+
+async function authorizeGroupAccess(groupId, profile) {
+  const row = await getGroupByLogicalId(groupId);
   const group = row;
   if (!group || group.is_active === false ||
-      (!groupBelongsToProfile(group, profile) &&
+      (!(standardGroupHasImplicitAccess(group) && groupBelongsToProfile(group, profile)) &&
         group.created_by_uid !== profile.uid &&
         !(await isGroupMember(groupId, profile.uid)))) {
     const error = new Error("You are not authorized to access this group.");
@@ -1629,13 +1684,16 @@ async function authorizeGroupAccess(groupId, profile) {
   return group;
 }
 
-function mapGroupDocument(document, profile, memberCount = 0) {
+function mapGroupDocument(document, profile, memberCount = 0, canAccess = true) {
   const data = document;
+  const rawGroupType = normalizeString(data.group_type || "CUSTOM").toUpperCase();
+  const isBranchPrayer = normalizeScopeType(data.scope_type) === "BRANCH" &&
+    rawGroupType === "PRAYER_TEAM";
   return {
     groupId: data.group_id || document.$id || document.id,
-    groupName: data.name || data.group_name || "",
+    groupName: isBranchPrayer ? "Prayer" : (data.name || data.group_name || ""),
     description: data.description || "",
-    groupType: data.group_type || "CUSTOM",
+    groupType: isBranchPrayer ? "PRAYER" : (data.group_type || "CUSTOM"),
     scopeType: data.scope_type || "BRANCH",
     parentGroupId: data.parent_group_id || "",
     regionId: parseOptionalInt(data.region_id),
@@ -1647,7 +1705,8 @@ function mapGroupDocument(document, profile, memberCount = 0) {
     canManage: canManageGroup(data, profile),
     isStandard: data.is_standard === true,
     iconKey: data.icon_key || "",
-    memberCount
+    memberCount,
+    canAccess
   };
 }
 
@@ -1656,6 +1715,14 @@ const STANDARD_GROUPS = [
   { type: "PRAYER_TEAM", name: "Prayer Team", iconKey: "prayer" },
   { type: "CHOIR_TEAM", name: "Choir Team", iconKey: "choir" },
   { type: "BIBLE_STUDY", name: "Bible Study", iconKey: "bible" }
+];
+
+const BRANCH_STANDARD_GROUPS = [
+  { type: "BRANCH", name: "Branch", iconKey: "branch" },
+  { type: "BIBLE_STUDY", name: "Bible Study", iconKey: "bible" },
+  { type: "CORE_TEAM", name: "Core Team", iconKey: "core" },
+  { type: "LEADERS", name: "Leaders", iconKey: "leaders" },
+  { type: "PRAYER", name: "Prayer", iconKey: "prayer" }
 ];
 
 function scopeIdentity(profile, scopeType) {
@@ -1671,12 +1738,19 @@ function standardGroupDefinitions(profile, scopeType) {
   const scope = normalizeScopeType(scopeType);
   const scopeId = scopeIdentity(profile, scope);
   if (!scopeId) throw announcementError(`Your ${scope.toLowerCase()} scope is missing from your profile.`, 400);
-  return STANDARD_GROUPS.map(standard => ({
+  const definitions = scope === "BRANCH" ? BRANCH_STANDARD_GROUPS : STANDARD_GROUPS;
+  const institution = normalizeString(
+    profile.institutionName || profile.organizationName || profile.organization
+  );
+  if (scope === "BRANCH" && !institution) {
+    throw announcementError("Your institution/branch name is missing from your profile.", 400);
+  }
+  return definitions.map(standard => ({
     groupId: `standard-${scope.toLowerCase()}-${scopeId.toLowerCase()}-${standard.type.toLowerCase()}`,
     rowId: `standard_${scope.toLowerCase()}_${scopeId.toLowerCase()}_${standard.type.toLowerCase()}`
       .replace(/[^A-Za-z0-9_]/g, "_")
       .slice(0, 36),
-    groupName: standard.name,
+    groupName: standard.type === "BRANCH" ? `${institution} Branch` : standard.name,
     groupType: standard.type,
     iconKey: standard.iconKey,
     scopeType: scope,
@@ -1697,7 +1771,22 @@ async function ensureStandardGroups(profile, scopeType) {
       undefined,
       [{ method: "equal", attribute: "group_id", values: [definition.groupId] }, { method: "limit", values: [1] }]
     );
-    const existing = existingRows.rows?.[0];
+    let existing = existingRows.rows?.[0];
+    if (!existing && definition.groupType === "PRAYER") {
+      const legacyPrayerRows = await appwriteTableRowRequest(
+        GROUPS_TABLE_ID,
+        "GET",
+        "",
+        undefined,
+        [
+          { method: "equal", attribute: "scope_id", values: [definition.scopeId] },
+          { method: "equal", attribute: "group_type", values: ["PRAYER_TEAM"] },
+          { method: "equal", attribute: "is_standard", values: [true] },
+          { method: "limit", values: [1] }
+        ]
+      );
+      existing = legacyPrayerRows.rows?.[0];
+    }
     if (existing) {
       if (existing.is_active === false) {
         standardGroups.push(await appwriteTableRowRequest(
@@ -1761,6 +1850,7 @@ async function listChurchGroups(req, log) {
     getQueryValue(req, "scopeType") ?? getQueryValue(req, "scope_type")
   );
   if (!requestedScope) throw announcementError("A valid group scope is required.", 400);
+  log(`[CCT_GROUP_PROFILE] scope=${requestedScope} uid=${profile.uid} branchId=${profile.branchId ?? "none"} institution=${profile.institutionName || "none"}`);
   const standardGroups = await ensureStandardGroups(profile, requestedScope);
   const rows = await appwriteTableRowRequest(
     GROUPS_TABLE_ID,
@@ -1773,7 +1863,8 @@ async function listChurchGroups(req, log) {
   const allRows = [
     ...standardGroups,
     ...(rows.rows || []).filter(row =>
-      row.is_standard !== true)
+      row.is_standard !== true &&
+      normalizeString(row.group_type).toUpperCase() !== "STANDARD")
   ];
   for (const row of allRows) {
     if ((requestedScope && normalizeScopeType(row.scope_type) !== requestedScope) ||
@@ -1781,15 +1872,18 @@ async function listChurchGroups(req, log) {
     const isStandard = row.is_standard === true;
     const isCreator = row.created_by_uid === profile.uid;
     if (!isStandard && !isCreator &&
-        !(await isGroupMember(row.$id || row.group_id, profile.uid))) continue;
+        !(await isGroupMember(row.group_id || row.$id, profile.uid))) continue;
     const members = await appwriteTableRowRequest(
       GROUP_MEMBERS_TABLE_ID,
       "GET",
       "",
       undefined,
-      [{ method: "equal", attribute: "group_id", values: [row.$id || row.group_id] }, { method: "equal", attribute: "is_active", values: [true] }, { method: "limit", values: [500] }]
+      [{ method: "equal", attribute: "group_id", values: [row.group_id || row.$id] }, { method: "equal", attribute: "is_active", values: [true] }, { method: "limit", values: [500] }]
     );
-    groups.push(mapGroupDocument(row, profile, (members.rows || []).length));
+    const canAccess = isCreator ||
+      (standardGroupHasImplicitAccess(row) && groupBelongsToProfile(row, profile)) ||
+      await isGroupMember(row.group_id || row.$id, profile.uid);
+    groups.push(mapGroupDocument(row, profile, (members.rows || []).length, canAccess));
   }
   return { groups };
 }
@@ -1811,9 +1905,10 @@ async function createChurchGroup(req, log) {
     throw announcementError("You are not authorized to create a group in this scope.", 403);
   }
 
-  if (["LEADERS", "PRAYER_TEAM", "CHOIR_TEAM", "BIBLE_STUDY"].includes(groupType)) {
+  if (["BRANCH", "LEADERS", "PRAYER", "PRAYER_TEAM", "CHOIR_TEAM", "BIBLE_STUDY", "CORE_TEAM"].includes(groupType)) {
     const standard = (await ensureStandardGroups(profile, scopeType))
-      .find(item => item.group_type === groupType);
+      .find(item => item.group_type === groupType ||
+        (groupType === "PRAYER" && item.group_type === "PRAYER_TEAM"));
     if (standard) return mapGroupDocument(standard, profile);
   }
 
@@ -1898,15 +1993,11 @@ async function createChurchGroup(req, log) {
 async function deleteChurchGroup(req, log, groupId) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const profile = await getAnnouncementProfile(firebaseUser);
-  const row = await appwriteTableRowRequest(
-    GROUPS_TABLE_ID,
-    "GET",
-    `/${encodeURIComponent(groupId)}`
-  );
+  const row = await getGroupByLogicalId(groupId);
   if (!row || row.is_active === false) {
     throw announcementError("Group was not found.", 404);
   }
-  if (row.is_standard === true) {
+  if (row.is_standard === true || isBranchMainGroup(row)) {
     throw announcementError("Standard groups cannot be deleted.", 409);
   }
   const isOwner = row.created_by_uid === profile.uid;
@@ -1918,7 +2009,7 @@ async function deleteChurchGroup(req, log, groupId) {
   const updated = await appwriteTableRowRequest(
     GROUPS_TABLE_ID,
     "PATCH",
-    `/${encodeURIComponent(groupId)}`,
+    `/${encodeURIComponent(row.$id)}`,
     { data: { is_active: false, updated_at: new Date().toISOString() } }
   );
   return { success: true, groupId, isActive: updated.is_active !== false };
@@ -1953,7 +2044,8 @@ async function listGroupMessages(
     );
   }
 
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+  if (communityId.startsWith("standard-") ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
     await authorizeGroupAccess(communityId, profile);
   }
 
@@ -2218,7 +2310,8 @@ async function createGroupMessage(
   }
 
   const profile = await getAnnouncementProfile(firebaseUser);
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+  if (communityId.startsWith("standard-") ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
     await authorizeGroupAccess(communityId, profile);
   }
 

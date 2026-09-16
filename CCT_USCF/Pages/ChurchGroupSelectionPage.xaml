@@ -110,7 +110,7 @@
                 <VerticalStackLayout x:Name="GroupsLayout" Spacing="10" />
                 <Button
                     x:Name="AddGroupButton"
-                    Text="＋  Add Group"
+                    Text="＋  Add New Group"
                     IsVisible="False"
                     Clicked="OnAddGroupClicked"
                     HeightRequest="52"
