@@ -181,7 +181,7 @@
                     Stroke="{StaticResource ChatAccent}"
                     StrokeThickness="0"
                     StrokeShape="RoundRectangle 10">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                         <BoxView WidthRequest="3" CornerRadius="2" Color="{StaticResource ChatAccent}" />
                         <Label
                             Grid.Column="1"
@@ -190,6 +190,16 @@
                             TextColor="{AppThemeBinding Light={StaticResource ChatText}, Dark={StaticResource White}}"
                             LineBreakMode="TailTruncation"
                             MaxLines="2" />
+                        <Button
+                            Grid.Column="2"
+                            Text="✕"
+                            WidthRequest="32"
+                            HeightRequest="32"
+                            Padding="0"
+                            FontSize="14"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource ChatMuted}"
+                            Clicked="OnCancelReplyClicked" />
                     </Grid>
                 </Border>
 

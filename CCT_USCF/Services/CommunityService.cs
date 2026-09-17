@@ -101,6 +101,20 @@ public string SenderUid { get; set; } = string.Empty;
             public string ReplyToPreview { get; set; } = string.Empty;
         }
 
+        [Table("community_message_local_deletions")]
+        private sealed class LocalDeletedCommunityMessage
+        {
+            [PrimaryKey]
+            public string Id { get; set; } = string.Empty;
+            [Indexed]
+            public string UserUid { get; set; } = string.Empty;
+            [Indexed]
+            public string CommunityId { get; set; } = string.Empty;
+            [Indexed]
+            public string MessageId { get; set; } = string.Empty;
+            public DateTime DeletedAt { get; set; }
+        }
+
         [Table("cct_post_cache")]
         private sealed class CachedCctPost
         {
@@ -206,6 +220,8 @@ public string SenderUid { get; set; } = string.Empty;
 
                         await _messageCacheDatabase
                             .CreateTableAsync<CachedCommunityMessage>();
+                        await _messageCacheDatabase
+                            .CreateTableAsync<LocalDeletedCommunityMessage>();
                         await _messageCacheDatabase
                             .CreateTableAsync<CommunityChatHistoryState>();
                         await _messageCacheDatabase
@@ -573,6 +589,74 @@ SenderUid =
                     "An authenticated Firebase user is required for the community cache.");
         }
 
+        private static string BuildLocalDeletionId(
+            string userUid,
+            string communityId,
+            string messageId) =>
+            $"{userUid}|{communityId}|{messageId}";
+
+        public async Task MarkCommunityMessageLocallyDeletedAsync(
+            string communityId,
+            string messageId)
+        {
+            var normalizedCommunityId = communityId?.Trim() ?? string.Empty;
+            var normalizedMessageId = messageId?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalizedCommunityId) ||
+                string.IsNullOrWhiteSpace(normalizedMessageId))
+            {
+                return;
+            }
+
+            var userUid = GetCacheUserUid();
+            var database = await GetMessageCacheDatabaseAsync();
+            await database.InsertOrReplaceAsync(
+                new LocalDeletedCommunityMessage
+                {
+                    Id = BuildLocalDeletionId(
+                        userUid,
+                        normalizedCommunityId,
+                        normalizedMessageId),
+                    UserUid = userUid,
+                    CommunityId = normalizedCommunityId,
+                    MessageId = normalizedMessageId,
+                    DeletedAt = DateTime.UtcNow
+                });
+        }
+
+        private async Task<HashSet<string>> GetLocalDeletedMessageIdsAsync(
+            string communityId)
+        {
+            var userUid = GetCacheUserUid();
+            var database = await GetMessageCacheDatabaseAsync();
+            return (await database
+                    .Table<LocalDeletedCommunityMessage>()
+                    .Where(row =>
+                        row.UserUid == userUid &&
+                        row.CommunityId == communityId)
+                    .ToListAsync())
+                .Select(row => row.MessageId)
+                .ToHashSet(StringComparer.Ordinal);
+        }
+
+        private async Task<List<CommunityMessage>>
+            FilterLocallyDeletedMessagesAsync(
+                string communityId,
+                IEnumerable<CommunityMessage> messages)
+        {
+            var deletedIds =
+                await GetLocalDeletedMessageIdsAsync(communityId);
+            return messages
+                .Where(message =>
+                {
+                    var messageId =
+                        string.IsNullOrWhiteSpace(message.MessageId)
+                            ? message.Id
+                            : message.MessageId;
+                    return !deletedIds.Contains(messageId);
+                })
+                .ToList();
+        }
+
         // ============================================================
         // CACHE ONE COMMUNITY MESSAGE
         // ============================================================
@@ -608,6 +692,12 @@ SenderUid =
 
             var database =
                 await GetMessageCacheDatabaseAsync();
+
+            if ((await GetLocalDeletedMessageIdsAsync(communityId))
+                .Contains(messageId))
+            {
+                return;
+            }
 
             var cachedMessage =
                 MapToCachedCommunityMessage(message);
@@ -663,6 +753,12 @@ SenderUid =
                     ?? string.Empty;
 
                 if (string.IsNullOrWhiteSpace(communityId))
+                {
+                    continue;
+                }
+
+                if ((await GetLocalDeletedMessageIdsAsync(communityId))
+                    .Contains(messageId))
                 {
                     continue;
                 }
@@ -843,7 +939,11 @@ SenderUid =
                     .Take(safeLimit)
                     .ToListAsync();
 
+            var deletedIds =
+                await GetLocalDeletedMessageIdsAsync(normalizedCommunityId);
+
             return cachedRows
+                .Where(row => !deletedIds.Contains(row.MessageId))
                 .OrderBy(row => row.CreatedAt)
                 .Select(MapCachedCommunityMessage)
                 .ToList();
@@ -1001,6 +1101,10 @@ SenderUid =
                         branchId,
                         regionId,
                         districtId);
+                initialMessages =
+                    await FilterLocallyDeletedMessagesAsync(
+                        normalizedGroupId,
+                        initialMessages);
 
                 if (initialMessages.Count > 0)
                 {
@@ -1034,6 +1138,10 @@ SenderUid =
                     branchId,
                     regionId,
                     districtId);
+            newMessages =
+                await FilterLocallyDeletedMessagesAsync(
+                    normalizedGroupId,
+                    newMessages);
 
             var cachedMessageIds =
                 (await database

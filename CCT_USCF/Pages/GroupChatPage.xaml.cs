@@ -11,6 +11,9 @@ using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Storage;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
+#if ANDROID
+using Android.Views;
+#endif
 
 namespace CCT_USCF.Pages;
 
@@ -49,11 +52,7 @@ public partial class GroupChatPage : ContentPage
     private bool _realtimeListenerAttached;
     private bool _isReadingOlderMessages;
     private int _unreadIncomingCount;
-    private DateTime _pointerPressedAt = DateTime.MinValue;
-    private bool _longPressTriggered;
     private bool _isComposerBusy;
-
-    private const int LongPressMilliseconds = 650;
 
     // ============================================================
     // REALTIME
@@ -89,6 +88,55 @@ public partial class GroupChatPage : ContentPage
 
             UpdateGroupTitle();
         }
+    }
+
+    private async Task DeleteSelectedMessagesAsync()
+    {
+        var selected = _messages
+            .Where(message => _selectedMessageIds.Contains(message.MessageId))
+            .ToList();
+
+        if (selected.Count == 0 ||
+            !await DisplayAlert(
+                "Delete selected messages",
+                $"Delete {selected.Count} selected messages permanently?",
+                "Delete",
+                "Cancel"))
+        {
+            return;
+        }
+
+        foreach (var message in selected)
+        {
+            try
+            {
+                if (await _communityService.DeleteCommunityMessageAsync(message.MessageId))
+                {
+                    await _communityService.MarkCommunityMessageLocallyDeletedAsync(
+                        message.GroupId,
+                        message.MessageId);
+                    message.IsDeleted = true;
+                    message.Text = "Message deleted";
+                    message.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                await DisplayAlert(
+                    "Access denied",
+                    "You can only delete your own messages.",
+                    "OK");
+                break;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP_CHAT] Selected delete failed: {ex}");
+            }
+        }
+
+        _selectedMessageIds.Clear();
+        RenderMessages();
     }
 
     private string _groupName = "Group Chat";
@@ -1165,7 +1213,7 @@ public partial class GroupChatPage : ContentPage
                             Text = "Be the first to share something with this community.",
                             FontSize = 13,
                             TextColor = Color.FromArgb("#667A70"),
-                            HorizontalTextAlignment = TextAlignment.Center
+                            HorizontalTextAlignment = Microsoft.Maui.TextAlignment.Center
                         }
                     }
                 }
@@ -1247,9 +1295,8 @@ public partial class GroupChatPage : ContentPage
             new Label
             {
                 Text =
-                    isCurrentUser
-                        ? "You"
-                        : message.SenderName,
+                    (_selectedMessageIds.Contains(message.MessageId) ? "✓ " : string.Empty) +
+                    (isCurrentUser ? "You" : message.SenderName),
 
                 FontSize =
                     12,
@@ -1301,18 +1348,7 @@ public partial class GroupChatPage : ContentPage
         border.Content =
             stack;
 
-        AttachLongPressGesture(border, message);
-        var pan = new PanGestureRecognizer();
-        pan.PanUpdated += (_, args) =>
-        {
-            if (args.StatusType == GestureStatus.Completed &&
-                args.TotalX >= 80 &&
-                Math.Abs(args.TotalX) > Math.Abs(args.TotalY) * 1.25)
-            {
-                BeginReply(message);
-            }
-        };
-        border.GestureRecognizers.Add(pan);
+        AttachNativeMessageGesture(border, message);
 
         return border;
     }
@@ -1326,29 +1362,39 @@ public partial class GroupChatPage : ContentPage
         return Color.FromArgb(palette[(hash & int.MaxValue) % palette.Length]);
     }
 
-    private void AttachLongPressGesture(
+    private void AttachNativeMessageGesture(
         Border container,
         GroupChatMessageUi message)
     {
-        var pointer = new PointerGestureRecognizer();
-        pointer.PointerPressed += (_, _) =>
+#if ANDROID
+        container.HandlerChanged += (_, _) =>
         {
-            _pointerPressedAt = DateTime.UtcNow;
-            _longPressTriggered = false;
-        };
-        pointer.PointerReleased += async (_, _) =>
-        {
-            var elapsed = DateTime.UtcNow - _pointerPressedAt;
-            if (elapsed.TotalMilliseconds >= LongPressMilliseconds &&
-                !_longPressTriggered)
+            if (container.Handler?.PlatformView is not Android.Views.View nativeView ||
+                nativeView.Tag is MessageGestureListener)
             {
-                _longPressTriggered = true;
-                await ShowMessageActionsAsync(message);
+                return;
             }
 
-            _pointerPressedAt = DateTime.MinValue;
+            var listener = new MessageGestureListener(
+                message,
+                BeginReply,
+                ShowMessageActionsAsync,
+                RenderMessages);
+            var detector = new GestureDetector(
+                nativeView.Context,
+                listener);
+            nativeView.Tag = listener;
+            nativeView.Touch += (_, args) =>
+            {
+                listener.HandleTouch(args.Event);
+                detector.OnTouchEvent(args.Event);
+                if (args.Event?.ActionMasked is MotionEventActions.Up or MotionEventActions.Cancel)
+                {
+                    args.Handled = true;
+                }
+            };
         };
-        container.GestureRecognizers.Add(pointer);
+#endif
     }
 
     private async Task ShowMessageActionsAsync(GroupChatMessageUi message)
@@ -1361,6 +1407,8 @@ public partial class GroupChatPage : ContentPage
                 actions.Add("Edit");
                 actions.Add("Delete");
             }
+            if (_selectedMessageIds.Count > 1)
+                actions.Add("Delete selected");
 
             var choice = await DisplayActionSheet(
                 "Message options", "Cancel", null, actions.ToArray());
@@ -1378,6 +1426,9 @@ public partial class GroupChatPage : ContentPage
                     break;
                 case "Delete":
                     await DeleteMessageAsync(message);
+                    break;
+                case "Delete selected":
+                    await DeleteSelectedMessagesAsync();
                     break;
             }
         }
@@ -1475,6 +1526,9 @@ public partial class GroupChatPage : ContentPage
             if (!await _communityService.DeleteCommunityMessageAsync(message.MessageId))
                 return;
 
+            await _communityService.MarkCommunityMessageLocallyDeletedAsync(
+                message.GroupId,
+                message.MessageId);
             message.IsDeleted = true;
             message.Text = "Message deleted";
             message.UpdatedAt = DateTime.UtcNow;
@@ -1966,15 +2020,13 @@ public partial class GroupChatPage : ContentPage
             AddOrReplaceMessage(
                 ToUiMessage(
                     createdMessage));
+            RenderMessages();
+            await ScrollMessagesToBottomAsync();
 
             MessageEntry.Text =
                 string.Empty;
             _replyingTo = null;
             ReplyPreviewLayout.IsVisible = false;
-            await DisplayAlert(
-                "Message sent",
-                "Your message was sent.",
-                "OK");
         }
         catch (Exception ex)
         {
@@ -2286,6 +2338,15 @@ public partial class GroupChatPage : ContentPage
         ClearPendingAttachment();
     }
 
+    private void OnCancelReplyClicked(
+        object? sender,
+        EventArgs e)
+    {
+        _replyingTo = null;
+        ReplyPreviewLayout.IsVisible = false;
+        ReplyPreviewLabel.Text = string.Empty;
+    }
+
     private void ClearPendingAttachment()
     {
         try
@@ -2507,6 +2568,9 @@ public partial class GroupChatPage : ContentPage
                 ToUiMessage(
                     createdMessage));
 
+            RenderMessages();
+            await ScrollMessagesToBottomAsync();
+
             MessageEntry.Text =
                 string.Empty;
             _replyingTo = null;
@@ -2515,7 +2579,7 @@ public partial class GroupChatPage : ContentPage
             ClearPendingAttachment();
 
             GroupStatusLabel.Text =
-                "Message sent";
+                string.Empty;
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -3723,4 +3787,129 @@ public partial class GroupChatPage : ContentPage
         public string Status { get; set; } =
             "pending";
     }
+
+#if ANDROID
+    private sealed class MessageGestureListener : GestureDetector.SimpleOnGestureListener
+    {
+        private readonly GroupChatMessageUi _message;
+        private readonly Action<GroupChatMessageUi> _reply;
+        private readonly Func<GroupChatMessageUi, Task> _showActions;
+        private readonly Action _render;
+        private CancellationTokenSource? _holdCancellation;
+        private float _downX;
+        private float _downY;
+        private bool _holdTriggered;
+        private bool _swipeTriggered;
+
+        public MessageGestureListener(
+            GroupChatMessageUi message,
+            Action<GroupChatMessageUi> reply,
+            Func<GroupChatMessageUi, Task> showActions,
+            Action render)
+        {
+            _message = message;
+            _reply = reply;
+            _showActions = showActions;
+            _render = render;
+        }
+
+        public override bool OnDown(MotionEvent? e)
+        {
+            if (e == null)
+                return false;
+
+            _downX = e.GetX();
+            _downY = e.GetY();
+            _holdTriggered = false;
+            _swipeTriggered = false;
+            _holdCancellation?.Cancel();
+            _holdCancellation = new CancellationTokenSource();
+            var token = _holdCancellation.Token;
+
+            _ = Task.Run(
+                async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(3000, token);
+                        if (!token.IsCancellationRequested &&
+                            !_holdTriggered)
+                        {
+                            _holdTriggered = true;
+                            MainThread.BeginInvokeOnMainThread(
+                                async () => await _showActions(_message));
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                },
+                token);
+            return true;
+        }
+
+        public void HandleTouch(MotionEvent? e)
+        {
+            if (e == null)
+                return;
+
+            if (e.ActionMasked == MotionEventActions.Move)
+            {
+                var deltaX = e.GetX() - _downX;
+                var deltaY = e.GetY() - _downY;
+                _holdCancellation?.Cancel();
+
+                if (!_swipeTriggered &&
+                    deltaX <= -80 &&
+                    Math.Abs(deltaX) > Math.Abs(deltaY) * 1.25f)
+                {
+                    _swipeTriggered = true;
+                    MainThread.BeginInvokeOnMainThread(
+                        () =>
+                        {
+                            _reply(_message);
+                            _render();
+                        });
+                }
+            }
+            else if (e.ActionMasked is MotionEventActions.Up or MotionEventActions.Cancel)
+            {
+                _holdCancellation?.Cancel();
+            }
+        }
+
+        public override void OnLongPress(MotionEvent? e)
+        {
+        }
+
+        public override bool OnFling(
+            MotionEvent? e1,
+            MotionEvent? e2,
+            float velocityX,
+            float velocityY)
+        {
+            if (e1 == null || e2 == null)
+                return false;
+
+            var deltaX = e2.GetX() - e1.GetX();
+            var deltaY = e2.GetY() - e1.GetY();
+            if (!_swipeTriggered &&
+                deltaX <= -80 &&
+                Math.Abs(deltaX) > Math.Abs(deltaY) * 1.25f)
+            {
+                _swipeTriggered = true;
+                _holdCancellation?.Cancel();
+                MainThread.BeginInvokeOnMainThread(
+                    () =>
+                    {
+                        _reply(_message);
+                        _render();
+                    });
+                return true;
+            }
+
+            return false;
+        }
+    }
+#endif
 }
