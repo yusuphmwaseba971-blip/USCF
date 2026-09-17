@@ -95,6 +95,14 @@ public partial class AnnouncementActivityPage : ContentPage
 
     private async Task OpenDetailsAsync(ChurchNotification item)
     {
+        if (!item.IsRead)
+        {
+            await _service.MarkReadAsync(item.AnnouncementId);
+            _all = _all.Select(notification => notification.AnnouncementId == item.AnnouncementId
+                ? notification with { IsRead = true }
+                : notification).ToList();
+            ApplyCategory();
+        }
         var details = $"{item.Message}\n\nIssued by: {item.SenderName}\n" +
                       $"Scope: {item.ScopeLabel}\nPublished: {item.CreatedAtUtc:dd MMM yyyy, HH:mm}";
         if (item.ExpiresAtUtc is not null)

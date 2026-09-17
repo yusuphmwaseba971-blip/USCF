@@ -7,7 +7,7 @@ const projectId =
   process.env.APPWRITE_PROJECT_ID || "project-sgp-cct-uscf";
 
 const databaseId =
-  process.env.APPWRITE_DATABASE_ID || "database-cct-uscf-db";
+  process.env.APPWRITE_DATABASE_ID || "cct-uscf-db";
 
 const apiKey = process.env.APPWRITE_API_KEY;
 

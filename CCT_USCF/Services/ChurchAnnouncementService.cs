@@ -97,7 +97,7 @@ public sealed class ChurchAnnouncementService
     public async Task<int> GetUnreadCountAsync(CancellationToken ct = default)
         => (await GetNotificationsAsync(ct)).Count(notification => !notification.IsRead);
 
-    public async Task CreateAsync(string title, string message, ChurchAnnouncementTarget target,
+    public async Task<string> CreateAsync(string title, string message, ChurchAnnouncementTarget target,
         string? imageUrl = null, string? attachmentUrl = null, CancellationToken ct = default)
     {
         var payload = new
@@ -116,6 +116,7 @@ public sealed class ChurchAnnouncementService
         if (result?.Success != true || string.IsNullOrWhiteSpace(result.AnnouncementId))
             throw new InvalidOperationException(
                 "The announcement service did not confirm storage with success=true and an announcement ID.");
+        return result.AnnouncementId;
     }
 
     public async Task MarkReadAsync(Guid id, CancellationToken ct = default)
@@ -123,7 +124,7 @@ public sealed class ChurchAnnouncementService
         await AnnouncementCache.MarkReadAsync(id);
         try
         {
-            await SendAsync<object>(HttpMethod.Post, $"api/church-announcements/notifications/{id}/read", new { }, ct);
+            await SendAsync<object>(HttpMethod.Post, $"api/church-announcements/notifications/{id:N}/read", new { }, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
@@ -289,6 +290,11 @@ internal static class AnnouncementCache
     private static readonly SemaphoreSlim InitializationLock = new(1, 1);
     private static bool _initialized;
 
+    private static string OwnerKey =>
+        MauiProgram.CurrentUser?.Id.ToString("N") ?? "anonymous";
+
+    private static string CacheKey(Guid id) => $"{OwnerKey}:{id:N}";
+
     private static async Task InitializeAsync()
     {
         if (_initialized) return;
@@ -308,6 +314,7 @@ internal static class AnnouncementCache
     {
         await InitializeAsync();
         return await Database.Table<CachedChurchNotification>()
+            .Where(x => x.Id.StartsWith(OwnerKey + ":"))
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync();
     }
@@ -317,7 +324,7 @@ internal static class AnnouncementCache
         await InitializeAsync();
         foreach (var notification in notifications)
         {
-            var id = notification.Id.ToString();
+            var id = CacheKey(notification.Id);
             var existing = await Database.FindAsync<CachedChurchNotification>(id);
             await Database.InsertOrReplaceAsync(new CachedChurchNotification
             {
@@ -328,7 +335,14 @@ internal static class AnnouncementCache
                 SenderName = notification.SenderName,
                 TargetLevel = notification.TargetLevel,
                 CreatedAtUtc = notification.CreatedAtUtc.ToUniversalTime(),
-                IsRead = existing?.IsRead == true || notification.IsRead
+                IsRead = existing?.IsRead == true || notification.IsRead,
+                RegionId = notification.RegionId,
+                DistrictId = notification.DistrictId,
+                BranchId = notification.BranchId,
+                ImageUrl = notification.ImageUrl,
+                AttachmentUrl = notification.AttachmentUrl,
+                ExpiresAtUtc = notification.ExpiresAtUtc,
+                IsActive = notification.IsActive
             });
         }
     }
@@ -336,7 +350,7 @@ internal static class AnnouncementCache
     public static async Task MarkReadAsync(Guid id)
     {
         await InitializeAsync();
-        var existing = await Database.FindAsync<CachedChurchNotification>(id.ToString());
+        var existing = await Database.FindAsync<CachedChurchNotification>(CacheKey(id));
         if (existing is not null)
         {
             existing.IsRead = true;
@@ -356,8 +370,16 @@ internal sealed class CachedChurchNotification
     public string TargetLevel { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public bool IsRead { get; set; }
+    public int? RegionId { get; set; }
+    public int? DistrictId { get; set; }
+    public int? BranchId { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public string AttachmentUrl { get; set; } = string.Empty;
+    public DateTime? ExpiresAtUtc { get; set; }
+    public bool IsActive { get; set; } = true;
 
     public ChurchNotification ToNotification() =>
-        new(Guid.Parse(Id), Guid.Parse(AnnouncementId), Title, Message, SenderName,
-            TargetLevel, CreatedAtUtc, IsRead);
+        new(Guid.Parse(Id[(Id.IndexOf(':') + 1)..]), Guid.Parse(AnnouncementId), Title, Message, SenderName,
+            TargetLevel, CreatedAtUtc, IsRead, RegionId, DistrictId, BranchId, ImageUrl, AttachmentUrl,
+            ExpiresAtUtc, IsActive);
 }

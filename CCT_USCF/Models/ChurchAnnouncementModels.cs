@@ -13,6 +13,8 @@ public sealed record ChurchNotification(Guid Id, Guid AnnouncementId, string Tit
     string ImageUrl = "", string AttachmentUrl = "", DateTime? ExpiresAtUtc = null,
     bool IsActive = true)
 {
+    public string ReadState => IsRead ? "SEEN / DONE" : "UNSEEN";
+
     public string ScopeLabel => TargetLevel.Trim().ToUpperInvariant() switch
     {
         "REGION" or "REGIONAL" => "REGIONAL",

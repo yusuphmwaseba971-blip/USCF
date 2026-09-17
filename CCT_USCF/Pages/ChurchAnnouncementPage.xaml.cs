@@ -131,8 +131,8 @@ public partial class ChurchAnnouncementPage : ContentPage
 
             StatusLabel.Text = "Publishing announcement...";
             System.Diagnostics.Debug.WriteLine("[AnnouncementMedia] Appwrite announcement creation started");
-            await _service.CreateAsync(TitleEntry.Text.Trim(), MessageEditor.Text.Trim(), target, imageUrl, attachmentUrl);
-            System.Diagnostics.Debug.WriteLine("[AnnouncementMedia] Appwrite announcement created");
+            var announcementId = await _service.CreateAsync(TitleEntry.Text.Trim(), MessageEditor.Text.Trim(), target, imageUrl, attachmentUrl);
+            System.Diagnostics.Debug.WriteLine($"[AnnouncementMedia] Appwrite announcement created id={announcementId}");
             StatusLabel.Text = "Announcement published";
             await DisplayAlert("Success", "Announcement published.", "OK");
             TitleEntry.Text = string.Empty;
@@ -142,9 +142,11 @@ public partial class ChurchAnnouncementPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[AnnouncementMedia] publish failed type={ex.GetType().Name} message={ex.Message}");
-            StatusLabel.Text = _attachment is not null && (imageUrl is null && attachmentUrl is null)
-                ? "Attachment upload failed. Please retry."
-                : "Announcement could not be published. Please try again.";
+            StatusLabel.Text = _attachment is not null && imageUrl is null && attachmentUrl is null
+                ? "Unable to upload the attachment. Please try again."
+                : ex.Message.Contains("authorized", StringComparison.OrdinalIgnoreCase)
+                    ? "You are not authorized to publish to this audience."
+                    : "Unable to publish the announcement. Please try again.";
         }
         finally
         {

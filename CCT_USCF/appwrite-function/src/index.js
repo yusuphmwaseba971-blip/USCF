@@ -136,7 +136,7 @@ if (!appwriteApiKey) {
 
 const DEFAULT_DATABASE_ID =
   process.env.APPWRITE_DATABASE_ID ||
-  "database-cct-uscf-db";
+  "cct-uscf-db";
 
 const ANNOUNCEMENTS_TABLE_ID =
   process.env.APPWRITE_ANNOUNCEMENTS_TABLE_ID ||
@@ -1178,6 +1178,19 @@ function toGuidString(value) {
     : randomUUID();
 }
 
+function identifiersMatch(left, right) {
+  const normalizedLeft = normalizeString(left).replace(/-/g, "").toLowerCase();
+  const normalizedRight = normalizeString(right).replace(/-/g, "").toLowerCase();
+  return normalizedLeft.length > 0 && normalizedLeft === normalizedRight;
+}
+
+function notificationRowId(announcementId, userUid) {
+  return createHash("sha256")
+    .update(`${announcementId}:${userUid}`)
+    .digest("hex")
+    .slice(0, 36);
+}
+
 function announcementVisibleToProfile(announcement, profile) {
   const scope = normalizeString(announcement.scope_type).toLowerCase();
   if (scope === "national") return true;
@@ -1203,7 +1216,7 @@ async function upsertDeviceToken(req, log) {
       updated_at: new Date().toISOString()
   };
   try {
-    await appwriteCollectionRequest(
+    await appwriteTableRowRequest(
       CHURCH_DEVICE_TOKENS_COLLECTION_ID,
       "PATCH",
       `/${encodeURIComponent(documentId)}`,
@@ -1211,8 +1224,8 @@ async function upsertDeviceToken(req, log) {
     );
   } catch (error) {
     if (!String(error.message || "").includes("404")) throw error;
-    await appwriteCollectionRequest(CHURCH_DEVICE_TOKENS_COLLECTION_ID, "POST", "", {
-      documentId,
+    await appwriteTableRowRequest(CHURCH_DEVICE_TOKENS_COLLECTION_ID, "POST", "", {
+      rowId: documentId,
       data
     });
   }
@@ -1412,6 +1425,7 @@ async function createChurchAnnouncement(req, log) {
       (targetLevel === "Branch" && branchId !== profile.branchId)) {
     throw announcementError("You can only announce to an audience assigned to your profile.", 403);
   }
+  const createdAt = new Date().toISOString();
   const announcement = {
     title,
     message,
@@ -1421,7 +1435,7 @@ async function createChurchAnnouncement(req, log) {
     region_id: regionId,
     district_id: districtId,
     branch_id: branchId,
-    created_at: new Date().toISOString()
+    created_at: createdAt
   };
   log(`[CCT_ANNOUNCEMENT_CREATE] uid=${profile.uid} target=${targetLevel} branchId=${branchId ?? "none"}`);
   const announcementId = randomUUID().replace(/-/g, "");
@@ -1432,9 +1446,12 @@ async function createChurchAnnouncement(req, log) {
     sender_uid: profile.uid,
     sender_name: profile.name,
     scope_type: targetLevel,
+    target_level: targetLevel,
     region_id: regionId === null ? null : String(regionId),
     district_id: districtId === null ? null : String(districtId),
     branch_id: branchId === null ? null : String(branchId),
+    message,
+    created_at: createdAt,
     image_url: imageUrl || null,
     attachment_url: attachmentUrl || null,
     is_active: true
@@ -1462,19 +1479,24 @@ async function createChurchAnnouncement(req, log) {
   let delivered = 0;
   let notificationError = null;
   try {
-    const tokenPage = await appwriteCollectionRequest(
+    const tokenPage = await appwriteTableRowRequest(
       CHURCH_DEVICE_TOKENS_COLLECTION_ID,
       "GET",
       "",
       undefined,
       [{ method: "limit", values: [500] }]
     );
-    const tokens = (tokenPage.documents || []).filter(token => targetMatchesToken(announcement, token));
-    const messages = tokens.map(token => ({
-      documentId: randomUUID().replace(/-/g, ""),
+    const tokens = (tokenPage.rows || []).filter(token => targetMatchesToken(announcement, token));
+    const recipients = new Map();
+    for (const token of tokens) {
+      const uid = normalizeString(token.user_uid);
+      if (uid && !recipients.has(uid)) recipients.set(uid, token);
+    }
+    const messages = [...recipients.entries()].map(([userUid]) => ({
+      rowId: notificationRowId(announcementId, userUid),
       data: {
         announcement_id: announcementId,
-        user_uid: token.user_uid,
+        user_uid: userUid,
         title,
         message,
         sender_name: profile.name,
@@ -1483,10 +1505,20 @@ async function createChurchAnnouncement(req, log) {
         created_at: announcement.created_at
       }
     }));
-    await Promise.all(messages.map(item =>
-      appwriteCollectionRequest(CHURCH_NOTIFICATIONS_COLLECTION_ID, "POST", "", item)
-    ));
-    delivered = tokens.length;
+    await Promise.all(messages.map(async item => {
+      try {
+        await appwriteTableRowRequest(CHURCH_NOTIFICATIONS_COLLECTION_ID, "POST", "", item);
+      } catch (error) {
+        if (error.statusCode !== 409) throw error;
+        await appwriteTableRowRequest(
+          CHURCH_NOTIFICATIONS_COLLECTION_ID,
+          "PATCH",
+          `/${encodeURIComponent(item.rowId)}`,
+          { data: { title, message, sender_name: profile.name, target_level: targetLevel } }
+        );
+      }
+    }));
+    delivered = recipients.size;
     if (tokens.length > 0) {
       const delivery = await firebaseMessaging.sendEachForMulticast({
         tokens: tokens.map(token => token.token),
@@ -1529,6 +1561,16 @@ async function listChurchNotifications(req, log) {
     [{ method: "limit", values: [500] }]
   );
   const rows = page.rows || [];
+  const notificationPage = await appwriteTableRowRequest(
+    CHURCH_NOTIFICATIONS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "equal", attribute: "user_uid", values: [firebaseUser.uid] }, { method: "limit", values: [500] }]
+  );
+  const readByAnnouncement = new Map(
+    (notificationPage.rows || []).map(item => [normalizeString(item.announcement_id).replace(/-/g, "").toLowerCase(), item.is_read === true])
+  );
   const visibleRows = rows
     .filter(row => row.is_active !== false)
     .filter(row => announcementVisibleToProfile(row, profile))
@@ -1552,28 +1594,67 @@ async function listChurchNotifications(req, log) {
     attachmentUrl: row.attachment_url || "",
     expiresAtUtc: safeIsoDate(row.expires_at),
     isActive: row.is_active !== false,
-    createdAtUtc: safeIsoDate(row.$createdAt),
-    isRead: false
+    createdAtUtc: safeIsoDate(row.created_at || row.$createdAt),
+    isRead: readByAnnouncement.get(normalizeString(row.announcement_id || row.$id).replace(/-/g, "").toLowerCase()) === true
   }));
 }
 
 async function markChurchNotificationRead(req, log, notificationId) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
-  const page = await appwriteCollectionRequest(
+  const page = await appwriteTableRowRequest(
     CHURCH_NOTIFICATIONS_COLLECTION_ID,
     "GET",
     "",
     undefined,
     [{ method: "equal", attribute: "user_uid", values: [firebaseUser.uid] }, { method: "limit", values: [500] }]
   );
-  const document = (page.documents || []).find(item => item.$id === notificationId);
-  if (!document) throw announcementError("Notification was not found.", 404);
-  await appwriteCollectionRequest(
-    CHURCH_NOTIFICATIONS_COLLECTION_ID,
-    "PATCH",
-    `/${encodeURIComponent(notificationId)}`,
-    { data: { is_read: true } }
+  let row = (page.rows || []).find(item =>
+    item.$id === notificationId ||
+    identifiersMatch(item.announcement_id, notificationId)
   );
+  if (row) {
+    await appwriteTableRowRequest(
+      CHURCH_NOTIFICATIONS_COLLECTION_ID,
+      "PATCH",
+      `/${encodeURIComponent(row.$id)}`,
+      { data: { is_read: true } }
+    );
+    log(`[CCT_ANNOUNCEMENT_READ] uid=${firebaseUser.uid} announcement=${row.announcement_id}`);
+    return { success: true };
+  }
+
+  const announcementPage = await appwriteTableRowRequest(
+    ANNOUNCEMENTS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "limit", values: [500] }]
+  );
+  const announcement = (announcementPage.rows || []).find(item =>
+    identifiersMatch(item.announcement_id || item.$id, notificationId)
+  );
+  if (!announcement) throw announcementError("Announcement was not found.", 404);
+
+  const announcementId = announcement.announcement_id || announcement.$id;
+  await appwriteTableRowRequest(
+    CHURCH_NOTIFICATIONS_COLLECTION_ID,
+    "POST",
+    "",
+    {
+      rowId: notificationRowId(announcementId, firebaseUser.uid),
+      data: {
+        announcement_id: announcementId,
+        user_uid: firebaseUser.uid,
+        title: announcement.title || "",
+        message: announcement.content || announcement.message || "",
+        sender_name: announcement.sender_name || "",
+        target_level: announcement.target_level || announcement.scope_type || "",
+        is_read: true,
+        created_at: announcement.created_at || announcement.$createdAt || new Date().toISOString()
+      }
+    }
+  );
+  log(`[CCT_ANNOUNCEMENT_READ] uid=${firebaseUser.uid} announcement=${announcementId} state=created`);
   return { success: true };
 }
 
