@@ -34,6 +34,7 @@ public partial class GroupChatPage : ContentPage
     private readonly CommunityService _communityService;
     private readonly CloudinaryService _cloudinaryService;
     private readonly ChurchGroupService _groupService;
+    private readonly AppwriteService _appwriteService;
 
     // ============================================================
     // MESSAGE STATE
@@ -50,6 +51,7 @@ public partial class GroupChatPage : ContentPage
     private int _unreadIncomingCount;
     private DateTime _pointerPressedAt = DateTime.MinValue;
     private bool _longPressTriggered;
+    private bool _isComposerBusy;
 
     private const int LongPressMilliseconds = 650;
 
@@ -201,6 +203,10 @@ public partial class GroupChatPage : ContentPage
         _groupService =
             MauiProgram.Services
                 .GetRequiredService<ChurchGroupService>();
+
+        _appwriteService =
+            MauiProgram.Services
+                .GetRequiredService<AppwriteService>();
 
         var membersTap =
             new TapGestureRecognizer();
@@ -1198,14 +1204,14 @@ public partial class GroupChatPage : ContentPage
                 Padding =
                     new Thickness(
                         12,
-                        10),
+                        6),
 
                 Margin =
                     new Thickness(
                         isCurrentUser ? 24 : 0,
                         0,
                         isCurrentUser ? 0 : 24,
-                        10),
+                        6),
 
                 BackgroundColor =
                     isCurrentUser
@@ -1234,7 +1240,7 @@ public partial class GroupChatPage : ContentPage
         var stack =
             new VerticalStackLayout
             {
-                Spacing = 6
+                Spacing = 3
             };
 
         stack.Children.Add(
@@ -1814,26 +1820,44 @@ public partial class GroupChatPage : ContentPage
 
     private async Task SendComposerAsync()
     {
+        if (_isComposerBusy)
+        {
+            return;
+        }
+
         var text =
             MessageEntry.Text?.Trim()
             ?? string.Empty;
 
-        if (_pendingAttachment != null)
-        {
-            await SendPendingAttachmentAsync(
-                text);
-
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(
-                text))
+        if (_pendingAttachment == null &&
+            string.IsNullOrWhiteSpace(text))
         {
             return;
         }
 
-        await SendTextMessageAsync(
-            text);
+        _isComposerBusy = true;
+        SetComposerBusy(
+            true,
+            _pendingAttachment == null
+                ? "Sending..."
+                : $"Uploading {_pendingAttachmentType}...");
+
+        try
+        {
+            if (_pendingAttachment != null)
+            {
+                await SendPendingAttachmentAsync(text);
+            }
+            else
+            {
+                await SendTextMessageAsync(text);
+            }
+        }
+        finally
+        {
+            _isComposerBusy = false;
+            SetComposerBusy(false, null);
+        }
     }
 
     // ============================================================
@@ -1845,10 +1869,6 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
-            SetComposerBusy(
-                true,
-                "Sending...");
-
             await FirebaseInit.Initialized;
 
             var currentUser =
@@ -1965,12 +1985,6 @@ public partial class GroupChatPage : ContentPage
                 "Message failed to send",
                 ex.Message,
                 "OK");
-        }
-        finally
-        {
-            SetComposerBusy(
-                false,
-                null);
         }
     }
 
@@ -2333,10 +2347,6 @@ public partial class GroupChatPage : ContentPage
 
         try
         {
-            SetComposerBusy(
-                true,
-                $"Uploading {_pendingAttachmentType}...");
-
             await FirebaseInit.Initialized;
 
             var currentUser =
@@ -2539,12 +2549,6 @@ public partial class GroupChatPage : ContentPage
                 $"The attachment could not be sent.\n\n{ex.Message}",
                 "OK");
         }
-        finally
-        {
-            SetComposerBusy(
-                false,
-                null);
-        }
     }
 
     // ============================================================
@@ -2555,25 +2559,36 @@ public partial class GroupChatPage : ContentPage
         bool busy,
         string? status)
     {
-        MainThread.BeginInvokeOnMainThread(
-            () =>
+        void Update()
+        {
+            AttachmentButton.IsEnabled =
+                !busy;
+
+            SendButton.IsEnabled =
+                !busy;
+
+            MessageEntry.IsEnabled =
+                !busy;
+
+            SendButton.Text =
+                busy ? "…" : "↑";
+
+            if (!string.IsNullOrWhiteSpace(
+                    status))
             {
-                AttachmentButton.IsEnabled =
-                    !busy;
+                GroupStatusLabel.Text =
+                    status;
+            }
+        }
 
-                SendButton.IsEnabled =
-                    !busy;
-
-                MessageEntry.IsEnabled =
-                    !busy;
-
-                if (!string.IsNullOrWhiteSpace(
-                        status))
-                {
-                    GroupStatusLabel.Text =
-                        status;
-                }
-            });
+        if (MainThread.IsMainThread)
+        {
+            Update();
+        }
+        else
+        {
+            MainThread.BeginInvokeOnMainThread(Update);
+        }
     }
 
     // ============================================================
@@ -2641,252 +2656,109 @@ public partial class GroupChatPage : ContentPage
     // ============================================================
 
     private async Task<List<GroupMemberUi>>
-        LoadGroupMembersAsync()
+    LoadGroupMembersAsync()
     {
-        try
-        {
-            var snapshot =
-                await _firestore
-                    .GetCollection(
-                        $"groups/{_groupId}/members")
-                    .GetDocumentsAsync<
-                        FirestoreGroupMemberDocument>(
-                        Source.Default);
-
-            if (snapshot != null &&
-                snapshot.Documents.Any())
-            {
-                return snapshot.Documents
-                    .Select(
-                        document =>
-                            document.Data)
-                    .Where(
-                        member =>
-                            member != null)
-                    .Select(
-                        member =>
-                            new GroupMemberUi
-                            {
-                                Uid =
-                                    string.IsNullOrWhiteSpace(
-                                        member!.Uid)
-                                        ? member.DocumentId
-                                        : member.Uid,
-
-                                DisplayName =
-                                    !string.IsNullOrWhiteSpace(
-                                        member.FullName)
-                                        ? member.FullName
-                                        : !string.IsNullOrWhiteSpace(
-                                            member.Username)
-                                            ? member.Username
-                                            : "Member",
-
-                                Role =
-                                    string.IsNullOrWhiteSpace(
-                                        member.Role)
-                                        ? "Member"
-                                        : member.Role,
-
-                                LeadershipLevel =
-                                    string.IsNullOrWhiteSpace(
-                                        member.LeadershipLevel)
-                                        ? "Member"
-                                        : member.LeadershipLevel,
-
-                                IsCurrentUser =
-                                    string.Equals(
-                                        GetCurrentUserUid(),
-                                        string.IsNullOrWhiteSpace(
-                                            member.Uid)
-                                            ? member.DocumentId
-                                            : member.Uid,
-                                        StringComparison.Ordinal)
-                            })
-                    .OrderBy(
-                        member =>
-                            member.DisplayName,
-                        StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
-
-            return await LoadGroupMembersFromUsersAsync();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Group member load failed: {ex}");
-
-            return await LoadGroupMembersFromUsersAsync();
-        }
-    }
-
-    private async Task<List<GroupMemberUi>>
-        LoadGroupMembersFromUsersAsync()
+    try
     {
-        try
+        if (string.IsNullOrWhiteSpace(_groupId))
         {
-            var snapshot =
-                await _firestore
-                    .GetCollection("users")
-                    .GetDocumentsAsync<
-                        FirestoreUserProfileDocument>(
-                        Source.Default);
-
-            if (snapshot == null)
-            {
-                return new List<GroupMemberUi>();
-            }
-
-            var currentUid =
-                GetCurrentUserUid();
-
-            return snapshot.Documents
-                .Select(
-                    document =>
-                        document.Data)
-                .Where(
-                    profile =>
-                        profile != null &&
-                        IsProfileEligibleForGroup(
-                            profile,
-                            currentUid))
-                .Select(
-                    profile =>
-                        new GroupMemberUi
-                        {
-                            Uid =
-                                string.IsNullOrWhiteSpace(
-                                    profile!.Uid)
-                                    ? profile.DocumentId
-                                    : profile.Uid,
-
-                            DisplayName =
-                                !string.IsNullOrWhiteSpace(
-                                    profile.FullName)
-                                    ? profile.FullName
-                                    : !string.IsNullOrWhiteSpace(
-                                        profile.Username)
-                                        ? profile.Username
-                                        : "Member",
-
-                            Role =
-                                string.IsNullOrWhiteSpace(
-                                    profile.Role)
-                                    ? "Member"
-                                    : profile.Role,
-
-                            LeadershipLevel =
-                                string.IsNullOrWhiteSpace(
-                                    profile.LeadershipLevel)
-                                    ? "Member"
-                                    : profile.LeadershipLevel,
-
-                            IsCurrentUser =
-                                string.Equals(
-                                    currentUid,
-                                    string.IsNullOrWhiteSpace(
-                                        profile.Uid)
-                                        ? profile.DocumentId
-                                        : profile.Uid,
-                                    StringComparison.Ordinal)
-                        })
-                .OrderBy(
-                    member =>
-                        member.DisplayName,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] User member fallback failed: {ex}");
-
             return new List<GroupMemberUi>();
         }
-    }
 
-    private bool IsProfileEligibleForGroup(
-        FirestoreUserProfileDocument profile,
-        string currentUid)
-    {
-        var level =
-            NormalizeLevel(
-                OrganizationalLevel);
+        var result =
+            await _appwriteService.Databases.ListDocuments(
+                AppwriteService.DatabaseId,
+                "cct_group_members",
+                new List<string>
+                {
+                    global::Appwrite.Query.Equal("group_id", _groupId.Trim()),
+                    global::Appwrite.Query.Equal("is_active", true),
+                    global::Appwrite.Query.Limit(100)
+                },
+                null,
+                null,
+                100);
 
-        if (string.IsNullOrWhiteSpace(
-                level))
+        var memberships =
+            result.Documents
+                .Select(document =>
+                {
+                    using var json =
+                        JsonDocument.Parse(
+                            JsonSerializer.Serialize(document.Data));
+                    var data = json.RootElement;
+                    return new ExactGroupMembership
+                    {
+                        Uid = TryGetString(data, "user_uid"),
+                        Role = TryGetString(data, "role")
+                    };
+                })
+                .Where(member => !string.IsNullOrWhiteSpace(member.Uid))
+                .ToList();
+
+        if (memberships.Count == 0)
+            return new List<GroupMemberUi>();
+
+        var profiles =
+            await _firestore
+                .GetCollection("users")
+                .GetDocumentsAsync<FirestoreUserProfileDocument>(
+                    Source.Default);
+
+        var profilesByUid =
+            new Dictionary<string, FirestoreUserProfileDocument>(
+                StringComparer.Ordinal);
+
+        if (profiles != null)
         {
-            return false;
-        }
+            foreach (var document in profiles.Documents)
+            {
+                var profile = document.Data;
+                if (profile == null)
+                    continue;
 
-        if (string.Equals(
-                level,
-                "District",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return
-                profile.DistrictId > 0 &&
-                DistrictId > 0 &&
-                profile.DistrictId == DistrictId;
-        }
-
-        if (string.Equals(
-                level,
-                "Regional",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return
-                profile.RegionId > 0 &&
-                RegionId > 0 &&
-                profile.RegionId == RegionId;
-        }
-
-        if (string.Equals(
-                level,
-                "Branch",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            var selectedBranchId =
-                BranchId > 0
-                    ? BranchId
-                    : TryParseBranchIdFromGroupId(
-                        _groupId);
-
-            return
-                selectedBranchId > 0 &&
-                profile.BranchId == selectedBranchId;
-        }
-
-        if (string.Equals(
-                level,
-                "National",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            var profileUid =
-                string.IsNullOrWhiteSpace(
-                    profile.Uid)
+                var uid = string.IsNullOrWhiteSpace(profile.Uid)
                     ? profile.DocumentId
                     : profile.Uid;
-
-            return
-                string.Equals(
-                    profile.LeadershipLevel,
-                    "National",
-                    StringComparison.OrdinalIgnoreCase)
-                ||
-                string.Equals(
-                    profile.Role,
-                    "National Leader",
-                    StringComparison.OrdinalIgnoreCase)
-                ||
-                string.Equals(
-                    currentUid,
-                    profileUid,
-                    StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(uid))
+                    profilesByUid[uid] = profile;
+            }
         }
 
-        return false;
+        var currentUid = GetCurrentUserUid();
+        return memberships
+            .Select(member =>
+            {
+                profilesByUid.TryGetValue(member.Uid, out var profile);
+                return new GroupMemberUi
+                {
+                    Uid = member.Uid,
+                    DisplayName = profile == null
+                        ? member.Uid
+                        : !string.IsNullOrWhiteSpace(profile.FullName)
+                            ? profile.FullName
+                            : !string.IsNullOrWhiteSpace(profile.Username)
+                                ? profile.Username
+                                : "Member",
+                    Role = string.IsNullOrWhiteSpace(member.Role)
+                        ? profile?.Role ?? "Member"
+                        : member.Role,
+                    LeadershipLevel = profile?.LeadershipLevel ?? "Member",
+                    IsCurrentUser = string.Equals(
+                        currentUid,
+                        member.Uid,
+                        StringComparison.Ordinal)
+                };
+            })
+            .OrderBy(member => member.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+    catch (Exception ex)
+    {
+        System.Diagnostics.Debug.WriteLine(
+            $"[GROUP_CHAT] Exact group member load failed: {ex}");
+        throw;
+    }
     }
 
     // ============================================================
@@ -3710,6 +3582,12 @@ public partial class GroupChatPage : ContentPage
             "Member";
 
         public bool IsCurrentUser { get; set; }
+    }
+
+    private sealed class ExactGroupMembership
+    {
+        public string Uid { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
     }
 
     // ============================================================
