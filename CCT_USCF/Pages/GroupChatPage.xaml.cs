@@ -1125,23 +1125,45 @@ public partial class GroupChatPage : ContentPage
 
         if (_messages.Count == 0)
         {
-            MessagesLayout.Children.Add(
-                new Label
+            MessagesLayout.Children.Add(new Border
+            {
+                BackgroundColor = Color.FromArgb("#FFFFFF"),
+                Stroke = Color.FromArgb("#DCE7DF"),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 18 },
+                Padding = new Thickness(22, 24),
+                Margin = new Thickness(8, 34, 8, 0),
+                Content = new VerticalStackLayout
                 {
-                    Text =
-                        "No messages yet. Start the conversation.",
-
-                    FontSize =
-                        15,
-
-                    TextColor =
-                        Colors.Gray,
-
-                    Margin =
-                        new Thickness(
-                            8,
-                            16)
-                });
+                    Spacing = 6,
+                    HorizontalOptions = LayoutOptions.Center,
+                    Children =
+                    {
+                        new Label
+                        {
+                            Text = "✦",
+                            FontSize = 26,
+                            TextColor = Color.FromArgb("#A16207"),
+                            HorizontalOptions = LayoutOptions.Center
+                        },
+                        new Label
+                        {
+                            Text = "Start the conversation",
+                            FontSize = 17,
+                            FontAttributes = FontAttributes.Bold,
+                            TextColor = Color.FromArgb("#102A20"),
+                            HorizontalOptions = LayoutOptions.Center
+                        },
+                        new Label
+                        {
+                            Text = "Be the first to share something with this community.",
+                            FontSize = 13,
+                            TextColor = Color.FromArgb("#667A70"),
+                            HorizontalTextAlignment = TextAlignment.Center
+                        }
+                    }
+                }
+            });
 
             return;
         }
@@ -1187,11 +1209,11 @@ public partial class GroupChatPage : ContentPage
 
                 BackgroundColor =
                     isCurrentUser
-                        ? Color.FromArgb("#DBEAFE")
+                        ? Color.FromArgb("#E4F4E9")
                         : GetSenderColor(message.SenderUid),
 
                 Stroke =
-                    Color.FromArgb("#D9E2F2"),
+                    Color.FromArgb("#DCE7DF"),
 
                 StrokeThickness =
                     _selectedMessageIds.Contains(message.MessageId) ? 3 : 1,
@@ -1205,7 +1227,8 @@ public partial class GroupChatPage : ContentPage
                 HorizontalOptions =
                     isCurrentUser ? LayoutOptions.End : LayoutOptions.Start,
 
-                WidthRequest = 300
+                MaximumWidthRequest = 320,
+                MinimumWidthRequest = 80
             };
 
         var stack =
@@ -1228,7 +1251,9 @@ public partial class GroupChatPage : ContentPage
                 FontAttributes =
                     FontAttributes.Bold,
 
-                TextColor = Color.FromArgb("#334155")
+                TextColor = isCurrentUser
+                    ? Color.FromArgb("#075E36")
+                    : Color.FromArgb("#315244")
             });
 
         AddMessageContent(
@@ -1243,7 +1268,7 @@ public partial class GroupChatPage : ContentPage
                     ? "Replying to deleted message"
                     : $"Replying to {message.ReplyToSenderName}: {message.ReplyToPreview}",
                 FontSize = 11,
-                TextColor = Color.FromArgb("#64748B"),
+                TextColor = Color.FromArgb("#667A70"),
                 LineBreakMode = LineBreakMode.TailTruncation
             });
         }
@@ -1486,7 +1511,7 @@ public partial class GroupChatPage : ContentPage
                 Text = "Message deleted",
                 FontSize = 14,
                 FontAttributes = FontAttributes.Italic,
-                TextColor = Color.FromArgb("#64748B")
+                TextColor = Color.FromArgb("#667A70")
             });
             return;
         }
@@ -1526,11 +1551,8 @@ public partial class GroupChatPage : ContentPage
                         Text =
                             message.Text,
 
-                        FontSize =
-                            15,
-
-                        TextColor =
-                            Colors.Black,
+                        FontSize = 15,
+                        TextColor = Color.FromArgb("#102A20"),
 
                         LineBreakMode =
                             LineBreakMode.WordWrap

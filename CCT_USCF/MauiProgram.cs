@@ -169,6 +169,8 @@ builder.Services.AddSingleton<
     CCT_USCF.Services.CommunityService>();
 builder.Services.AddSingleton<
     CCT_USCF.Services.ChurchGroupService>();
+builder.Services.AddSingleton<
+    CCT_USCF.Services.ChurchGroupCacheService>();
 
 // Cloudinary
 builder.Services.AddSingleton<

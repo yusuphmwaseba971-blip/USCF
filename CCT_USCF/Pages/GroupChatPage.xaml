@@ -4,65 +4,111 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.GroupChatPage"
     Title="Group Chat"
-    BackgroundColor="#F8FAFC">
+    BackgroundColor="{AppThemeBinding Light={StaticResource ChatBackground}, Dark={StaticResource UscfBackgroundDark}}">
+
+    <ContentPage.Resources>
+        <Style x:Key="ChatActionButton" TargetType="Button">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="MinimumHeightRequest" Value="40" />
+            <Setter Property="MinimumWidthRequest" Value="40" />
+        </Style>
+        <Style x:Key="ComposerIconButton" TargetType="Button">
+            <Setter Property="WidthRequest" Value="44" />
+            <Setter Property="HeightRequest" Value="44" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="22" />
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource BrandDeepGreen}, Dark={StaticResource White}}" />
+            <Setter Property="FontSize" Value="20" />
+        </Style>
+    </ContentPage.Resources>
 
     <Grid
-        RowDefinitions="Auto,Auto,*,Auto">
+        RowDefinitions="Auto,Auto,*,Auto"
+        RowSpacing="0">
 
         <!-- HEADER -->
         <Border
             Grid.Row="0"
-            BackgroundColor="#EEF2FF"
-            Padding="18,16"
-            StrokeThickness="0">
-
-            <VerticalStackLayout Spacing="4">
-
+            BackgroundColor="{AppThemeBinding Light={StaticResource ChatHeader}, Dark={StaticResource UscfSurfaceDark}}"
+            Padding="18,14,18,16"
+            StrokeThickness="0"
+            StrokeShape="RoundRectangle 0">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Border
+                    WidthRequest="46"
+                    HeightRequest="46"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource ChatAccent}, Dark={StaticResource AccentGold}}"
+                    StrokeThickness="0"
+                    StrokeShape="RoundRectangle 23"
+                    VerticalOptions="Center">
+                    <Label
+                        Text="✦"
+                        FontSize="23"
+                        TextColor="White"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+                </Border>
+                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                    <Label
+                        x:Name="GroupTitleLabel"
+                        Text="Group Chat"
+                        FontSize="20"
+                        FontAttributes="Bold"
+                        LineBreakMode="TailTruncation"
+                        MaxLines="1"
+                        TextColor="White" />
+                    <Label
+                        x:Name="GroupStatusLabel"
+                        Text="Loading group..."
+                        FontSize="12"
+                        LineBreakMode="TailTruncation"
+                        MaxLines="1"
+                        TextColor="{StaticResource ChatHeaderMuted}" />
+                </VerticalStackLayout>
                 <Label
-                    x:Name="GroupTitleLabel"
-                    Text="Group Chat"
-                    FontSize="22"
+                    Grid.Column="2"
+                    Text="CHAT"
+                    FontSize="10"
                     FontAttributes="Bold"
-                    TextColor="#1E40AF" />
-
-                <Label
-                    x:Name="GroupStatusLabel"
-                    Text="Loading group..."
-                    FontSize="12"
-                    TextColor="#475569" />
-
-            </VerticalStackLayout>
+                    TextColor="{StaticResource ChatHeaderMuted}"
+                    VerticalOptions="Center" />
+            </Grid>
         </Border>
 
         <!-- MEMBERS -->
         <Grid
             Grid.Row="1"
-            Margin="12,8,12,0"
+            Margin="16,12,16,4"
             ColumnDefinitions="*,Auto,Auto"
-            ColumnSpacing="8">
+            ColumnSpacing="8"
+            VerticalOptions="Center">
 
             <Border
                 Grid.Column="0"
-                BackgroundColor="White"
-                Padding="12"
-                StrokeThickness="0">
-
+                BackgroundColor="{AppThemeBinding Light={StaticResource ChatSurface}, Dark={StaticResource UscfSurfaceDark}}"
+                Padding="12,9"
+                Stroke="{StaticResource ChatBorder}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 12">
                 <Label
                     x:Name="MembersLabel"
                     Text="Members"
                     FontSize="12"
-                    TextColor="#475569" />
+                    FontAttributes="Bold"
+                    TextColor="{AppThemeBinding Light={StaticResource ChatMuted}, Dark={StaticResource Gray300}}" />
             </Border>
 
             <Button
                 x:Name="AddMemberButton"
                 Grid.Column="1"
-                Text="+ Add Member"
-                Padding="12,8"
-                FontSize="12"
-                BackgroundColor="#2563EB"
+                Text="Add member"
+                Style="{StaticResource ChatActionButton}"
+                BackgroundColor="{StaticResource BrandDeepGreen}"
                 TextColor="White"
-                CornerRadius="10"
                 VerticalOptions="Center" />
 
             <Button
@@ -70,13 +116,11 @@
                 Grid.Column="2"
                 Text="Delete"
                 IsVisible="False"
-                Padding="12,8"
-                FontSize="12"
-                BackgroundColor="#FFF1F2"
+                Style="{StaticResource ChatActionButton}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource Gray700}}"
                 TextColor="#B91C1C"
                 BorderColor="#FECACA"
                 BorderWidth="1"
-                CornerRadius="10"
                 VerticalOptions="Center"
                 Clicked="OnDeleteGroupClicked" />
 
@@ -91,11 +135,12 @@
             <ScrollView
                 x:Name="MessagesScrollView"
                 Scrolled="OnMessagesScrolled"
-                Padding="12,12,12,0">
+                Padding="16,8,16,10"
+                BackgroundColor="{AppThemeBinding Light={StaticResource ChatBackground}, Dark={StaticResource UscfBackgroundDark}}">
 
                 <VerticalStackLayout
                     x:Name="MessagesLayout"
-                    Spacing="10" />
+                    Spacing="2" />
 
             </ScrollView>
         </RefreshView>
@@ -108,123 +153,138 @@
             Clicked="OnNewMessagesClicked"
             HorizontalOptions="Center"
             VerticalOptions="End"
-            Margin="0,0,0,16"
-            Padding="16,8"
-            BackgroundColor="#2563EB"
+            Margin="0,0,0,18"
+            Padding="18,9"
+            FontSize="12"
+            FontAttributes="Bold"
+            BackgroundColor="{StaticResource BrandDeepGreen}"
             TextColor="White"
             CornerRadius="18" />
 
         <!-- COMPOSER -->
         <Border
             Grid.Row="3"
-            BackgroundColor="White"
-            Padding="12,10"
-            StrokeThickness="0">
+            BackgroundColor="{AppThemeBinding Light={StaticResource ChatSurface}, Dark={StaticResource UscfSurfaceDark}}"
+            Padding="14,10,14,14"
+            Stroke="{StaticResource ChatBorder}"
+            StrokeThickness="1"
+            StrokeShape="RoundRectangle 18,18,0,0">
 
             <VerticalStackLayout
-                Spacing="8">
+                Spacing="9">
 
                 <Border
                     x:Name="ReplyPreviewLayout"
                     IsVisible="False"
-                    BackgroundColor="#EEF2FF"
-                    Padding="10,6"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource Gray700}}"
+                    Padding="12,8"
+                    Stroke="{StaticResource ChatAccent}"
                     StrokeThickness="0"
                     StrokeShape="RoundRectangle 10">
-                    <Label
-                        x:Name="ReplyPreviewLabel"
-                        FontSize="12"
-                        TextColor="#334155"
-                        LineBreakMode="TailTruncation" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <BoxView WidthRequest="3" CornerRadius="2" Color="{StaticResource ChatAccent}" />
+                        <Label
+                            Grid.Column="1"
+                            x:Name="ReplyPreviewLabel"
+                            FontSize="12"
+                            TextColor="{AppThemeBinding Light={StaticResource ChatText}, Dark={StaticResource White}}"
+                            LineBreakMode="TailTruncation"
+                            MaxLines="2" />
+                    </Grid>
                 </Border>
 
                 <!-- PENDING ATTACHMENT PREVIEW -->
-                <Grid
+                <Border
                     x:Name="AttachmentPreviewContainer"
                     IsVisible="False"
-                    ColumnDefinitions="Auto,*,Auto"
-                    ColumnSpacing="8"
-                    BackgroundColor="#F8FAFC"
-                    Padding="8">
+                    BackgroundColor="{StaticResource ChatInput}"
+                    Padding="8"
+                    Stroke="{StaticResource ChatBorder}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <Image
+                            x:Name="AttachmentPreviewImage"
+                            Grid.Column="0"
+                            WidthRequest="70"
+                            HeightRequest="70"
+                            Aspect="AspectFill"
+                            IsVisible="False" />
 
-                    <Image
-                        x:Name="AttachmentPreviewImage"
-                        Grid.Column="0"
-                        WidthRequest="70"
-                        HeightRequest="70"
-                        Aspect="AspectFill"
-                        IsVisible="False" />
+                        <VerticalStackLayout
+                            Grid.Column="1"
+                            VerticalOptions="Center">
+                            <Label
+                                x:Name="AttachmentPreviewNameLabel"
+                                Text="Attachment"
+                                FontSize="13"
+                                FontAttributes="Bold"
+                                TextColor="{StaticResource ChatText}" />
+                            <Label
+                                x:Name="AttachmentPreviewTypeLabel"
+                                Text=""
+                                FontSize="11"
+                                TextColor="{StaticResource ChatMuted}" />
+                        </VerticalStackLayout>
 
-                    <VerticalStackLayout
-                        Grid.Column="1"
-                        VerticalOptions="Center">
-
-                        <Label
-                            x:Name="AttachmentPreviewNameLabel"
-                            Text="Attachment"
-                            FontSize="13"
-                            FontAttributes="Bold"
-                            TextColor="#0F172A" />
-
-                        <Label
-                            x:Name="AttachmentPreviewTypeLabel"
-                            Text=""
-                            FontSize="11"
-                            TextColor="#64748B" />
-
-                    </VerticalStackLayout>
-
-                    <Button
-                        x:Name="RemoveAttachmentButton"
-                        Grid.Column="2"
-                        Text="✕"
-                        FontSize="16"
-                        WidthRequest="40"
-                        HeightRequest="40"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="#DC2626"
-                        Clicked="OnRemoveAttachmentClicked" />
-
-                </Grid>
+                        <Button
+                            x:Name="RemoveAttachmentButton"
+                            Grid.Column="2"
+                            Text="✕"
+                            FontSize="16"
+                            WidthRequest="40"
+                            HeightRequest="40"
+                            Padding="0"
+                            BackgroundColor="Transparent"
+                            TextColor="#B91C1C"
+                            Clicked="OnRemoveAttachmentClicked" />
+                    </Grid>
+                </Border>
 
                 <!-- MESSAGE INPUT -->
                 <Grid
                     ColumnDefinitions="Auto,*,Auto"
-                    ColumnSpacing="8">
+                    ColumnSpacing="8"
+                    VerticalOptions="Center">
 
                     <Button
                         x:Name="AttachmentButton"
                         Grid.Column="0"
                         Text="📎"
-                        FontSize="22"
-                        WidthRequest="48"
-                        HeightRequest="48"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="#1E40AF"
+                        Style="{StaticResource ComposerIconButton}"
                         Clicked="OnAttachmentClicked"
                         VerticalOptions="Center" />
 
-                    <Entry
-                        x:Name="MessageEntry"
+                    <Border
                         Grid.Column="1"
-                        Placeholder="Type a message..."
-                        BackgroundColor="#F8FAFC"
-                        TextColor="#0F172A"
-                        PlaceholderColor="#64748B"
-                        VerticalOptions="Center"
-                        ReturnType="Send"
-                        Completed="OnMessageEntryCompleted" />
+                        BackgroundColor="{StaticResource ChatInput}"
+                        Stroke="{StaticResource ChatBorder}"
+                        StrokeThickness="1"
+                        StrokeShape="RoundRectangle 16"
+                        Padding="12,0"
+                        MinimumHeightRequest="46">
+                        <Entry
+                            x:Name="MessageEntry"
+                            Placeholder="Share something with the group..."
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource ChatText}, Dark={StaticResource White}}"
+                            PlaceholderColor="{StaticResource ChatMuted}"
+                            ReturnType="Send"
+                            Completed="OnMessageEntryCompleted" />
+                    </Border>
 
                     <Button
                         x:Name="SendButton"
                         Grid.Column="2"
-                        Text="Send"
+                        Text="↑"
                         Clicked="OnSendClicked"
-                        Padding="14,8"
-                        CornerRadius="10"
-                        BackgroundColor="#2563EB"
+                        WidthRequest="46"
+                        HeightRequest="46"
+                        Padding="0"
+                        FontSize="23"
+                        FontAttributes="Bold"
+                        CornerRadius="23"
+                        BackgroundColor="{StaticResource BrandDeepGreen}"
                         TextColor="White"
                         VerticalOptions="Center" />
 

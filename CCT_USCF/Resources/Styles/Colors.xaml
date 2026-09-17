@@ -35,6 +35,17 @@
     <Color x:Key="AccentPurpleTint">#F3EDFF</Color>
     <Color x:Key="AccentGold">#A16207</Color>
     <Color x:Key="AccentGoldTint">#FFF7D6</Color>
+    <Color x:Key="ChatBackground">#F6F8F6</Color>
+    <Color x:Key="ChatHeader">#075E36</Color>
+    <Color x:Key="ChatHeaderMuted">#D7E8DE</Color>
+    <Color x:Key="ChatSurface">#FFFFFF</Color>
+    <Color x:Key="ChatIncoming">#FFFFFF</Color>
+    <Color x:Key="ChatOutgoing">#E4F4E9</Color>
+    <Color x:Key="ChatAccent">#A16207</Color>
+    <Color x:Key="ChatInput">#F2F6F3</Color>
+    <Color x:Key="ChatText">#102A20</Color>
+    <Color x:Key="ChatMuted">#667A70</Color>
+    <Color x:Key="ChatBorder">#DCE7DF</Color>
 
     <Color x:Key="White">#FFFFFF</Color>
     <Color x:Key="Black">#121212</Color>

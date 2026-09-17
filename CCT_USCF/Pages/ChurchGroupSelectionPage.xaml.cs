@@ -1,6 +1,7 @@
 using Microsoft.Maui.Controls.Shapes;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
+using Microsoft.Maui.Networking;
 using CCT_USCF.Controls;
 using CCT_USCF.Services;
 
@@ -12,6 +13,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
     private readonly ChurchGroupService _groupService;
+    private readonly ChurchGroupCacheService _groupCache;
     private string _selectedLevel = string.Empty;
     private CCT_USCF.Models.CurrentUser? _loadedUser;
     private string _destination = string.Empty;
@@ -22,6 +24,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
         _auth = MauiProgram.Services.GetRequiredService<IFirebaseAuth>();
         _firestore = MauiProgram.Services.GetRequiredService<IFirebaseFirestore>();
         _groupService = MauiProgram.Services.GetRequiredService<ChurchGroupService>();
+        _groupCache = MauiProgram.Services.GetRequiredService<ChurchGroupCacheService>();
     }
 
     public string Destination
@@ -65,9 +68,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
 
     private async Task LoadGroupsAsync(string level)
     {
-        GroupsLayout.Clear();
         AddGroupButton.IsVisible = false;
-        StatusLabel.Text = "Loading groups...";
         _selectedLevel = level;
 
         try
@@ -81,42 +82,107 @@ public partial class ChurchGroupSelectionPage : ContentPage
             }
             _loadedUser = user;
 
-            var groups = await GetGroupsForLevelAsync(level, user);
-            // Any authenticated user with an assigned scope can create a group.
-            AddGroupButton.IsVisible =
-                CanCreateGroups(level, user) ||
-                (level == "Branch" && user.BranchId.HasValue);
-            if (groups.Count == 0)
+            var firebaseUid = GetFirebaseUid();
+            if (string.IsNullOrWhiteSpace(firebaseUid))
+                firebaseUid = user.Id.ToString("N");
+
+            var cacheKey = ChurchGroupCacheService.BuildCacheKey(
+                firebaseUid,
+                level,
+                user);
+            var cachedGroups = await _groupCache.GetAsync(cacheKey);
+            if (cachedGroups != null)
             {
-                StatusLabel.Text = $"No {level.ToLowerInvariant()} groups yet. Groups created for your {level.ToLowerInvariant()} scope will appear here.";
+                await RenderGroupsAsync(
+                    level,
+                    user,
+                    ToFirestoreGroups(cachedGroups));
+                StatusLabel.Text = cachedGroups.Count == 0
+                    ? $"No {level.ToLowerInvariant()} groups yet. Connect to sync this scope."
+                    : $"{level} groups • cached";
+            }
+
+            if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+            {
+                if (cachedGroups == null)
+                    StatusLabel.Text = "Groups aren't available offline yet. Connect to the internet once to load them.";
                 return;
             }
 
-            StatusLabel.Text = $"{level} groups";
-            foreach (var group in groups)
-            {
-                var (accent, accentBorder, accentBackground, icon) = GetGroupTheme(group, level);
-                var card = new ChurchGroupCard
-                {
-                    GroupName = group.Name,
-                    ScopeLabel = $"{group.Level} • {group.GroupType}",
-                    MemberSummary = await BuildGroupMetaAsync(group, user),
-                    Icon = icon,
-                    Accent = accent,
-                    AccentBorder = accentBorder,
-                    AccentBackground = accentBackground,
-                    Margin = new Thickness(0, 0, 0, 2)
-                };
-                card.Clicked += async (_, _) => await SelectGroupAsync(group, user);
-                GroupsLayout.Add(card);
-            }
+            StatusLabel.Text = cachedGroups == null
+                ? "Loading groups..."
+                : "Updating groups...";
+
+            var groups = await GetGroupsForLevelAsync(level, user);
+            await _groupCache.ReplaceAsync(cacheKey, groups);
+            await RenderGroupsAsync(level, user, ToFirestoreGroups(groups));
         }
 
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Loading {level} groups failed: {ex}");
-            StatusLabel.Text = "Unable to connect to the Church Group right now. Please check your internet connection and try again.";
+            if (!GroupsLayout.Children.Any())
+                StatusLabel.Text = "Unable to connect to the Church Group right now. Please check your internet connection and try again.";
+            else
+                StatusLabel.Text = $"{level} groups • cached (sync failed)";
         }
+    }
+
+    private async Task RenderGroupsAsync(
+        string level,
+        CCT_USCF.Models.CurrentUser user,
+        IReadOnlyList<FirestoreGroupDocument> groups)
+    {
+        GroupsLayout.Clear();
+        AddGroupButton.IsVisible =
+            CanCreateGroups(level, user) ||
+            (level == "Branch" && user.BranchId.HasValue);
+
+        if (groups.Count == 0)
+            return;
+
+        foreach (var group in groups)
+        {
+            var (accent, accentBorder, accentBackground, icon) = GetGroupTheme(group, level);
+            var card = new ChurchGroupCard
+            {
+                GroupName = group.Name,
+                ScopeLabel = $"{group.Level} • {group.GroupType}",
+                MemberSummary = await BuildGroupMetaAsync(group, user),
+                Icon = icon,
+                Accent = accent,
+                AccentBorder = accentBorder,
+                AccentBackground = accentBackground,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            card.Clicked += async (_, _) => await SelectGroupAsync(group, user);
+            GroupsLayout.Add(card);
+        }
+    }
+
+    private static List<FirestoreGroupDocument> ToFirestoreGroups(
+        IEnumerable<CCT_USCF.Models.ChurchGroup> groups)
+    {
+        return groups
+            .Select(group => new FirestoreGroupDocument
+            {
+                DocumentId = group.GroupId,
+                Name = group.GroupName,
+                Description = group.Description,
+                Level = group.ScopeType,
+                RegionId = group.RegionId ?? 0,
+                DistrictId = group.DistrictId ?? 0,
+                BranchId = group.BranchId,
+                GroupType = group.GroupType,
+                MemberCount = group.MemberCount,
+                IsStandard = group.IsStandard,
+                CanAccess = group.CanAccess,
+                CanManage = group.CanManage,
+                IsCustom = !group.IsStandard
+            })
+            .OrderBy(group => group.IsCustom ? 1 : 0)
+            .ThenBy(group => group.Name)
+            .ToList();
     }
 
     private static (Color Accent, Color Border, Color Background, string Icon) GetGroupTheme(
@@ -229,12 +295,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
                 // Refresh the selected scope from the backend before opening the
                 // group so persistence and filtering use the same source of truth.
                 await LoadGroupsAsync(_selectedLevel);
-                var persisted = (await GetGroupsForLevelAsync(_selectedLevel, _loadedUser))
-                    .FirstOrDefault(item => string.Equals(
-                        item.DocumentId,
-                        group.GroupId,
-                        StringComparison.Ordinal));
-                await SelectGroupAsync(persisted ?? created, _loadedUser);
+                await SelectGroupAsync(created, _loadedUser);
             }
             catch (Exception ex)
             {
@@ -247,32 +308,21 @@ public partial class ChurchGroupSelectionPage : ContentPage
             }
         }
 
-    private async Task<List<FirestoreGroupDocument>> GetGroupsForLevelAsync(string level, CCT_USCF.Models.CurrentUser user)
+    private async Task<List<CCT_USCF.Models.ChurchGroup>> GetGroupsForLevelAsync(
+        string level,
+        CCT_USCF.Models.CurrentUser user)
     {
         var registeredGroups = await _groupService.GetGroupsAsync(level.ToUpperInvariant());
 
         var groups = registeredGroups
             .Where(group => group.IsActive)
             .Where(group => GroupMatchesScope(level, group, user))
-            .Select(group => new FirestoreGroupDocument
-            {
-                DocumentId = group.GroupId,
-                Name = group.GroupName,
-                Level = group.ScopeType,
-                RegionId = group.RegionId ?? 0,
-                DistrictId = group.DistrictId ?? 0,
-                BranchId = group.BranchId,
-                GroupType = group.GroupType,
-                CanManage = group.CanManage,
-                MemberCount = group.MemberCount,
-                IsStandard = group.IsStandard,
-                CanAccess = group.CanAccess,
-                IsCustom = string.Equals(group.GroupType, "CUSTOM", StringComparison.OrdinalIgnoreCase),
-                MemberUids = new List<string> { GetFirebaseUid() }
-            })
             .ToList();
 
-        return groups.OrderBy(group => group.IsCustom ? 1 : 0).ThenBy(group => group.Name).ToList();
+        return groups
+            .OrderBy(group => !group.IsStandard)
+            .ThenBy(group => group.GroupName)
+            .ToList();
     }
 
     private static bool GroupMatchesScope(string level, CCT_USCF.Models.ChurchGroup group, CCT_USCF.Models.CurrentUser user)
@@ -396,15 +446,18 @@ public partial class ChurchGroupSelectionPage : ContentPage
             ? group.DocumentId
             : group.Name.Replace(" ", "-").Replace("/", "-").Trim('-');
 
-        try
+        if (Connectivity.Current.NetworkAccess == NetworkAccess.Internet)
         {
-            await _groupService.JoinGroupAsync(groupId);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Join failed: {ex}");
-            await DisplayAlert("Unable to join group", ex.Message, "OK");
-            return;
+            try
+            {
+                await _groupService.JoinGroupAsync(groupId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Join failed: {ex}");
+                await DisplayAlert("Unable to join group", ex.Message, "OK");
+                return;
+            }
         }
 
         await Shell.Current.GoToAsync(
