@@ -1379,7 +1379,7 @@ public partial class GroupChatPage : ContentPage
             {
                 Text = message.ReplyToPreview == "Message deleted"
                     ? "Replying to deleted message"
-                    : $"Replying to {message.ReplyToSenderName}: {message.ReplyToPreview}",
+                    : $"Replying to {SafePublicName(message.ReplyToSenderName)}: {message.ReplyToPreview}",
                 FontSize = 10 * _appearance.ChatFontScale,
                 TextColor = Color.FromArgb("#667A70"),
                 LineBreakMode = LineBreakMode.TailTruncation
@@ -1481,6 +1481,10 @@ public partial class GroupChatPage : ContentPage
     private static bool IsEmailLike(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         value.Contains('@', StringComparison.Ordinal);
+
+    private static string SafePublicName(string? value) =>
+        IsEmailLike(value) ? "Member" :
+        string.IsNullOrWhiteSpace(value) ? "Member" : value.Trim();
 
     private static Color GetSenderColor(string senderUid)
     {
@@ -3325,9 +3329,6 @@ public partial class GroupChatPage : ContentPage
                 })
                 .Where(member => !string.IsNullOrWhiteSpace(member.Uid))
                 .ToList();
-
-        if (memberships.Count == 0)
-            return new List<GroupMemberUi>();
 
         var profiles =
             await _firestore

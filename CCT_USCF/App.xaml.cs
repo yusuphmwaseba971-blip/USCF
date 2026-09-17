@@ -10,6 +10,9 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        MauiProgram.Services
+            .GetRequiredService<AppAppearanceService>()
+            .ApplyTypography();
 
         // NOTE: Region seeding is temporary and should be run manually.
         // The automatic seeder was disabled to avoid runtime write attempts

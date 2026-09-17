@@ -23,7 +23,7 @@ public sealed class AppAppearanceService
     public string Language => Preferences.Default.Get(LanguageKey, "en");
     public string BackgroundName => Preferences.Default.Get(BackgroundKey, "White");
     public string CustomColor => Preferences.Default.Get(ColorKey, "#FFFFFF");
-    public string FontPreference => Preferences.Default.Get(FontPreferenceKey, "System");
+    public string FontPreference => Preferences.Default.Get(FontPreferenceKey, "CCT-USCF Default");
     public string FontSizePreference => Preferences.Default.Get(FontSizePreferenceKey, "Medium");
     public static readonly IReadOnlyList<string> FontPreferences =
         ["System", "CCT-USCF Default", "Readable", "Modern"];
@@ -40,6 +40,25 @@ public sealed class AppAppearanceService
             "Large" => 1.12,
             _ => 1.0
         };
+
+    public void ApplyTypography()
+    {
+        var resources = Application.Current?.Resources;
+        if (resources == null)
+            return;
+
+        resources["AppFontFamily"] =
+            string.Equals(
+                FontPreference,
+                "System",
+                StringComparison.OrdinalIgnoreCase)
+                ? "sans"
+                : "OpenSansRegular";
+
+        resources["AppFontSize"] = 14d * ChatFontScale;
+        resources["AppSmallFontSize"] = 12d * ChatFontScale;
+        resources["AppCaptionFontSize"] = 11d * ChatFontScale;
+    }
     public Color BackgroundColor
     {
         get
@@ -62,6 +81,7 @@ public sealed class AppAppearanceService
         if (!Backgrounds.ContainsKey(background) && !string.Equals(background, "Custom", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Unsupported application background.", nameof(background));
         Preferences.Default.Set(BackgroundKey, background);
+        ApplyTypography();
         AppearanceChanged?.Invoke(this, EventArgs.Empty);
     }
     public void SetCustomColor(string color)
@@ -78,6 +98,7 @@ public sealed class AppAppearanceService
         if (!FontPreferences.Contains(preference, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException("Unsupported font preference.", nameof(preference));
         Preferences.Default.Set(FontPreferenceKey, preference);
+        ApplyTypography();
         AppearanceChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -86,6 +107,7 @@ public sealed class AppAppearanceService
         if (!FontSizePreferences.Contains(preference, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException("Unsupported font size preference.", nameof(preference));
         Preferences.Default.Set(FontSizePreferenceKey, preference);
+        ApplyTypography();
         AppearanceChanged?.Invoke(this, EventArgs.Empty);
     }
 }
