@@ -74,6 +74,9 @@
                     </Border>
                     <Entry x:Name="CustomColorEntry" Placeholder="Custom color (#RRGGBB)" />
                     <Button Text="Apply appearance" Clicked="OnAppearanceClicked" />
+                    <Label Text="Chat Typography" FontAttributes="Bold" />
+                    <Picker x:Name="FontPreferencePicker" Title="Font preference" />
+                    <Picker x:Name="FontSizePreferencePicker" Title="Font size" />
                 </VerticalStackLayout>
             </Frame>
 

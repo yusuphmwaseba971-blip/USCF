@@ -38,12 +38,16 @@ public partial class GroupChatPage : ContentPage
     private readonly CloudinaryService _cloudinaryService;
     private readonly ChurchGroupService _groupService;
     private readonly AppwriteService _appwriteService;
+    private readonly AppAppearanceService _appearance;
 
     // ============================================================
     // MESSAGE STATE
     // ============================================================
 
     private readonly List<GroupChatMessageUi> _messages = new();
+    private readonly Dictionary<string, FirestoreUserProfileDocument> _profilesByUid =
+        new(StringComparer.Ordinal);
+    private bool _renderQueued;
     private readonly HashSet<string> _selectedMessageIds = new(StringComparer.Ordinal);
     private GroupChatMessageUi? _replyingTo;
 
@@ -53,6 +57,11 @@ public partial class GroupChatPage : ContentPage
     private bool _isReadingOlderMessages;
     private int _unreadIncomingCount;
     private bool _isComposerBusy;
+    private bool _hasLoadedMessages;
+
+#if ANDROID
+    private Android.Media.MediaRecorder? _audioRecorder;
+#endif
 
     // ============================================================
     // REALTIME
@@ -231,6 +240,7 @@ public partial class GroupChatPage : ContentPage
     {
         InitializeComponent();
         _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
+        _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
 
         _auth =
             MauiProgram.Services
@@ -632,6 +642,11 @@ public partial class GroupChatPage : ContentPage
                 GetAppwriteDocumentId(
                     payload);
 
+            var clientMessageId =
+                TryGetString(
+                    payload,
+                    "client_message_id");
+
             if (string.IsNullOrWhiteSpace(
                     messageId))
             {
@@ -667,6 +682,11 @@ public partial class GroupChatPage : ContentPage
                 TryGetString(
                     payload,
                     "content");
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                content =
+                    TryGetString(payload, "text");
+            }
 
             var messageType =
                 TryGetString(
@@ -721,6 +741,9 @@ public partial class GroupChatPage : ContentPage
                     MessageId =
                         messageId,
 
+                    ClientMessageId =
+                        clientMessageId,
+
                     GroupId =
                         communityId,
 
@@ -773,6 +796,7 @@ public partial class GroupChatPage : ContentPage
                         TryGetString(payload, "reply_to_preview")
                 };
 
+            message.SenderName = GetPublicSenderName(message);
             if (message.IsDeleted)
                 message.Text = "Message deleted";
 
@@ -820,26 +844,33 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            var existingIndex =
-                _messages.FindIndex(
-                    existing =>
-                        string.Equals(
-                            existing.MessageId,
-                            message.MessageId,
-                            StringComparison.Ordinal));
-
-            if (existingIndex >= 0)
-            {
-                _messages[existingIndex] = message;
-                System.Diagnostics.Debug.WriteLine(
-                    $"[GROUP_CHAT] Duplicate realtime message suppressed. message_id={message.MessageId}, group={message.GroupId}");
-                return;
-            }
-
             await MainThread.InvokeOnMainThreadAsync(
                 () =>
                 {
+                    var existingIndex =
+                        _messages.FindIndex(
+                            existing =>
+                                string.Equals(
+                                    existing.MessageId,
+                                    message.MessageId,
+                                    StringComparison.Ordinal) ||
+                                (!string.IsNullOrWhiteSpace(message.ClientMessageId) &&
+                                 string.Equals(
+                                     existing.ClientMessageId,
+                                     message.ClientMessageId,
+                                     StringComparison.Ordinal)));
+
+                    if (existingIndex >= 0)
+                    {
+                        _messages[existingIndex] = message;
+                        RenderMessages();
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[GROUP_CHAT] Duplicate realtime message suppressed. message_id={message.MessageId}, group={message.GroupId}");
+                        return;
+                    }
+
                     AddOrReplaceMessage(message);
+                    RenderMessages(!_isReadingOlderMessages);
                     if (_isReadingOlderMessages &&
                         !string.Equals(
                             message.SenderUid,
@@ -995,11 +1026,16 @@ public partial class GroupChatPage : ContentPage
                             message.CreatedAt)
                     .ToList();
 
-            _messages.Clear();
-
-            _messages.AddRange(loadedMessages);
-
-            RenderMessages();
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                var hadMessages = _messages.Count > 0;
+                var changed = MergeLoadedMessages(loadedMessages);
+                if (changed || !_hasLoadedMessages)
+                {
+                    _hasLoadedMessages = true;
+                    RenderMessages(!hadMessages);
+                }
+            });
         }
         catch (Exception ex)
         {
@@ -1015,13 +1051,16 @@ public partial class GroupChatPage : ContentPage
     private GroupChatMessageUi ToUiMessage(
         Models.CommunityMessage message)
     {
-        return new GroupChatMessageUi
+        var uiMessage = new GroupChatMessageUi
         {
             MessageId =
                 string.IsNullOrWhiteSpace(
                     message.MessageId)
                     ? message.Id
                     : message.MessageId,
+
+            ClientMessageId =
+                message.ClientMessageId,
 
             GroupId =
                 message.CommunityId,
@@ -1086,6 +1125,8 @@ public partial class GroupChatPage : ContentPage
             Status =
                 message.Status
         };
+        uiMessage.SenderName = GetPublicSenderName(uiMessage);
+        return uiMessage;
     }
 
     // ============================================================
@@ -1105,6 +1146,9 @@ public partial class GroupChatPage : ContentPage
 
                     MessageId =
                         message.MessageId,
+
+                    ClientMessageId =
+                        message.ClientMessageId,
 
                     SenderUid =
                         message.SenderUid,
@@ -1173,8 +1217,23 @@ public partial class GroupChatPage : ContentPage
     // RENDER MESSAGES
     // ============================================================
 
-    private void RenderMessages()
+    private void RenderMessages(
+        bool scrollToBottom = false)
     {
+        if (!MainThread.IsMainThread)
+        {
+            if (_renderQueued)
+                return;
+
+            _renderQueued = true;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                _renderQueued = false;
+                RenderMessages(scrollToBottom);
+            });
+            return;
+        }
+
         MessagesLayout.Children.Clear();
 
         if (_messages.Count == 0)
@@ -1234,15 +1293,15 @@ public partial class GroupChatPage : ContentPage
                 CreateMessageBubble(message, isCurrentUser));
         }
 
-        _ =
-            ScrollMessagesToBottomAsync();
+        if (scrollToBottom)
+            _ = ScrollMessagesToBottomAsync();
     }
 
     // ============================================================
     // MESSAGE BUBBLE
     // ============================================================
 
-    private Border CreateMessageBubble(
+    private Microsoft.Maui.Controls.View CreateMessageBubble(
         GroupChatMessageUi message,
         bool isCurrentUser)
     {
@@ -1251,15 +1310,15 @@ public partial class GroupChatPage : ContentPage
             {
                 Padding =
                     new Thickness(
-                        12,
-                        6),
+                        10,
+                        5),
 
                 Margin =
                     new Thickness(
-                        isCurrentUser ? 24 : 0,
+                        isCurrentUser ? 28 : 0,
                         0,
-                        isCurrentUser ? 0 : 24,
-                        6),
+                        isCurrentUser ? 0 : 28,
+                        3),
 
                 BackgroundColor =
                     isCurrentUser
@@ -1288,7 +1347,7 @@ public partial class GroupChatPage : ContentPage
         var stack =
             new VerticalStackLayout
             {
-                Spacing = 3
+                Spacing = 2
             };
 
         stack.Children.Add(
@@ -1296,17 +1355,18 @@ public partial class GroupChatPage : ContentPage
             {
                 Text =
                     (_selectedMessageIds.Contains(message.MessageId) ? "✓ " : string.Empty) +
-                    (isCurrentUser ? "You" : message.SenderName),
+                    (isCurrentUser ? "You" : GetPublicSenderName(message)),
 
                 FontSize =
-                    12,
+                    11 * _appearance.ChatFontScale,
 
                 FontAttributes =
                     FontAttributes.Bold,
 
                 TextColor = isCurrentUser
                     ? Color.FromArgb("#075E36")
-                    : Color.FromArgb("#315244")
+                    : Color.FromArgb("#315244"),
+                FontFamily = _appearance.ChatFontFamily
             });
 
         AddMessageContent(
@@ -1320,7 +1380,7 @@ public partial class GroupChatPage : ContentPage
                 Text = message.ReplyToPreview == "Message deleted"
                     ? "Replying to deleted message"
                     : $"Replying to {message.ReplyToSenderName}: {message.ReplyToPreview}",
-                FontSize = 11,
+                FontSize = 10 * _appearance.ChatFontScale,
                 TextColor = Color.FromArgb("#667A70"),
                 LineBreakMode = LineBreakMode.TailTruncation
             });
@@ -1337,9 +1397,10 @@ public partial class GroupChatPage : ContentPage
                 Text = timestampText,
 
                 FontSize =
-                    11,
+                    10 * _appearance.ChatFontScale,
 
                 TextColor = Color.FromArgb("#64748B"),
+                FontFamily = _appearance.ChatFontFamily,
 
                 HorizontalOptions =
                     LayoutOptions.End
@@ -1350,8 +1411,76 @@ public partial class GroupChatPage : ContentPage
 
         AttachNativeMessageGesture(border, message);
 
-        return border;
+        if (isCurrentUser)
+            return border;
+
+        var avatar = new Border
+        {
+            WidthRequest = 30,
+            HeightRequest = 30,
+            Margin = new Thickness(0, 2, 6, 0),
+            BackgroundColor = GetSenderColor(message.SenderUid),
+            StrokeThickness = 0,
+            StrokeShape = new RoundRectangle { CornerRadius = 15 },
+            Content = new Label
+            {
+                Text = GetAvatarText(message),
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#315244"),
+                HorizontalTextAlignment = Microsoft.Maui.TextAlignment.Center,
+                VerticalTextAlignment = Microsoft.Maui.TextAlignment.Center
+            }
+        };
+        var avatarTap = new TapGestureRecognizer();
+        avatarTap.Tapped += async (_, _) => await ShowSenderDetailsAsync(message);
+        avatar.GestureRecognizers.Add(avatarTap);
+
+        return new HorizontalStackLayout
+        {
+            Spacing = 0,
+            HorizontalOptions = LayoutOptions.Start,
+            Children = { avatar, border }
+        };
     }
+
+    private string GetPublicSenderName(GroupChatMessageUi message)
+    {
+        if (_profilesByUid.TryGetValue(message.SenderUid, out var profile))
+        {
+            if (!string.IsNullOrWhiteSpace(profile.Username))
+                return profile.Username.Trim();
+            if (!string.IsNullOrWhiteSpace(profile.FullName))
+                return profile.FullName.Trim();
+        }
+
+        return IsEmailLike(message.SenderName)
+            ? "Member"
+            : string.IsNullOrWhiteSpace(message.SenderName)
+                ? "Member"
+                : message.SenderName.Trim();
+    }
+
+    private string GetAvatarText(GroupChatMessageUi message)
+    {
+        var name = GetPublicSenderName(message);
+        return name.Length == 0 ? "?" : name[..1].ToUpperInvariant();
+    }
+
+    private async Task ShowSenderDetailsAsync(GroupChatMessageUi message)
+    {
+        _profilesByUid.TryGetValue(message.SenderUid, out var profile);
+        await DisplayAlert(
+            "Sender details",
+            $"Username: {GetPublicSenderName(message)}\n" +
+            $"Name: {(!string.IsNullOrWhiteSpace(profile?.FullName) ? profile.FullName : "Unavailable")}\n" +
+            $"Email: {(!string.IsNullOrWhiteSpace(profile?.Email) ? profile.Email : "Unavailable offline")}",
+            "Close");
+    }
+
+    private static bool IsEmailLike(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.Contains('@', StringComparison.Ordinal);
 
     private static Color GetSenderColor(string senderUid)
     {
@@ -1379,7 +1508,7 @@ public partial class GroupChatPage : ContentPage
                 message,
                 BeginReply,
                 ShowMessageActionsAsync,
-                RenderMessages);
+                () => RenderMessages());
             var detector = new GestureDetector(
                 nativeView.Context,
                 listener);
@@ -1499,7 +1628,7 @@ public partial class GroupChatPage : ContentPage
                 message.MessageId,
                 newText);
             ReplaceUiMessage(ToUiMessage(updated));
-            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            await MainThread.InvokeOnMainThreadAsync(() => RenderMessages());
         }
         catch (UnauthorizedAccessException)
         {
@@ -1533,7 +1662,7 @@ public partial class GroupChatPage : ContentPage
             message.Text = "Message deleted";
             message.UpdatedAt = DateTime.UtcNow;
             ReplaceUiMessage(message);
-            await MainThread.InvokeOnMainThreadAsync(RenderMessages);
+            await MainThread.InvokeOnMainThreadAsync(() => RenderMessages());
         }
         catch (UnauthorizedAccessException)
         {
@@ -1554,6 +1683,20 @@ public partial class GroupChatPage : ContentPage
             _messages[index] = message;
         else
             AddOrReplaceMessage(message);
+    }
+
+    private void RemoveUiMessage(string messageId)
+    {
+        var index =
+            _messages.FindIndex(
+                existing =>
+                    string.Equals(
+                        existing.MessageId,
+                        messageId,
+                        StringComparison.Ordinal));
+
+        if (index >= 0)
+            _messages.RemoveAt(index);
     }
 
     // ============================================================
@@ -1584,6 +1727,14 @@ public partial class GroupChatPage : ContentPage
                     .Trim()
                     .ToLowerInvariant();
 
+        type = MediaViewerService.DetectMediaType(
+        message.MediaUrl,
+        type,
+        message.FileName);
+
+        if (string.IsNullOrWhiteSpace(message.MediaUrl))
+        type = "text";
+
         switch (type)
         {
             case "image":
@@ -1611,8 +1762,9 @@ public partial class GroupChatPage : ContentPage
                         Text =
                             message.Text,
 
-                        FontSize = 15,
+                        FontSize = 14 * _appearance.ChatFontScale,
                         TextColor = Color.FromArgb("#102A20"),
+                        FontFamily = _appearance.ChatFontFamily,
 
                         LineBreakMode =
                             LineBreakMode.WordWrap
@@ -1636,7 +1788,15 @@ public partial class GroupChatPage : ContentPage
                 new Label
                 {
                     Text =
-                        "Image unavailable.",
+                        message.Status.Equals(
+                            "uploading",
+                            StringComparison.OrdinalIgnoreCase)
+                            ? "Uploading image..."
+                            : message.Status.Equals(
+                                "failed",
+                                StringComparison.OrdinalIgnoreCase)
+                                ? "Image upload failed."
+                                : "Image unavailable.",
 
                     TextColor =
                         Colors.Gray
@@ -1708,6 +1868,25 @@ public partial class GroupChatPage : ContentPage
         VerticalStackLayout stack,
         GroupChatMessageUi message)
     {
+        if (string.IsNullOrWhiteSpace(message.MediaUrl))
+        {
+            stack.Children.Add(new Label
+            {
+                Text =
+                    message.Status.Equals(
+                        "uploading",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "Uploading video..."
+                        : message.Status.Equals(
+                            "failed",
+                            StringComparison.OrdinalIgnoreCase)
+                            ? "Video upload failed."
+                            : "Video unavailable.",
+                TextColor = Colors.Gray
+            });
+            return;
+        }
+
         var button =
             new Button
             {
@@ -1779,6 +1958,25 @@ public partial class GroupChatPage : ContentPage
         VerticalStackLayout stack,
         GroupChatMessageUi message)
     {
+        if (string.IsNullOrWhiteSpace(message.MediaUrl))
+        {
+            stack.Children.Add(new Label
+            {
+                Text =
+                    message.Status.Equals(
+                        "uploading",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "Uploading audio..."
+                        : message.Status.Equals(
+                            "failed",
+                            StringComparison.OrdinalIgnoreCase)
+                            ? "Audio upload failed."
+                            : "Audio unavailable.",
+                TextColor = Colors.Gray
+            });
+            return;
+        }
+
         var button =
             new Button
             {
@@ -1966,67 +2164,44 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            var createdMessage =
-                await _communityService
-                    .CreateCommunityMessageAsync(
-                        communityId:
-                            GetBackendCommunityId(),
+            var clientMessageId = Guid.NewGuid().ToString("N");
+            var replyToMessageId = _replyingTo?.MessageId;
+            var replyToSenderName = _replyingTo?.SenderName;
+            var replyToPreview = _replyingTo?.IsDeleted == true
+                ? "Message deleted"
+                : Shorten(_replyingTo?.Text ?? string.Empty);
+            var optimistic = new GroupChatMessageUi
+            {
+                MessageId = $"local-{clientMessageId}",
+                ClientMessageId = clientMessageId,
+                GroupId = GetBackendCommunityId(),
+                SenderUid = GetCurrentUserUid(),
+                SenderName = string.IsNullOrWhiteSpace(currentUser.Username)
+                    ? currentUser.FullName
+                    : currentUser.Username,
+                Text = text,
+                MessageType = "text",
+                CreatedAt = DateTime.UtcNow,
+                ReplyToMessageId = replyToMessageId,
+                ReplyToSenderName = replyToSenderName,
+                ReplyToPreview = replyToPreview,
+                Status = "pending"
+            };
 
-                        content:
-                            text,
-
-                        messageType:
-                            "text",
-
-                        branchId:
-                            _branchId > 0
-                                ? _branchId.ToString()
-                                : null,
-
-                        regionId:
-                            _regionId > 0
-                                ? _regionId.ToString()
-                                : null,
-
-                        districtId:
-                            _districtId > 0
-                                ? _districtId.ToString()
-                                : null,
-
-                        organizationalLevel:
-                            OrganizationalLevel,
-
-                        clientMessageId:
-                            Guid.NewGuid().ToString("N"),
-
-                        replyToMessageId:
-                            _replyingTo?.MessageId,
-
-                        replyToSenderName:
-                            _replyingTo?.SenderName,
-
-                        replyToPreview:
-                            _replyingTo?.IsDeleted == true
-                                ? "Message deleted"
-                                : Shorten(_replyingTo?.Text ?? string.Empty));
-
-            await _communityService
-                .CacheCommunityMessageAsync(
-                    createdMessage);
-            await _communityService.SetChatHistoryEnrolledAsync(
-                GetBackendCommunityId());
-            _chatHistoryEnrolled = true;
-
-            AddOrReplaceMessage(
-                ToUiMessage(
-                    createdMessage));
-            RenderMessages();
-            await ScrollMessagesToBottomAsync();
+            AddOrReplaceMessage(optimistic);
+            RenderMessages(true);
 
             MessageEntry.Text =
                 string.Empty;
             _replyingTo = null;
             ReplyPreviewLayout.IsVisible = false;
+
+            _ = PersistOptimisticTextAsync(
+                optimistic,
+                clientMessageId,
+                replyToMessageId,
+                replyToSenderName,
+                replyToPreview);
         }
         catch (Exception ex)
         {
@@ -2040,6 +2215,50 @@ public partial class GroupChatPage : ContentPage
         }
     }
 
+    private async Task PersistOptimisticTextAsync(
+        GroupChatMessageUi optimistic,
+        string clientMessageId,
+        string? replyToMessageId,
+        string? replyToSenderName,
+        string? replyToPreview)
+    {
+        try
+        {
+            var createdMessage = await _communityService.CreateCommunityMessageAsync(
+                communityId: GetBackendCommunityId(),
+                content: optimistic.Text,
+                messageType: "text",
+                branchId: _branchId > 0 ? _branchId.ToString() : null,
+                regionId: _regionId > 0 ? _regionId.ToString() : null,
+                districtId: _districtId > 0 ? _districtId.ToString() : null,
+                organizationalLevel: OrganizationalLevel,
+                clientMessageId: clientMessageId,
+                replyToMessageId: replyToMessageId,
+                replyToSenderName: replyToSenderName,
+                replyToPreview: replyToPreview);
+
+            await _communityService.CacheCommunityMessageAsync(createdMessage);
+            await _communityService.SetChatHistoryEnrolledAsync(GetBackendCommunityId());
+            _chatHistoryEnrolled = true;
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                AddOrReplaceMessage(ToUiMessage(createdMessage));
+                RenderMessages();
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Optimistic text persistence failed: {ex}");
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                optimistic.Status = "failed";
+                RenderMessages();
+            });
+            await DisplayAlert("Message not sent", ex.Message, "OK");
+        }
+    }
+
     // ============================================================
     // ATTACHMENT BUTTON
     // ============================================================
@@ -2050,27 +2269,24 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
-            var choice =
-                await DisplayActionSheet(
-                    "Attach",
-                    "Cancel",
-                    null,
-                    "🖼️ Image",
-                    "🎥 Video",
-                    "🎵 Audio");
+            var choice = await ShowAttachmentMenuAsync();
 
             switch (choice)
             {
-                case "🖼️ Image":
+                case "🖼  Image":
                     await PickImageAsync();
                     break;
 
-                case "🎥 Video":
+                case "🎥  Video":
                     await PickVideoAsync();
                     break;
 
-                case "🎵 Audio":
+                case "🎵  Audio file":
                     await PickAudioAsync();
+                    break;
+
+                case "🎙  Record audio":
+                    await RecordAudioAsync();
                     break;
             }
         }
@@ -2085,6 +2301,302 @@ public partial class GroupChatPage : ContentPage
                 "OK");
         }
     }
+
+    private async Task<string?> ShowAttachmentMenuAsync()
+    {
+        var completion = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var modal = new ContentPage
+        {
+            BackgroundColor = Color.FromArgb("#66000000")
+        };
+
+        var options = new VerticalStackLayout
+        {
+            Spacing = 10,
+            Padding = 18
+        };
+        options.Children.Add(new Label
+        {
+            Text = "Add to conversation",
+            FontSize = 20,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Color.FromArgb("#102A20")
+        });
+        options.Children.Add(new Label
+        {
+            Text = "Share media with your group",
+            FontSize = 12,
+            TextColor = Color.FromArgb("#667A70"),
+            Margin = new Thickness(0, -6, 0, 4)
+        });
+
+        void AddOption(string icon, string title, string description, string value)
+        {
+            var button = new Button
+            {
+                Text = $"{icon}   {title}\n       {description}",
+                FontSize = 14,
+                TextColor = Color.FromArgb("#102A20"),
+                BackgroundColor = Color.FromArgb("#F4F8F5"),
+                BorderColor = Color.FromArgb("#DCE7DF"),
+                BorderWidth = 1,
+                CornerRadius = 14,
+                Padding = new Thickness(16, 10),
+                MinimumHeightRequest = 62
+            };
+            button.Clicked += async (_, _) =>
+            {
+                completion.TrySetResult(value);
+                if (Navigation.ModalStack.Contains(modal))
+                    await Navigation.PopModalAsync();
+            };
+            options.Children.Add(button);
+        }
+
+        AddOption("🖼", "Image", "Choose a photo from this device.", "🖼  Image");
+        AddOption("🎥", "Video", "Choose a video to share.", "🎥  Video");
+        AddOption("🎵", "Audio File", "Choose an existing audio file.", "🎵  Audio file");
+        AddOption("🎙", "Record Audio", "Record a new voice message.", "🎙  Record audio");
+
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            BackgroundColor = Colors.Transparent,
+            TextColor = Color.FromArgb("#315244"),
+            FontAttributes = FontAttributes.Bold
+        };
+        cancel.Clicked += async (_, _) =>
+        {
+            completion.TrySetResult(null);
+            if (Navigation.ModalStack.Contains(modal))
+                await Navigation.PopModalAsync();
+        };
+        options.Children.Add(cancel);
+
+        modal.Content = new Border
+        {
+            Margin = new Thickness(18, 0, 18, 18),
+            Padding = 0,
+            VerticalOptions = LayoutOptions.End,
+            BackgroundColor = Colors.White,
+            Stroke = Color.FromArgb("#DCE7DF"),
+            StrokeShape = new RoundRectangle { CornerRadius = 24 },
+            Content = options
+        };
+        modal.Disappearing += (_, _) => completion.TrySetResult(null);
+        await Navigation.PushModalAsync(modal);
+        return await completion.Task;
+    }
+
+        private async Task RecordAudioAsync()
+        {
+#if ANDROID
+            var permission = await Permissions.RequestAsync<Permissions.Microphone>();
+            if (permission != PermissionStatus.Granted)
+            {
+                await DisplayAlert(
+                    "Microphone permission required",
+                    "Allow microphone access to record an audio message.",
+                    "OK");
+                return;
+            }
+
+            var path = System.IO.Path.Combine(
+                FileSystem.CacheDirectory,
+                $"group-audio-{Guid.NewGuid():N}.m4a");
+
+            try
+            {
+                _audioRecorder = new Android.Media.MediaRecorder();
+                _audioRecorder.SetAudioSource(Android.Media.AudioSource.Mic);
+                _audioRecorder.SetOutputFormat(Android.Media.OutputFormat.Mpeg4);
+                _audioRecorder.SetAudioEncoder(Android.Media.AudioEncoder.Aac);
+                _audioRecorder.SetOutputFile(path);
+                _audioRecorder.Prepare();
+                _audioRecorder.Start();
+                var result = await ShowRecordingDialogAsync();
+                StopAudioRecorder();
+
+                if (result == RecordingResult.Completed &&
+                    File.Exists(path) &&
+                    new FileInfo(path).Length > 0)
+                {
+                    _pendingAttachment = new FileResult(path, "audio/mp4");
+                    _pendingAttachmentType = "audio";
+                    _pendingAttachmentLocalPath = path;
+                    ShowPendingAttachmentPreview();
+                }
+                else
+                {
+                    TryDeleteRecording(path);
+                }
+            }
+            catch (Exception ex)
+            {
+                StopAudioRecorder();
+                TryDeleteRecording(path);
+                System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Audio recording failed: {ex}");
+                await DisplayAlert("Recording unavailable", "The audio recording could not be started.", "OK");
+            }
+#else
+            await DisplayAlert("Recording unavailable", "Audio recording is supported on Android only.", "OK");
+#endif
+        }
+
+#if ANDROID
+        private enum RecordingResult
+        {
+            Cancelled,
+            Completed
+        }
+
+        private async Task<RecordingResult> ShowRecordingDialogAsync()
+        {
+            var completion = new TaskCompletionSource<RecordingResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var elapsed = TimeSpan.Zero;
+            var timer = Dispatcher.CreateTimer();
+            timer.Interval = TimeSpan.FromSeconds(1);
+
+            var elapsedLabel = new Label
+            {
+                Text = "00:00",
+                FontSize = 22,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#102A20"),
+                HorizontalOptions = LayoutOptions.Center
+            };
+            timer.Tick += (_, _) =>
+            {
+                elapsed += TimeSpan.FromSeconds(1);
+                elapsedLabel.Text = elapsed.ToString(@"mm\:ss");
+            };
+
+            var recordingPage = new ContentPage
+            {
+                Title = "Record audio",
+                BackgroundColor = Color.FromArgb("#F4F8F5"),
+                Content = new Border
+                {
+                    Margin = 24,
+                    Padding = 24,
+                    BackgroundColor = Colors.White,
+                    Stroke = Color.FromArgb("#DCE7DF"),
+                    StrokeShape = new RoundRectangle { CornerRadius = 22 },
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 14,
+                        VerticalOptions = LayoutOptions.Center,
+                        Children =
+                        {
+                            new Label
+                            {
+                                Text = "🎙",
+                                FontSize = 38,
+                                HorizontalOptions = LayoutOptions.Center
+                            },
+                            new Label
+                            {
+                                Text = "Recording audio",
+                                FontSize = 19,
+                                FontAttributes = FontAttributes.Bold,
+                                TextColor = Color.FromArgb("#102A20"),
+                                HorizontalOptions = LayoutOptions.Center
+                            },
+                            new Label
+                            {
+                                Text = "Speak clearly, then tap Stop when finished.",
+                                FontSize = 13,
+                                TextColor = Color.FromArgb("#667A70"),
+                                HorizontalTextAlignment = Microsoft.Maui.TextAlignment.Center
+                            },
+                            elapsedLabel,
+                            new HorizontalStackLayout
+                            {
+                                Spacing = 12,
+                                HorizontalOptions = LayoutOptions.Center,
+                                Children =
+                                {
+                                    new Button
+                                    {
+                                        Text = "Cancel",
+                                        TextColor = Color.FromArgb("#315244"),
+                                        BackgroundColor = Color.FromArgb("#EAF2ED"),
+                                        CornerRadius = 14,
+                                        Command = new Command(() =>
+                                        {
+                                            timer.Stop();
+                                            completion.TrySetResult(RecordingResult.Cancelled);
+                                        })
+                                    },
+                                    new Button
+                                    {
+                                        Text = "Stop",
+                                        TextColor = Colors.White,
+                                        BackgroundColor = Color.FromArgb("#1A4D3A"),
+                                        CornerRadius = 14,
+                                        Command = new Command(() =>
+                                        {
+                                            timer.Stop();
+                                            completion.TrySetResult(RecordingResult.Completed);
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            recordingPage.Disappearing += (_, _) =>
+            {
+                timer.Stop();
+                completion.TrySetResult(RecordingResult.Cancelled);
+            };
+
+            timer.Start();
+            await Navigation.PushModalAsync(recordingPage);
+            var result = await completion.Task;
+            if (Navigation.ModalStack.Contains(recordingPage))
+                await Navigation.PopModalAsync();
+            return result;
+        }
+
+        private void StopAudioRecorder()
+        {
+            if (_audioRecorder is null)
+                return;
+
+            try
+            {
+                _audioRecorder.Stop();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Recorder stop failed: {ex}");
+            }
+            finally
+            {
+                _audioRecorder.Release();
+                _audioRecorder.Dispose();
+                _audioRecorder = null;
+            }
+        }
+
+        private static void TryDeleteRecording(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GROUP_CHAT] Recording cleanup failed: {ex}");
+            }
+        }
+#endif
 
     // ============================================================
     // PICK IMAGE
@@ -2451,6 +2963,39 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
+            var pendingType =
+                _pendingAttachmentType.Trim().ToLowerInvariant();
+            var pendingFileName =
+                _pendingAttachment.FileName;
+            var pendingMessageId =
+                $"local-media-{Guid.NewGuid():N}";
+            var pendingMessage =
+                new GroupChatMessageUi
+                {
+                    MessageId = pendingMessageId,
+                    ClientMessageId = pendingMessageId,
+                    GroupId = _groupId,
+                    SenderUid = GetCurrentUserUid(),
+                    SenderName =
+                        currentUser.Email
+                        ?? "You",
+                    Text = pendingFileName,
+                    MessageType = pendingType,
+                    FileName = pendingFileName,
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "uploading",
+                    ReplyToMessageId = _replyingTo?.MessageId,
+                    ReplyToSenderName = _replyingTo?.SenderName,
+                    ReplyToPreview =
+                        _replyingTo?.IsDeleted == true
+                            ? "Message deleted"
+                            : Shorten(_replyingTo?.Text ?? string.Empty)
+                };
+
+            AddOrReplaceMessage(pendingMessage);
+            RenderMessages();
+            await ScrollMessagesToBottomAsync();
+
             CloudinaryUploadResult upload;
 
             switch (
@@ -2560,6 +3105,7 @@ public partial class GroupChatPage : ContentPage
                                 ? "Message deleted"
                                 : Shorten(_replyingTo?.Text ?? string.Empty));
 
+            RemoveUiMessage(pendingMessageId);
             await _communityService
                 .CacheCommunityMessageAsync(
                     createdMessage);
@@ -2590,6 +3136,21 @@ public partial class GroupChatPage : ContentPage
         }
         catch (Exception ex)
         {
+            var uploadingMessage =
+                _messages.LastOrDefault(
+                    message =>
+                        string.Equals(
+                            message.Status,
+                            "uploading",
+                            StringComparison.OrdinalIgnoreCase));
+
+            if (uploadingMessage != null)
+            {
+                uploadingMessage.Status = "failed";
+                ReplaceUiMessage(uploadingMessage);
+                RenderMessages();
+            }
+
             System.Diagnostics.Debug.WriteLine(
                 "========== GROUP CHAT ATTACHMENT ERROR ==========");
 
@@ -2675,7 +3236,12 @@ public partial class GroupChatPage : ContentPage
                     string.Equals(
                         existing.MessageId,
                         message.MessageId,
-                        StringComparison.Ordinal));
+                        StringComparison.Ordinal) ||
+                    (!string.IsNullOrWhiteSpace(message.ClientMessageId) &&
+                     string.Equals(
+                         existing.ClientMessageId,
+                         message.ClientMessageId,
+                         StringComparison.Ordinal)));
 
         if (existingIndex >= 0)
         {
@@ -2785,7 +3351,10 @@ public partial class GroupChatPage : ContentPage
                     ? profile.DocumentId
                     : profile.Uid;
                 if (!string.IsNullOrWhiteSpace(uid))
+                {
                     profilesByUid[uid] = profile;
+                    _profilesByUid[uid] = profile;
+                }
             }
         }
 
@@ -3553,6 +4122,42 @@ public partial class GroupChatPage : ContentPage
         }
     }
 
+    private bool MergeLoadedMessages(
+        IReadOnlyList<GroupChatMessageUi> loadedMessages)
+    {
+        var changed = false;
+        foreach (var message in loadedMessages)
+        {
+            var existingIndex = _messages.FindIndex(existing =>
+                string.Equals(existing.MessageId, message.MessageId, StringComparison.Ordinal));
+            if (existingIndex < 0)
+            {
+                _messages.Add(message);
+                changed = true;
+            }
+            else if (!AreMessagesEquivalent(_messages[existingIndex], message))
+            {
+                _messages[existingIndex] = message;
+                changed = true;
+            }
+        }
+
+        if (changed)
+            _messages.Sort((left, right) => left.CreatedAt.CompareTo(right.CreatedAt));
+
+        return changed;
+    }
+
+    private static bool AreMessagesEquivalent(
+        GroupChatMessageUi left,
+        GroupChatMessageUi right) =>
+        string.Equals(left.Text, right.Text, StringComparison.Ordinal) &&
+        string.Equals(left.MessageType, right.MessageType, StringComparison.Ordinal) &&
+        string.Equals(left.MediaUrl, right.MediaUrl, StringComparison.Ordinal) &&
+        left.IsDeleted == right.IsDeleted &&
+        left.IsEdited == right.IsEdited &&
+        left.UpdatedAt == right.UpdatedAt;
+
     // ============================================================
     // SCROLL
     // ============================================================
@@ -3589,6 +4194,9 @@ public partial class GroupChatPage : ContentPage
     private sealed class GroupChatMessageUi
     {
         public string MessageId { get; set; } =
+            string.Empty;
+
+        public string ClientMessageId { get; set; } =
             string.Empty;
 
         public string GroupId { get; set; } =
@@ -3675,6 +4283,10 @@ public partial class GroupChatPage : ContentPage
 
         [FirestoreProperty("username")]
         public string Username { get; set; } =
+            string.Empty;
+
+        [FirestoreProperty("email")]
+        public string Email { get; set; } =
             string.Empty;
 
         [FirestoreProperty("role")]

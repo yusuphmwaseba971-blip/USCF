@@ -1590,12 +1590,17 @@ SenderUid =
             }
 
             var senderName =
-                currentUser.FullName?.Trim();
+                currentUser.Username?.Trim();
 
             if (string.IsNullOrWhiteSpace(senderName))
             {
-                senderName =
-                    "Community member";
+                senderName = currentUser.FullName?.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(senderName) ||
+                senderName.Contains('@', StringComparison.Ordinal))
+            {
+                senderName = "Community member";
             }
 
             branchId ??= currentUser.BranchId?.ToString();
@@ -2852,6 +2857,13 @@ SenderUid =
                     "content",
                     string.Empty)
                 ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                content =
+                    TryGetString(data, "text", string.Empty)
+                    ?? TryGetString(data, "message", string.Empty)
+                    ?? string.Empty;
+            }
 
 var communityId =
     TryGetString(

@@ -8,6 +8,8 @@ public sealed class AppAppearanceService
     private const string LanguageKey = "app.language";
     private const string BackgroundKey = "app.background";
     private const string ColorKey = "app.background.color";
+    private const string FontPreferenceKey = "app.font.preference";
+    private const string FontSizePreferenceKey = "app.font.size";
     public static readonly IReadOnlyDictionary<string, string> Languages =
         new Dictionary<string, string> { ["English"] = "en", ["Kiswahili"] = "sw" };
     public static readonly IReadOnlyDictionary<string, string> Backgrounds =
@@ -21,6 +23,23 @@ public sealed class AppAppearanceService
     public string Language => Preferences.Default.Get(LanguageKey, "en");
     public string BackgroundName => Preferences.Default.Get(BackgroundKey, "White");
     public string CustomColor => Preferences.Default.Get(ColorKey, "#FFFFFF");
+    public string FontPreference => Preferences.Default.Get(FontPreferenceKey, "System");
+    public string FontSizePreference => Preferences.Default.Get(FontSizePreferenceKey, "Medium");
+    public static readonly IReadOnlyList<string> FontPreferences =
+        ["System", "CCT-USCF Default", "Readable", "Modern"];
+    public static readonly IReadOnlyList<string> FontSizePreferences =
+        ["System", "Small", "Medium", "Large"];
+    public string? ChatFontFamily =>
+        string.Equals(FontPreference, "System", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : "OpenSansRegular";
+    public double ChatFontScale =>
+        FontSizePreference switch
+        {
+            "Small" => 0.92,
+            "Large" => 1.12,
+            _ => 1.0
+        };
     public Color BackgroundColor
     {
         get
@@ -52,5 +71,21 @@ public sealed class AppAppearanceService
             Preferences.Default.Set(ColorKey, color);
             SetBackground("Custom");
         }
+    }
+
+    public void SetFontPreference(string preference)
+    {
+        if (!FontPreferences.Contains(preference, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("Unsupported font preference.", nameof(preference));
+        Preferences.Default.Set(FontPreferenceKey, preference);
+        AppearanceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SetFontSizePreference(string preference)
+    {
+        if (!FontSizePreferences.Contains(preference, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("Unsupported font size preference.", nameof(preference));
+        Preferences.Default.Set(FontSizePreferenceKey, preference);
+        AppearanceChanged?.Invoke(this, EventArgs.Empty);
     }
 }

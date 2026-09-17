@@ -38,28 +38,51 @@ public sealed class MediaViewerService
         string? explicitType = null,
         string? fileName = null)
     {
-        var type = explicitType?.Trim().ToLowerInvariant();
+        var type = explicitType?
+            .Trim()
+            .ToLowerInvariant()
+            .Split(';', 2)[0]
+            .Trim();
         if (!string.IsNullOrWhiteSpace(type))
         {
+            if (type is "image" or "photo" or "picture") return "image";
+            if (type is "video" or "movie") return "video";
+            if (type is "audio" or "voice" or "recording") return "audio";
             if (type.StartsWith("image/", StringComparison.Ordinal)) return "image";
             if (type.StartsWith("video/", StringComparison.Ordinal)) return "video";
             if (type.StartsWith("audio/", StringComparison.Ordinal)) return "audio";
             if (type.Equals("application/pdf", StringComparison.Ordinal)) return "pdf";
         }
 
-        var candidate = fileName;
-        if (string.IsNullOrWhiteSpace(candidate))
-            candidate = new Uri(url).AbsolutePath;
-
-        var extension = Path.GetExtension(candidate).ToLowerInvariant();
-        return extension switch
+        foreach (var candidate in new[]
         {
-            ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" or ".bmp" => "image",
-            ".mp4" or ".webm" or ".mov" or ".m4v" => "video",
-            ".mp3" or ".m4a" or ".aac" or ".wav" or ".ogg" => "audio",
-            ".pdf" => "pdf",
-            _ => "unsupported"
-        };
+            fileName,
+            Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                ? uri.AbsolutePath
+                : url
+        })
+        {
+            var extension =
+                Path.GetExtension(candidate ?? string.Empty)
+                    .ToLowerInvariant();
+
+            var detected = extension switch
+            {
+                ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" or ".bmp" =>
+                    "image",
+                ".mp4" or ".webm" or ".mov" or ".m4v" or ".3gp" =>
+                    "video",
+                ".mp3" or ".m4a" or ".aac" or ".wav" or ".ogg" or ".oga" =>
+                    "audio",
+                ".pdf" => "pdf",
+                _ => "unsupported"
+            };
+
+            if (detected != "unsupported")
+                return detected;
+        }
+
+        return "unsupported";
     }
 
     private static async Task ShowInvalidMediaAsync()

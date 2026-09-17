@@ -16,6 +16,8 @@ public partial class SettingsPage : ContentPage
         _assistant = MauiProgram.Services.GetRequiredService<ICctAssistantService>();
         LanguagePicker.ItemsSource = AppAppearanceService.Languages.Keys.ToList();
         BackgroundPicker.ItemsSource = AppAppearanceService.Backgrounds.Keys.Concat(["Custom"]).ToList();
+        FontPreferencePicker.ItemsSource = AppAppearanceService.FontPreferences.ToList();
+        FontSizePreferencePicker.ItemsSource = AppAppearanceService.FontSizePreferences.ToList();
     }
 
     protected override void OnAppearing()
@@ -64,6 +66,8 @@ public partial class SettingsPage : ContentPage
             BackgroundPicker.SelectedItem = _appearance.BackgroundName;
             CustomColorEntry.Text = _appearance.CustomColor;
             BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+            FontPreferencePicker.SelectedItem = _appearance.FontPreference;
+            FontSizePreferencePicker.SelectedItem = _appearance.FontSizePreference;
         }
         catch (Exception ex)
         {
@@ -86,6 +90,10 @@ public partial class SettingsPage : ContentPage
         }
         if (!string.IsNullOrWhiteSpace(CustomColorEntry.Text))
             _appearance.SetCustomColor(CustomColorEntry.Text.Trim());
+        if (FontPreferencePicker.SelectedItem is string fontPreference)
+            _appearance.SetFontPreference(fontPreference);
+        if (FontSizePreferencePicker.SelectedItem is string fontSizePreference)
+            _appearance.SetFontSizePreference(fontSizePreference);
         BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
         BackgroundColor = _appearance.BackgroundColor;
         await DisplayAlert("Appearance", "Appearance settings saved.", "OK");
