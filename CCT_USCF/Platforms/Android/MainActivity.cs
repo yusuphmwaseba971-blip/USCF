@@ -47,12 +47,14 @@ public class MainActivity : MauiAppCompatActivity
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
+        System.Diagnostics.Debug.WriteLine($"[STARTUP] Android activity created at {DateTimeOffset.UtcNow:O}");
 #if DEBUG
         CrossFirebaseAppCheck.Configure(AppCheckOptions.Debug);
 #else
         CrossFirebaseAppCheck.Configure(AppCheckOptions.PlayIntegrity);
 #endif
         CrossFirebase.Initialize(this, () => this);
+        System.Diagnostics.Debug.WriteLine($"[STARTUP] Firebase initialization requested at {DateTimeOffset.UtcNow:O}");
         base.OnCreate(savedInstanceState);
         Window?.SetSoftInputMode(SoftInput.AdjustPan);
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&

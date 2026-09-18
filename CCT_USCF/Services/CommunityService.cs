@@ -980,21 +980,13 @@ SenderUid =
                     normalizedGroupId,
                     safeLimit);
 
-            // Cached messages remain readable when the device is offline,
-            // even if the enrollment state cannot be refreshed.
-            if (cachedMessages.Count > 0)
-            {
-                Debug.WriteLine($"[COMMUNITY_CACHE] Returning {cachedMessages.Count} cached messages for {normalizedGroupId}.");
-                return cachedMessages;
-            }
-
             try
             {
                 var enrolled = await GetChatHistoryEnrolledAsync(normalizedGroupId);
                 if (!enrolled)
                 {
                     Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} ChatHistoryEnrolled=false HistoricalFetch=SKIPPED Reason=NEW_USER");
-                    return new List<CommunityMessage>();
+                    return cachedMessages;
                 }
                 if (await IsLocalGroupHistoryClearedAsync(normalizedGroupId))
                 {

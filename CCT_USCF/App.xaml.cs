@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using CCT_USCF.Pages;
 using CCT_USCF.Services;
+using System.Diagnostics;
 
 namespace CCT_USCF;
 
@@ -9,10 +10,12 @@ public partial class App : Application
 {
     public App()
     {
+        Debug.WriteLine($"[STARTUP] App constructor started at {DateTimeOffset.UtcNow:O}");
         InitializeComponent();
         MauiProgram.Services
             .GetRequiredService<AppAppearanceService>()
             .ApplyTypography();
+        Debug.WriteLine($"[STARTUP] App created at {DateTimeOffset.UtcNow:O}");
 
         // NOTE: Region seeding is temporary and should be run manually.
         // The automatic seeder was disabled to avoid runtime write attempts
@@ -44,6 +47,7 @@ public partial class App : Application
     protected override Window CreateWindow(
         IActivationState? activationState)
     {
-        return new Window(new SplashPage());
+        Debug.WriteLine($"[STARTUP] First page requested at {DateTimeOffset.UtcNow:O}");
+        return new Window(new AppShell());
     }
 }

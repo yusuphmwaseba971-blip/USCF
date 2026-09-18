@@ -58,7 +58,7 @@
 
                             <Button x:Name="AddPrayerButton" Text="＋  Add Prayer Request"
                                     BackgroundColor="{StaticResource BrandGreen}" TextColor="White"
-                                    CornerRadius="18" HeightRequest="54" FontSize="16"
+                                    CornerRadius="18" MinimumHeightRequest="54" FontSize="16"
                                     FontAttributes="Bold" Clicked="OnAddPrayerClicked"
                                     SemanticProperties.Description="Open the prayer request form" />
                         </VerticalStackLayout>
@@ -82,7 +82,7 @@
 
                     <CollectionView.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="16,6" Padding="20" MinimumHeightRequest="290"
+                            <Border Margin="16,6" Padding="20"
                                     BackgroundColor="{Binding CardBackgroundColor}"
                                     StrokeThickness="0" StrokeShape="RoundRectangle 22">
                                 <Border.Shadow>

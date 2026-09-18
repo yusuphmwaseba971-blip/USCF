@@ -862,7 +862,12 @@ public partial class GroupChatPage : ContentPage
 
                     if (existingIndex >= 0)
                     {
+                        var previousId = _messages[existingIndex].MessageId;
                         _messages[existingIndex] = message;
+                        if (_selectedMessageIds.Remove(previousId))
+                            _selectedMessageIds.Add(message.MessageId);
+                        _messages.Sort((left, right) =>
+                            left.CreatedAt.CompareTo(right.CreatedAt));
                         RenderMessages();
                         System.Diagnostics.Debug.WriteLine(
                             $"[GROUP_CHAT] Duplicate realtime message suppressed. message_id={message.MessageId}, group={message.GroupId}");
@@ -1281,8 +1286,16 @@ public partial class GroupChatPage : ContentPage
             return;
         }
 
+        DateTime? previousLocalDate = null;
         foreach (var message in _messages)
         {
+            var localDate = message.CreatedAt.ToLocalTime().Date;
+            if (previousLocalDate != localDate)
+            {
+                MessagesLayout.Children.Add(CreateDateSeparator(localDate));
+                previousLocalDate = localDate;
+            }
+
             var isCurrentUser =
                 string.Equals(
                     message.SenderUid,
@@ -1295,6 +1308,33 @@ public partial class GroupChatPage : ContentPage
 
         if (scrollToBottom)
             _ = ScrollMessagesToBottomAsync();
+    }
+
+    private static Microsoft.Maui.Controls.View CreateDateSeparator(DateTime date)
+    {
+        var label = new Label
+        {
+            Text = date == DateTime.Today
+                ? "Today"
+                : date == DateTime.Today.AddDays(-1)
+                    ? "Yesterday"
+                    : date.ToString("dd MMM yyyy"),
+            FontSize = 11,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Color.FromArgb("#667A70"),
+            HorizontalTextAlignment = Microsoft.Maui.TextAlignment.Center,
+            HorizontalOptions = LayoutOptions.Center
+        };
+
+        return new Border
+        {
+            BackgroundColor = Color.FromArgb("#F1F7F3"),
+            Stroke = Colors.Transparent,
+            StrokeShape = new RoundRectangle { CornerRadius = 12 },
+            Padding = new Thickness(10, 3),
+            Margin = new Thickness(0, 8, 0, 4),
+            Content = label
+        };
     }
 
     // ============================================================
@@ -4130,7 +4170,12 @@ public partial class GroupChatPage : ContentPage
         foreach (var message in loadedMessages)
         {
             var existingIndex = _messages.FindIndex(existing =>
-                string.Equals(existing.MessageId, message.MessageId, StringComparison.Ordinal));
+                string.Equals(existing.MessageId, message.MessageId, StringComparison.Ordinal) ||
+                (!string.IsNullOrWhiteSpace(message.ClientMessageId) &&
+                 string.Equals(
+                     existing.ClientMessageId,
+                     message.ClientMessageId,
+                     StringComparison.Ordinal)));
             if (existingIndex < 0)
             {
                 _messages.Add(message);
@@ -4408,10 +4453,8 @@ public partial class GroupChatPage : ContentPage
         private readonly Action<GroupChatMessageUi> _reply;
         private readonly Func<GroupChatMessageUi, Task> _showActions;
         private readonly Action _render;
-        private CancellationTokenSource? _holdCancellation;
         private float _downX;
         private float _downY;
-        private bool _holdTriggered;
         private bool _swipeTriggered;
 
         public MessageGestureListener(
@@ -4433,31 +4476,7 @@ public partial class GroupChatPage : ContentPage
 
             _downX = e.GetX();
             _downY = e.GetY();
-            _holdTriggered = false;
             _swipeTriggered = false;
-            _holdCancellation?.Cancel();
-            _holdCancellation = new CancellationTokenSource();
-            var token = _holdCancellation.Token;
-
-            _ = Task.Run(
-                async () =>
-                {
-                    try
-                    {
-                        await Task.Delay(3000, token);
-                        if (!token.IsCancellationRequested &&
-                            !_holdTriggered)
-                        {
-                            _holdTriggered = true;
-                            MainThread.BeginInvokeOnMainThread(
-                                async () => await _showActions(_message));
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                    }
-                },
-                token);
             return true;
         }
 
@@ -4470,8 +4489,6 @@ public partial class GroupChatPage : ContentPage
             {
                 var deltaX = e.GetX() - _downX;
                 var deltaY = e.GetY() - _downY;
-                _holdCancellation?.Cancel();
-
                 if (!_swipeTriggered &&
                     deltaX <= -80 &&
                     Math.Abs(deltaX) > Math.Abs(deltaY) * 1.25f)
@@ -4485,14 +4502,15 @@ public partial class GroupChatPage : ContentPage
                         });
                 }
             }
-            else if (e.ActionMasked is MotionEventActions.Up or MotionEventActions.Cancel)
-            {
-                _holdCancellation?.Cancel();
-            }
         }
 
         public override void OnLongPress(MotionEvent? e)
         {
+            if (_swipeTriggered)
+                return;
+
+            MainThread.BeginInvokeOnMainThread(
+                async () => await _showActions(_message));
         }
 
         public override bool OnFling(
@@ -4511,7 +4529,6 @@ public partial class GroupChatPage : ContentPage
                 Math.Abs(deltaX) > Math.Abs(deltaY) * 1.25f)
             {
                 _swipeTriggered = true;
-                _holdCancellation?.Cancel();
                 MainThread.BeginInvokeOnMainThread(
                     () =>
                     {

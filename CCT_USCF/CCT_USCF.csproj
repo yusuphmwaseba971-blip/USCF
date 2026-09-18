@@ -96,7 +96,7 @@
     <MauiIcon Include="Resources\AppIcon\uscf_logo.png" Link="uscf_app_icon.png" LogicalName="uscf_app_icon.png" BaseSize="128,128" Color="#FFFFFF" />
 
     <!-- Splash Screen -->
-    <MauiSplashScreen Include="Resources\Splash\uscf_logo.png" Link="uscf_splash_screen.png" LogicalName="uscf_splash_screen.png" BaseSize="128,128" Color="#FFFFFF" />
+    <MauiSplashScreen Include="Resources\Splash\uscf_logo.png" Link="uscf_splash_screen.png" LogicalName="uscf_splash_screen.png" BaseSize="128,128" Color="#F4F8F5" />
 
     <!-- Images -->
     <MauiImage Include="Resources\Images\*" />

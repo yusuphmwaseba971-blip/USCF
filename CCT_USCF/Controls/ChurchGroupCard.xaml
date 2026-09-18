@@ -18,11 +18,11 @@
                 Radius="8"
                 Opacity="0.18" />
         </Border.Shadow>
-        <Grid ColumnDefinitions="48,*,28" ColumnSpacing="12">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
             <Border
                 Grid.Column="0"
-                WidthRequest="44"
-                HeightRequest="44"
+                MinimumWidthRequest="44"
+                MinimumHeightRequest="44"
                 BackgroundColor="{Binding AccentBackground, Source={x:Reference Card}}"
                 StrokeThickness="0"
                 StrokeShape="RoundRectangle 14"
@@ -40,17 +40,17 @@
                     FontAttributes="Bold"
                     FontSize="16"
                     TextColor="#26362E"
-                    LineBreakMode="TailTruncation" />
+                    LineBreakMode="WordWrap" />
                 <Label
                     Text="{Binding ScopeLabel, Source={x:Reference Card}}"
                     FontSize="12"
                     TextColor="#7A8981"
-                    LineBreakMode="TailTruncation" />
+                    LineBreakMode="WordWrap" />
                 <Label
                     Text="{Binding MemberSummary, Source={x:Reference Card}}"
                     FontSize="12"
                     TextColor="#52635A"
-                    LineBreakMode="TailTruncation" />
+                    LineBreakMode="WordWrap" />
             </VerticalStackLayout>
             <Label
                 Grid.Column="2"

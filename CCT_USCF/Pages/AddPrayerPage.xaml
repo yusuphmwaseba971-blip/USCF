@@ -15,7 +15,7 @@
             <Border BackgroundColor="White" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Share what's on your heart." FontAttributes="Bold" TextColor="#0F172A" />
-                    <Editor x:Name="PrayerEditor" Placeholder="Write your prayer request here..." HeightRequest="180" AutoSize="TextChanges" BackgroundColor="#F8FAFC" />
+                    <Editor x:Name="PrayerEditor" Placeholder="Write your prayer request here..." MinimumHeightRequest="120" AutoSize="TextChanges" BackgroundColor="#F8FAFC" />
                 </VerticalStackLayout>
             </Border>
 
@@ -53,7 +53,7 @@
                 BackgroundColor="#009E2C"
                 TextColor="White"
                 CornerRadius="18"
-                HeightRequest="56"
+                MinimumHeightRequest="56"
                 Clicked="OnSubmitPrayerClicked" />
         </VerticalStackLayout>
     </ScrollView>

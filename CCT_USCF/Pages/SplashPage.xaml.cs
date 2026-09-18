@@ -29,9 +29,6 @@ public partial class SplashPage : ContentPage
     {
         try
         {
-            // Allow the startup branding page to render completely.
-            await Task.Delay(1000);
-
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 Application.Current!.Windows[0].Page = new AppShell();

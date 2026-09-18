@@ -7,6 +7,7 @@ using CCT_USCF.Services.Appwrite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
+using System.Diagnostics;
 
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
@@ -61,6 +62,8 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
+        var startupTimer = Stopwatch.StartNew();
+        Debug.WriteLine("[STARTUP] MAUI initialization started");
         var builder = MauiApp.CreateBuilder();
 
         // =====================================================
@@ -227,6 +230,7 @@ builder.Services.AddSingleton<ICctAssistantService, CctAssistantService>();
 
         // Store application's service provider
         Services = app.Services;
+        Debug.WriteLine($"[STARTUP] MAUI initialized in {startupTimer.ElapsedMilliseconds} ms");
 
         return app;
     }

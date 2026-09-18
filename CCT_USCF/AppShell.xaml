@@ -29,7 +29,7 @@
                     SemanticProperties.Description="Open USCF Assistance"
                     BackgroundColor="{StaticResource SoftMint}"
                     TextColor="{StaticResource BrandDeepGreen}"
-                    CornerRadius="22" WidthRequest="44" HeightRequest="44"
+                    CornerRadius="22" MinimumWidthRequest="44" MinimumHeightRequest="44"
                     Padding="0" Clicked="OnAssistantClicked" />
             <Button x:Name="SignUpLoginButton"
                     Grid.Column="2"

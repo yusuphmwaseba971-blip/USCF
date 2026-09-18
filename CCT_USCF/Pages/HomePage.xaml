@@ -84,7 +84,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="!" FontSize="22" TextColor="{StaticResource AccentPurple}" />
                                 <Label x:Name="AnnouncementsCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="#38216B" />
-                                <Label Text="Announcements" FontSize="11" TextColor="#75658F" />
+                                <Label Text="Announcements" FontSize="11" TextColor="#75658F" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Column="1" Padding="13" BackgroundColor="#EAF5FF" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -92,7 +92,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="♡" FontSize="23" TextColor="{StaticResource AccentBlue}" />
                                 <Label x:Name="PrayerCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="#123B73" />
-                                <Label Text="Prayer Requests" FontSize="11" TextColor="#54708B" />
+                                <Label Text="Prayer Requests" FontSize="11" TextColor="#54708B" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Row="1" Padding="13" BackgroundColor="#EAF7EE" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -100,7 +100,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="♧" FontSize="23" TextColor="{StaticResource BrandGreen}" />
                                 <Label x:Name="ActivityCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
-                                <Label Text="Community activity" FontSize="11" TextColor="#537160" />
+                                <Label Text="Community activity" FontSize="11" TextColor="#537160" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Row="1" Grid.Column="1" Padding="13" BackgroundColor="#FFF8E7" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -108,7 +108,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="□" FontSize="23" TextColor="{StaticResource AccentGold}" />
                                 <Label x:Name="EventsCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="#684400" />
-                                <Label Text="Church activity" FontSize="11" TextColor="#8A7045" />
+                                <Label Text="Church activity" FontSize="11" TextColor="#8A7045" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Row="2" Padding="13" BackgroundColor="#EEF2FF" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -116,7 +116,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="▶" FontSize="20" TextColor="{StaticResource AccentBlue}" />
                                 <Label Text="—" FontSize="24" FontAttributes="Bold" TextColor="#273B73" />
-                                <Label Text="New sermon" FontSize="11" TextColor="#63739B" />
+                                <Label Text="New sermon" FontSize="11" TextColor="#63739B" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                     </Grid>
@@ -147,7 +147,7 @@
                         <Label x:Name="LatestAnnouncementTitleLabel" Text="No new announcements" FontSize="20"
                                FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
                         <Label x:Name="LatestAnnouncementMessageLabel" Text="You're all caught up."
-                               FontSize="13" TextColor="#537160" MaxLines="3" />
+                               FontSize="13" TextColor="#537160" LineBreakMode="WordWrap" />
                         <Label x:Name="LatestAnnouncementMetaLabel" Text="View announcements  ›" FontSize="12"
                                TextColor="{StaticResource BrandGreen}" Margin="0,4,0,0" />
                     </VerticalStackLayout>
@@ -180,7 +180,7 @@
                     <VerticalStackLayout Spacing="8">
                         <Label Text="PRAY WITH YOUR COMMUNITY" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
                         <Label x:Name="PrayerPreviewLabel" Text="Prayer requests will appear here when available."
-                               FontSize="16" FontAttributes="Bold" TextColor="#123B73" MaxLines="3" />
+                               FontSize="16" FontAttributes="Bold" TextColor="#123B73" LineBreakMode="WordWrap" />
                         <Button Text="Open prayer wall  ›" Clicked="OpenPrayerButton" BackgroundColor="Transparent"
                                 TextColor="{StaticResource AccentBlue}" HorizontalOptions="Start" Padding="0" />
                     </VerticalStackLayout>

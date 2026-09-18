@@ -50,15 +50,15 @@
             <Button x:Name="CheckButton" Text="I'VE VERIFIED MY EMAIL"
                     Clicked="OnCheckClicked" BackgroundColor="#1A4D3A"
                     TextColor="White" CornerRadius="14"
-                    HeightRequest="54" FontAttributes="Bold" />
+                    MinimumHeightRequest="54" FontAttributes="Bold" />
             <Button x:Name="ResendButton" Text="RESEND VERIFICATION EMAIL"
                     Clicked="OnResendClicked" BackgroundColor="Transparent"
                     TextColor="#1A4D3A" BorderColor="#1A4D3A"
                     BorderWidth="1" CornerRadius="14"
-                    HeightRequest="50" />
+                    MinimumHeightRequest="50" />
             <Button x:Name="EditEmailButton" Text="Edit email"
                     Clicked="OnEditEmailClicked" BackgroundColor="Transparent"
-                    TextColor="#52645B" HeightRequest="44" />
+                    TextColor="#52645B" MinimumHeightRequest="44" />
 
             <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False"
                                IsRunning="False" Color="#1A4D3A" />

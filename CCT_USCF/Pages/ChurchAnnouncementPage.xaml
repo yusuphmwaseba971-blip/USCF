@@ -32,7 +32,7 @@
                     <Button x:Name="AttachmentButton" Text="CHOOSE IMAGE OR PDF" Clicked="OnAttachmentClicked" />
                     <Grid x:Name="AttachmentPreview" IsVisible="False" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                         <Image x:Name="SelectedImagePreview" WidthRequest="72" HeightRequest="72" Aspect="AspectFill" IsVisible="False" />
-                        <Label x:Name="SelectedFileLabel" Grid.Column="1" TextColor="#173C2C" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                        <Label x:Name="SelectedFileLabel" Grid.Column="1" TextColor="#173C2C" VerticalOptions="Center" LineBreakMode="WordWrap" />
                         <Button Grid.Column="2" Text="REMOVE" Clicked="OnRemoveAttachmentClicked" />
                     </Grid>
                 </VerticalStackLayout>

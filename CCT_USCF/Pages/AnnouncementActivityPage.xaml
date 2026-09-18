@@ -62,7 +62,7 @@
                                             <TapGestureRecognizer Tapped="OnImageTapped" />
                                         </Image.GestureRecognizers>
                                     </Image>
-                                    <Label Text="{Binding Preview}" TextColor="#4E5D53" MaxLines="3" />
+                                    <Label Text="{Binding Preview}" TextColor="#4E5D53" LineBreakMode="WordWrap" />
                                     <Label Text="{Binding SenderName, StringFormat='Issued by {0}'}" TextColor="#78857B" FontSize="12" />
                                     <Label Text="{Binding ReadState}" TextColor="#A98232" FontAttributes="Bold" FontSize="11" />
                                     <HorizontalStackLayout Spacing="10">

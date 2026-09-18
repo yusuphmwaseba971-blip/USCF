@@ -1,4 +1,5 @@
 using Plugin.Firebase.CloudMessaging;
+using System.Diagnostics;
 using CCT_USCF.Models;
 using CCT_USCF.Services;
 using Microsoft.Maui.Controls.Shapes;
@@ -7,6 +8,7 @@ namespace CCT_USCF.Pages;
 
 public partial class HomePage : ContentPage
 {
+    private static readonly long StartupTimestamp = Stopwatch.GetTimestamp();
     private static readonly TimeSpan CctPostsFreshnessWindow = TimeSpan.FromMinutes(10);
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
     private readonly SemaphoreSlim _cctPostsLoadGate = new(1, 1);
@@ -21,6 +23,8 @@ public partial class HomePage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        System.Diagnostics.Debug.WriteLine(
+            $"[STARTUP] Home first render requested after {Stopwatch.GetElapsedTime(StartupTimestamp).TotalMilliseconds:F0} ms");
         CommunityService.CctPostCreated -= OnCctPostCreated;
         CommunityService.CctPostCreated += OnCctPostCreated;
         _ = LoadDashboardAsync();
