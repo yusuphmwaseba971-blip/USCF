@@ -2,7 +2,8 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.LoginPage"
-             Title="Login to USCF">
+             Title="Login to USCF"
+             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="15">
             <Label Text="Login to USCF" FontAttributes="Bold" FontSize="24" HorizontalOptions="Center" />
@@ -13,8 +14,9 @@
             <Button x:Name="LoginButton" Text="LOGIN" Clicked="OnLoginClicked" BackgroundColor="#009E2C" TextColor="White" />
             <Button x:Name="GoogleSignInButton" Text="CONTINUE WITH GOOGLE"
                     Clicked="OnGoogleSignInClicked"
-                    BackgroundColor="White" TextColor="#173B28"
-                    BorderColor="#DCE8DF" BorderWidth="1" />
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                    TextColor="{AppThemeBinding Light={StaticResource BrandDeepGreen}, Dark={StaticResource White}}"
+                    BorderColor="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}" BorderWidth="1" />
 
             <HorizontalStackLayout HorizontalOptions="Center">
                 <Label Text="Don't have an account?" />

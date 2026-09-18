@@ -5,11 +5,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.SavedSermonsPage"
     Title="Saved Sermons"
-    BackgroundColor="#F8FAFC">
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
 
     <VerticalStackLayout Padding="20" Spacing="12">
-        <Label Text="Saved Sermons" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
-        <Label Text="Your saved sermons will appear here." TextColor="#64748B" />
+        <Label Text="Saved Sermons" FontSize="24" FontAttributes="Bold"
+               TextColor="{AppThemeBinding Light={StaticResource AccentBlue}, Dark={StaticResource AccentBlue}}" />
+        <Label Text="Your saved sermons will appear here." TextColor="{StaticResource TextSecondary}" />
         <Button Text="Back" Clicked="OnBackClicked" />
     </VerticalStackLayout>
 

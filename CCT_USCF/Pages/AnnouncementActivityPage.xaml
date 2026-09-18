@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.AnnouncementActivityPage"
              Title="Announcement Center"
-             BackgroundColor="#F5F7F3">
+             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <ContentPage.Resources>
         <Style x:Key="SecondaryButtonStyle" TargetType="Button">
             <Setter Property="BackgroundColor" Value="#E8EFE9" />
@@ -50,7 +50,7 @@
                 <CollectionView x:Name="NotificationsView" SelectionMode="Single" SelectionChanged="OnSelected">
                     <CollectionView.ItemTemplate>
                         <DataTemplate>
-                            <Border Padding="16" Margin="0,5" BackgroundColor="White" Stroke="#E3E9E3" StrokeThickness="1" StrokeShape="RoundRectangle 18">
+                            <Border Padding="16" Margin="0,5" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Stroke="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}" StrokeThickness="1" StrokeShape="RoundRectangle 18">
                                 <VerticalStackLayout Spacing="8">
                                     <Grid ColumnDefinitions="*,Auto">
                                         <Label Text="{Binding ScopeLabel}" TextColor="#A98232" FontAttributes="Bold" FontSize="11" />

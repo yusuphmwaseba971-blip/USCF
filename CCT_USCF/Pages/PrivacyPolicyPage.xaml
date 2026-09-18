@@ -3,27 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.PrivacyPolicyPage"
              Title="Privacy Policy"
-             BackgroundColor="#F4F8F5">
+             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <ScrollView>
         <VerticalStackLayout Padding="20,18,20,36" Spacing="16">
-            <Label Text="Privacy Policy" FontSize="30" FontAttributes="Bold" TextColor="#173B28" />
+            <Label Text="Privacy Policy" FontSize="30" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
             <Label Text="CCT-USCF uses information to provide account, organizational and community features. This in-app summary is written for clarity and must be kept aligned with the project owner's published policy."
-                   FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
+                   FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
 
-            <Border Padding="16" BackgroundColor="White" Stroke="#DCE8DF" StrokeThickness="1" StrokeShape="RoundRectangle 16">
+            <Border Padding="16" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Stroke="#DCE8DF" StrokeThickness="1" StrokeShape="RoundRectangle 16">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Information collected" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="Registration collects your full name, username, email address, password for Firebase Authentication, role, leadership information and USCF region, district and branch selections. Phone number is not needed to create an account. Passwords are sent to Firebase Authentication and are not written to the Firestore profile." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
-                    <Label Text="How it is used" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="The app uses this information for authentication, profile management, organizational permissions, branch and community features, prayer/community functionality where enabled, and account-related communication or recovery supported by the app." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
-                    <Label Text="Where it is stored and processed" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="Firebase Authentication handles sign-in credentials. Firestore stores the user profile under users/{uid}. The project also includes Appwrite components for community media and related services, and Cloudinary components; the project owner must confirm the exact production data flows before publishing a final Data Safety declaration." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
-                    <Label Text="Security and retention" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="Information is protected using the security controls of the application and its service providers. Profiles are retained while needed to operate an account and its features, subject to applicable deletion requests and service retention requirements." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
-                    <Label Text="Your choices and deletion" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="You can review and update available profile settings in the app. Account deletion is available from Settings and deletes the Firebase Authentication account and the Firestore users/{uid} profile. Media, community records, and other service data may require separate deletion handling confirmed by the project owner." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
-                    <Label Text="Contact and policy updates" FontSize="19" FontAttributes="Bold" TextColor="#1A4D3A" />
-                    <Label Text="A project-owner-approved support contact is required here; no contact address or URL was found in the codebase, so none is invented in this screen. The project owner should publish policy updates and the effective date through the same approved support and policy channels." FontSize="14" TextColor="#52645B" LineBreakMode="WordWrap" />
+                    <Label Text="Information collected" FontSize="19" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                    <Label Text="Registration collects your full name, username, email address, password for Firebase Authentication, role, leadership information and USCF region, district and branch selections. Phone number is not needed to create an account. Passwords are sent to Firebase Authentication and are not written to the Firestore profile." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                    <Label Text="How it is used" FontSize="19" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                    <Label Text="The app uses this information for authentication, profile management, organizational permissions, branch and community features, prayer/community functionality where enabled, and account-related communication or recovery supported by the app." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                    <Label Text="Where it is stored and processed" FontSize="19" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                    <Label Text="Firebase Authentication handles sign-in credentials. Firestore stores the user profile under users/{uid}. The project also includes Appwrite components for community media and related services, and Cloudinary components; the project owner must confirm the exact production data flows before publishing a final Data Safety declaration." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                    <Label Text="Security and retention" FontSize="19" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                    <Label Text="Information is protected using the security controls of the application and its service providers. Profiles are retained while needed to operate an account and its features, subject to applicable deletion requests and service retention requirements." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                    <Label Text="Your choices and deletion" FontSize="19" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                    <Label Text="You can review and update available profile settings in the app. Account deletion is available from Settings and deletes the Firebase Authentication account and the Firestore users/{uid} profile. Media, community records, and other service data may require separate deletion handling confirmed by the project owner." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                    <Label Text="Contact and policy updates" FontSize="19" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                    <Label Text="A project-owner-approved support contact is required here; no contact address or URL was found in the codebase, so none is invented in this screen. The project owner should publish policy updates and the effective date through the same approved support and policy channels." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>

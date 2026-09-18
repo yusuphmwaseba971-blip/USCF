@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.HelpSupportPage"
     Title="Help &amp; Support"
-    BackgroundColor="#F7F4EF">
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
 
     <ScrollView>
         <VerticalStackLayout Padding="20,28,20,32" Spacing="18">
@@ -12,19 +12,19 @@
                 Text="Help &amp; Support"
                 FontSize="30"
                 FontAttributes="Bold"
-                TextColor="#173B28"
+                TextColor="{StaticResource TextPrimary}"
                 HorizontalTextAlignment="Center" />
 
             <Label
                 Text="How can we help?"
                 FontSize="18"
                 FontAttributes="Bold"
-                TextColor="#1A4D3A"
+                TextColor="{StaticResource BrandGreen}"
                 HorizontalTextAlignment="Center" />
 
             <Border
                 Padding="16,14"
-                BackgroundColor="#FFFFFF"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                 Stroke="#E5DCC8"
                 StrokeThickness="1"
                 StrokeShape="RoundRectangle 18">
@@ -34,46 +34,46 @@
                         FontSize="12"
                         FontAttributes="Bold"
                         CharacterSpacing="1.2"
-                        TextColor="#1A4D3A" />
+                        TextColor="{StaticResource BrandGreen}" />
 
                     <Picker
                         x:Name="CategoryPicker"
                         Title="Select a category"
-                        TextColor="#173B28"
-                        BackgroundColor="#F7F4EF" />
+                        TextColor="{StaticResource TextPrimary}"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}" />
                 </VerticalStackLayout>
             </Border>
 
             <Border
                 Padding="16,14"
-                BackgroundColor="#FFFFFF"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                 Stroke="#E5DCC8"
                 StrokeThickness="1"
                 StrokeShape="RoundRectangle 18">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Subject" FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="#1A4D3A" />
+                    <Label Text="Subject" FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="{StaticResource BrandGreen}" />
                     <Entry
                         x:Name="SubjectEntry"
                         Placeholder="Brief summary"
-                        BackgroundColor="#F7F4EF"
-                        TextColor="#173B28" />
+                        BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
+                        TextColor="{StaticResource TextPrimary}" />
                 </VerticalStackLayout>
             </Border>
 
             <Border
                 Padding="16,14"
-                BackgroundColor="#FFFFFF"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                 Stroke="#E5DCC8"
                 StrokeThickness="1"
                 StrokeShape="RoundRectangle 18">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Message" FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="#1A4D3A" />
+                    <Label Text="Message" FontSize="12" FontAttributes="Bold" CharacterSpacing="1.2" TextColor="{StaticResource BrandGreen}" />
                     <Editor
                         x:Name="MessageEditor"
                         HeightRequest="170"
                         Placeholder="Describe your issue or suggestion..."
-                        BackgroundColor="#F7F4EF"
-                        TextColor="#173B28"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
+                        TextColor="{StaticResource TextPrimary}"
                         AutoSize="TextChanges" />
                 </VerticalStackLayout>
             </Border>
@@ -102,7 +102,7 @@
                 Text="Contact Support"
                 FontSize="15"
                 FontAttributes="Bold"
-                TextColor="#1A4D3A"
+                TextColor="{StaticResource BrandGreen}"
                 HorizontalTextAlignment="Center" />
 
             <Button
@@ -112,7 +112,7 @@
                 BackgroundColor="Transparent"
                 BorderColor="#1A4D3A"
                 BorderWidth="1"
-                TextColor="#1A4D3A"
+                TextColor="{StaticResource BrandGreen}"
                 CornerRadius="14"
                 HeightRequest="50" />
         </VerticalStackLayout>

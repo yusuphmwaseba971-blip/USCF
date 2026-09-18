@@ -15,24 +15,21 @@ public sealed class AppAppearanceService
     public static readonly IReadOnlyDictionary<string, string> Backgrounds =
         new Dictionary<string, string>
         {
+            ["System"] = string.Empty,
             ["White"] = "#FFFFFF", ["Blue"] = "#E8F1FB", ["Green"] = "#E8F5EE",
             ["Cream"] = "#FFF8E7", ["Purple"] = "#F2ECFA", ["Gray"] = "#EEF2F5",
             ["Dark"] = "#18202B", ["Soft gradient"] = "#EAF2FF"
         };
 
     public string Language => Preferences.Default.Get(LanguageKey, "en");
-    public string BackgroundName => Preferences.Default.Get(BackgroundKey, "White");
+    public string BackgroundName => Preferences.Default.Get(BackgroundKey, "System");
     public string CustomColor => Preferences.Default.Get(ColorKey, "#FFFFFF");
-    public string FontPreference => Preferences.Default.Get(FontPreferenceKey, "CCT-USCF Default");
+    public string FontPreference => "System";
     public string FontSizePreference => Preferences.Default.Get(FontSizePreferenceKey, "Medium");
-    public static readonly IReadOnlyList<string> FontPreferences =
-        ["System", "CCT-USCF Default", "Readable", "Modern"];
+    public static readonly IReadOnlyList<string> FontPreferences = ["System"];
     public static readonly IReadOnlyList<string> FontSizePreferences =
         ["System", "Small", "Medium", "Large"];
-    public string? ChatFontFamily =>
-        string.Equals(FontPreference, "System", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : "OpenSansRegular";
+    public string? ChatFontFamily => null;
     public double ChatFontScale =>
         FontSizePreference switch
         {
@@ -47,14 +44,6 @@ public sealed class AppAppearanceService
         if (resources == null)
             return;
 
-        resources["AppFontFamily"] =
-            string.Equals(
-                FontPreference,
-                "System",
-                StringComparison.OrdinalIgnoreCase)
-                ? "sans"
-                : "OpenSansRegular";
-
         resources["AppFontSize"] = 14d * ChatFontScale;
         resources["AppSmallFontSize"] = 12d * ChatFontScale;
         resources["AppCaptionFontSize"] = 11d * ChatFontScale;
@@ -63,11 +52,21 @@ public sealed class AppAppearanceService
     {
         get
         {
+            if (string.Equals(BackgroundName, "System", StringComparison.OrdinalIgnoreCase))
+            {
+                return Application.Current?.RequestedTheme == AppTheme.Dark
+                    ? Color.FromArgb("#121212")
+                    : Color.FromArgb("#F4F8F5");
+            }
+
             var value = BackgroundName == "Custom" ? CustomColor :
-                Backgrounds.TryGetValue(BackgroundName, out var color) ? color : "#FFFFFF";
+                Backgrounds.TryGetValue(BackgroundName, out var color) ? color : "#F4F8F5";
             return Color.FromArgb(value);
         }
     }
+
+    public void NotifySystemThemeChanged() =>
+        AppearanceChanged?.Invoke(this, EventArgs.Empty);
 
     public void SetLanguage(string language)
     {
@@ -95,9 +94,9 @@ public sealed class AppAppearanceService
 
     public void SetFontPreference(string preference)
     {
-        if (!FontPreferences.Contains(preference, StringComparer.OrdinalIgnoreCase))
+        if (!string.Equals(preference, "System", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Unsupported font preference.", nameof(preference));
-        Preferences.Default.Set(FontPreferenceKey, preference);
+        Preferences.Default.Set(FontPreferenceKey, "System");
         ApplyTypography();
         AppearanceChanged?.Invoke(this, EventArgs.Empty);
     }

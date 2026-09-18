@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.BiblePage"
              Title="Bible"
-             BackgroundColor="{StaticResource PageBackground}">
+             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <Grid x:Name="RootGrid" RowDefinitions="Auto,*">
         <ScrollView Grid.Row="0" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
             <HorizontalStackLayout Padding="16,12,16,4" Spacing="8">
@@ -46,11 +46,20 @@
                     </CollectionView.ItemTemplate>
                 </CollectionView>
 
-                <Border BackgroundColor="{StaticResource SurfaceWhite}" Stroke="#D5E5DA" Padding="16" StrokeShape="RoundRectangle 20">
+                <Label x:Name="VerseLoadingLabel" Text="Loading local Bible text…" IsVisible="False"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource Gray300}}"
+                       HorizontalOptions="Center" />
+                <Border x:Name="VerseCard" IsVisible="False"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                        Stroke="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}"
+                        Padding="16" StrokeShape="RoundRectangle 20">
                     <VerticalStackLayout Spacing="10">
                         <Grid ColumnDefinitions="*,Auto">
-                            <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                            <Label x:Name="StatusLabel" Grid.Column="1" Text="Offline" TextColor="#4F6F5C" VerticalOptions="Center" />
+                            <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource UscfTextDark}}" />
+                            <Label x:Name="StatusLabel" Grid.Column="1" Text="Offline"
+                                   TextColor="{AppThemeBinding Light={StaticResource BrandDeepGreen}, Dark={StaticResource Gray300}}"
+                                   VerticalOptions="Center" />
                         </Grid>
                         <CollectionView x:Name="VerseList" SelectionMode="None">
                             <CollectionView.ItemTemplate>
@@ -58,7 +67,9 @@
                                     <Border Padding="10" Margin="0,3" StrokeThickness="0" BackgroundColor="{Binding Background}">
                                         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
                                             <Label Text="{Binding Number}" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" FontSize="16" />
-                                            <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}" TextColor="{StaticResource TextPrimary}" LineHeight="1.35" Margin="10,0,0,0" />
+                                            <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource UscfTextDark}}"
+                                                   LineHeight="1.35" Margin="10,0,0,0" />
                                             <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,6,0,0">
                                                 <Button Text="Copy" FontSize="12" Padding="8,4" Clicked="OnCopyVerseClicked" CommandParameter="{Binding .}" />
                                                 <Button Text="Note" FontSize="12" Padding="8,4" Clicked="OnNoteVerseClicked" CommandParameter="{Binding .}" />

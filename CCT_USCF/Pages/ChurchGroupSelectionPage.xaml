@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.ChurchGroupSelectionPage"
     Title="Church Group"
-    BackgroundColor="#FAF8F5">
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
 
     <Grid RowDefinitions="Auto,*">
         <Border
@@ -60,7 +60,7 @@
                     Clicked="OnNationalClicked"
                     Padding="16"
                     MinimumHeightRequest="64"
-                    BackgroundColor="White"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                     TextColor="#176B78"
                     BorderColor="#B9DDE0"
                     BorderWidth="1"
@@ -73,7 +73,7 @@
                     Clicked="OnRegionalClicked"
                     Padding="16"
                     MinimumHeightRequest="64"
-                    BackgroundColor="White"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                     TextColor="#51458A"
                     BorderColor="#D2CBEA"
                     BorderWidth="1"
@@ -86,7 +86,7 @@
                     Clicked="OnDistrictClicked"
                     Padding="16"
                     MinimumHeightRequest="64"
-                    BackgroundColor="White"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                     TextColor="#A56819"
                     BorderColor="#EAD5AE"
                     BorderWidth="1"
@@ -99,7 +99,7 @@
                     Clicked="OnBranchClicked"
                     Padding="16"
                     MinimumHeightRequest="64"
-                    BackgroundColor="White"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                     TextColor="#1B4332"
                     BorderColor="#BFD8C8"
                     BorderWidth="1"

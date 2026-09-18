@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.PrayerPage"
     Title="Prayer"
-    BackgroundColor="{StaticResource PageBackground}">
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
 
     <Grid RowDefinitions="Auto,*">
         <Border Grid.Row="0" StrokeThickness="0" Padding="24,26,24,28">
@@ -72,7 +72,7 @@
                                    FontAttributes="Bold" TextColor="{StaticResource TextPrimary}"
                                    HorizontalOptions="Center" />
                             <Label Text="Be the first to share a prayer request with the community."
-                                   FontSize="15" TextColor="#64748B"
+                                   FontSize="15" TextColor="{StaticResource TextSecondary}"
                                    HorizontalTextAlignment="Center" />
                             <Button Text="＋  Add Prayer Request"                             BackgroundColor="{StaticResource BrandGreen}"
                                     TextColor="White" CornerRadius="16"
@@ -91,7 +91,7 @@
                                 <VerticalStackLayout Spacing="14">
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                         <Border Grid.Column="0" WidthRequest="42" HeightRequest="42"
-                                                BackgroundColor="White" StrokeThickness="0"
+                                                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0"
                                                 StrokeShape="RoundRectangle 21">
                                             <Label Text="👤" FontSize="20"
                                                    HorizontalOptions="Center" VerticalOptions="Center" />
@@ -108,7 +108,7 @@
                                                TextColor="#718096" VerticalOptions="Start" />
                                     </Grid>
 
-                                    <Border Padding="9,6" BackgroundColor="#EEF8F1"
+                                    <Border Padding="9,6" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}"
                                             StrokeThickness="0" StrokeShape="RoundRectangle 12"
                                             HorizontalOptions="Start">
                                         <Label Text="{Binding ReachLabel}" FontAttributes="Bold"
@@ -124,7 +124,7 @@
                                                FontSize="12" TextColor="#718096"
                                                VerticalOptions="Center" />
                                         <Button Grid.Column="1" Text="🙏  I PRAY"
-                                                Padding="14,9" BackgroundColor="White"
+                                                Padding="14,9" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                                                 TextColor="{StaticResource BrandGreen}" CornerRadius="16"
                                                 FontAttributes="Bold" FontSize="13"
                                                 CommandParameter="{Binding PrayerId}"
@@ -147,13 +147,13 @@
                 </CollectionView>
 
                 <VerticalStackLayout x:Name="PrayerLoadingIndicator" IsVisible="False"
-                                     BackgroundColor="#F4F8F5" HorizontalOptions="Center"
+                                     BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}" HorizontalOptions="Center"
                                      VerticalOptions="Center" Spacing="8">
                     <ActivityIndicator IsRunning="True" Color="{StaticResource BrandGreen}" />
                     <Label Text="Loading prayer requests..." TextColor="#475569" />
                 </VerticalStackLayout>
                 <VerticalStackLayout x:Name="PrayerErrorState" IsVisible="False"
-                                     BackgroundColor="#F4F8F5" HorizontalOptions="Center"
+                                     BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}" HorizontalOptions="Center"
                                      VerticalOptions="Center" Spacing="10" Padding="28">
                     <Label x:Name="PrayerErrorMessage" Text="Couldn't load prayer requests."
                            TextColor="#991B1B" HorizontalTextAlignment="Center" />
@@ -165,12 +165,12 @@
 
         <Grid x:Name="IntroOverlay" IsVisible="False" BackgroundColor="#0F172A"
               Opacity="0.6" Padding="0">
-            <Border Margin="28" BackgroundColor="White" StrokeThickness="0"
+            <Border Margin="28" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0"
                     StrokeShape="RoundRectangle 28" Padding="24" VerticalOptions="Center">
                 <VerticalStackLayout Spacing="14">
                     <Label Text="🙏" FontSize="42" HorizontalOptions="Center" />
                     <Label Text="WELCOME TO THE PRAYER COMMUNITY" FontAttributes="Bold"
-                           FontSize="24" TextColor="#0F172A" HorizontalTextAlignment="Center" />
+                           FontSize="24" TextColor="{StaticResource TextPrimary}" HorizontalTextAlignment="Center" />
                     <Label Text="You don't have to pray alone. Share a prayer request and let members of the USCF family stand with you."
                            FontSize="15" TextColor="#475569" HorizontalTextAlignment="Center" />
                     <Button Text="GOT IT" BackgroundColor="#009E2C" TextColor="White"

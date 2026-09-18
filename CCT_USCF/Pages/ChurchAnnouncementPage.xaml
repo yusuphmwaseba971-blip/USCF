@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.ChurchAnnouncementPage"
              Title="Create Announcement"
-             BackgroundColor="#F5F7F3">
+             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <ScrollView>
         <VerticalStackLayout Padding="18,20,18,32" Spacing="16">
             <Border BackgroundColor="#173C2C" StrokeThickness="0" Padding="20" StrokeShape="RoundRectangle 24">
@@ -18,7 +18,7 @@
             <Label Text="Audience" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" />
             <Picker x:Name="AudiencePicker" Title="Choose an audience" ItemDisplayBinding="{Binding .}" />
 
-            <Border BackgroundColor="White" Stroke="#E3E9E3" StrokeThickness="1" Padding="14" StrokeShape="RoundRectangle 16">
+            <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Stroke="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}" StrokeThickness="1" Padding="14" StrokeShape="RoundRectangle 16">
                 <VerticalStackLayout Spacing="10">
                     <Entry x:Name="TitleEntry" Placeholder="Announcement title" FontSize="18" />
                     <Editor x:Name="MessageEditor" Placeholder="Write your announcement..." AutoSize="TextChanges" MinimumHeightRequest="150" />

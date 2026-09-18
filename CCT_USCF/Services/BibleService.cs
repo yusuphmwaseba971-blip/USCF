@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using CCT_USCF.Models;
+using System.Diagnostics;
 
 namespace CCT_USCF.Services;
 
@@ -39,6 +40,30 @@ public sealed class BibleService
             _initialized = true;
         }
         finally { _gate.Release(); }
+    }
+
+    public async Task WarmupDefaultAsync()
+    {
+        var timer = Stopwatch.StartNew();
+        await InitializeAsync();
+        await EnsureTranslationLoadedAsync(Language);
+        Debug.WriteLine($"[BIBLE] Persisted {Language} data warmed in {timer.ElapsedMilliseconds} ms");
+    }
+
+    public static async Task<IReadOnlyList<BibleVerse>> GetBundledDefaultVersesAsync()
+    {
+        using var stream = await FileSystem.OpenAppPackageFileAsync("kjv_john3.json");
+        var verses = await JsonSerializer.DeserializeAsync<string[]>(stream, JsonOptions)
+            ?? Array.Empty<string>();
+        return verses.Select((text, index) => new BibleVerse(index + 1, text)).ToArray();
+    }
+
+    public static async Task<IReadOnlyList<BibleVerse>> GetBundledNenoMathayo1VersesAsync()
+    {
+        using var stream = await FileSystem.OpenAppPackageFileAsync("swahili_neno_mathayo1.json");
+        var verses = await JsonSerializer.DeserializeAsync<string[]>(stream, JsonOptions)
+            ?? Array.Empty<string>();
+        return verses.Select((text, index) => new BibleVerse(index + 1, text)).ToArray();
     }
 
     private async Task<BibleTranslation> EnsureTranslationLoadedAsync(string language)

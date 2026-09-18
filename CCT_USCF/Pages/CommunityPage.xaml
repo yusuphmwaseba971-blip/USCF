@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.CommunityPage"
     Title="Community"
-    BackgroundColor="{StaticResource PageBackground}">
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
 
     <Grid RowDefinitions="*,Auto">
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
@@ -32,7 +32,7 @@
                     </Grid>
                 </Border>
 
-                <Border Padding="18,16" BackgroundColor="White" StrokeThickness="0"
+                <Border Padding="18,16" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
                         SemanticProperties.Description="Create a post">
                     <Border.Shadow>
@@ -56,7 +56,7 @@
                     </Grid>
                 </Border>
 
-                <Border Padding="20" BackgroundColor="White" StrokeThickness="0"
+                <Border Padding="20" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 22"
                         SemanticProperties.Description="Open the Church Community feed">
                     <Border.Shadow>

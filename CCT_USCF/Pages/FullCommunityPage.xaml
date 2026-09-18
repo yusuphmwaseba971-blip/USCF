@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-x:Class="CCT_USCF.Pages.FullCommunityPage" Title="Full Community" BackgroundColor="{StaticResource PageBackground}">
+x:Class="CCT_USCF.Pages.FullCommunityPage" Title="Full Community" BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="12">
             <Label Text="🌍 Full Community" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
-            <Label Text="One national feed for the whole CCT community." TextColor="#64748B" />
-            <Border BackgroundColor="{StaticResource SurfaceWhite}" Padding="14" StrokeShape="RoundRectangle 16">
+            <Label Text="One national feed for the whole CCT community." TextColor="{StaticResource TextSecondary}" />
+            <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Padding="14" StrokeShape="RoundRectangle 16">
                 <VerticalStackLayout Spacing="8">
                     <Entry x:Name="TitleEntry" Placeholder="Title (optional)" />
                     <Editor x:Name="ContentEditor" Placeholder="Share encouragement, testimony, or an update..." HeightRequest="110" />
@@ -15,7 +15,7 @@ x:Class="CCT_USCF.Pages.FullCommunityPage" Title="Full Community" BackgroundColo
                         <Button Text="Video" Clicked="OnVideoClicked" />
                         <Button Text="Audio" Clicked="OnAudioClicked" />
                     </HorizontalStackLayout>
-                    <Label x:Name="AttachmentLabel" Text="No media selected" TextColor="#64748B" />
+                    <Label x:Name="AttachmentLabel" Text="No media selected" TextColor="{StaticResource TextSecondary}" />
                     <Entry x:Name="AudioDurationEntry" Placeholder="Audio duration in seconds (required for audio)" Keyboard="Numeric" IsVisible="False" />
                     <Button x:Name="PostButton" Text="POST NATIONALLY" Clicked="OnPostClicked" />
                 </VerticalStackLayout>

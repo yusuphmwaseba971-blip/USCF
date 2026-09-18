@@ -4,7 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.HomePage"
              Title="Home"
-             BackgroundColor="{StaticResource PageBackground}">
+             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <Grid RowDefinitions="*,Auto">
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
             <VerticalStackLayout Padding="18,14,18,34" Spacing="18">
@@ -22,7 +22,7 @@
                         <Label Text="USCF" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
                         <Label Text="My church headquarters" FontSize="11" TextColor="{StaticResource TextSecondary}" />
                     </VerticalStackLayout>
-                    <Border Grid.Column="2" WidthRequest="44" HeightRequest="44" BackgroundColor="White"
+                    <Border Grid.Column="2" WidthRequest="44" HeightRequest="44" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                             Stroke="#DCEBE0" StrokeThickness="1" StrokeShape="RoundRectangle 14">
                         <Grid>
                             <Label Text="◉" FontSize="21" TextColor="{StaticResource BrandGreen}"
@@ -79,7 +79,7 @@
                         </Label>
                     </Grid>
                     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
-                        <Border Padding="13" BackgroundColor="#F3EDFF" StrokeThickness="0" StrokeShape="RoundRectangle 18">
+                        <Border Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource AccentPurpleTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenNotifications" /></Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="!" FontSize="22" TextColor="{StaticResource AccentPurple}" />
@@ -87,7 +87,7 @@
                                 <Label Text="Announcements" FontSize="11" TextColor="#75658F" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
-                        <Border Grid.Column="1" Padding="13" BackgroundColor="#EAF5FF" StrokeThickness="0" StrokeShape="RoundRectangle 18">
+                        <Border Grid.Column="1" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenPrayer" /></Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="♡" FontSize="23" TextColor="{StaticResource AccentBlue}" />
@@ -95,7 +95,7 @@
                                 <Label Text="Prayer Requests" FontSize="11" TextColor="#54708B" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
-                        <Border Grid.Row="1" Padding="13" BackgroundColor="#EAF7EE" StrokeThickness="0" StrokeShape="RoundRectangle 18">
+                        <Border Grid.Row="1" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenCommunity" /></Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="♧" FontSize="23" TextColor="{StaticResource BrandGreen}" />
@@ -103,7 +103,7 @@
                                 <Label Text="Community activity" FontSize="11" TextColor="#537160" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
-                        <Border Grid.Row="1" Grid.Column="1" Padding="13" BackgroundColor="#FFF8E7" StrokeThickness="0" StrokeShape="RoundRectangle 18">
+                        <Border Grid.Row="1" Grid.Column="1" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenEvents" /></Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="□" FontSize="23" TextColor="{StaticResource AccentGold}" />
@@ -111,7 +111,7 @@
                                 <Label Text="Church activity" FontSize="11" TextColor="#8A7045" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
-                        <Border Grid.Row="2" Padding="13" BackgroundColor="#EEF2FF" StrokeThickness="0" StrokeShape="RoundRectangle 18">
+                        <Border Grid.Row="2" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
                             <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenSermons" /></Border.GestureRecognizers>
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="▶" FontSize="20" TextColor="{StaticResource AccentBlue}" />
@@ -122,7 +122,7 @@
                     </Grid>
                 </VerticalStackLayout>
 
-                <Border Padding="18" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 22">
+                <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                     <Border.Shadow><Shadow Brush="#173B28" Offset="0,3" Radius="12" Opacity="0.10" /></Border.Shadow>
                     <VerticalStackLayout Spacing="12">
                         <Grid ColumnDefinitions="*,Auto">
@@ -140,7 +140,7 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <Border Padding="18" BackgroundColor="#EAF7EE" StrokeThickness="0" StrokeShape="RoundRectangle 22">
+                <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenNotifications" /></Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="7">
                         <Label Text="OFFICIAL USCF UPDATE" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
@@ -160,10 +160,10 @@
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenChurch" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
-                    <Border Padding="16" BackgroundColor="#FFF8E7" StrokeThickness="0" StrokeShape="RoundRectangle 20">
+                    <Border Padding="16" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 20">
                         <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenChurch" /></Border.GestureRecognizers>
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="13">
-                            <Border WidthRequest="48" HeightRequest="48" BackgroundColor="#FFEDB7" StrokeThickness="0" StrokeShape="RoundRectangle 24">
+                            <Border WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 24">
                                 <Label Text="♧" FontSize="29" TextColor="#A66A00" HorizontalOptions="Center" VerticalOptions="Center" />
                             </Border>
                             <VerticalStackLayout Grid.Column="1" Spacing="3">
@@ -175,7 +175,7 @@
                     </Border>
                 </VerticalStackLayout>
 
-                <Border Padding="18" BackgroundColor="#EAF5FF" StrokeThickness="0" StrokeShape="RoundRectangle 22">
+                <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenPrayer" /></Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="8">
                         <Label Text="PRAY WITH YOUR COMMUNITY" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
@@ -193,7 +193,7 @@
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenBible" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
-                    <Border Padding="18" BackgroundColor="#EEF5FF" StrokeThickness="0" StrokeShape="RoundRectangle 22">
+                    <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                         <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenBible" /></Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="6">
                             <Label Text="TODAY'S WORD" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
@@ -263,11 +263,11 @@
                     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto"
                           ColumnSpacing="10" RowSpacing="10">
                         <Button Text="📖  Scripture" Clicked="OpenScriptureComposer" BackgroundColor="#EEF5FF" TextColor="#17315F" />
-                        <Button Grid.Column="1" Text="🙏  Prayer" Clicked="OpenPrayerFromShare" BackgroundColor="#EAF7EE" TextColor="{StaticResource BrandDeepGreen}" />
-                        <Button Grid.Row="1" Text="💬  Encouragement" Clicked="OpenEncouragementComposer" BackgroundColor="#F3EDFF" TextColor="#38216B" />
-                        <Button Grid.Row="1" Grid.Column="1" Text="📢  Notice" Clicked="OpenNoticeComposer" BackgroundColor="#FFF8E7" TextColor="#684400" />
-                        <Button Grid.Row="2" Text="🎵  Worship" Clicked="OpenWorshipComposer" BackgroundColor="#EAF5FF" TextColor="#123B73" />
-                        <Button Grid.Row="2" Grid.Column="1" Text="📅  Event" Clicked="OpenEventComposer" BackgroundColor="#EAF7EE" TextColor="{StaticResource BrandDeepGreen}" />
+                        <Button Grid.Column="1" Text="🙏  Prayer" Clicked="OpenPrayerFromShare" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource BrandDeepGreen}" />
+                        <Button Grid.Row="1" Text="💬  Encouragement" Clicked="OpenEncouragementComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentPurpleTint}, Dark={StaticResource SurfaceDark}}" TextColor="#38216B" />
+                        <Button Grid.Row="1" Grid.Column="1" Text="📢  Notice" Clicked="OpenNoticeComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" TextColor="#684400" />
+                        <Button Grid.Row="2" Text="🎵  Worship" Clicked="OpenWorshipComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" TextColor="#123B73" />
+                        <Button Grid.Row="2" Grid.Column="1" Text="📅  Event" Clicked="OpenEventComposer" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource BrandDeepGreen}" />
                     </Grid>
                     <Button Text="Close" Clicked="CloseShareAndServe" BackgroundColor="Transparent"
                             TextColor="{StaticResource BrandGreen}" />
@@ -277,13 +277,13 @@
 
         <Grid Grid.Row="0" x:Name="ShortcutPanel" IsVisible="False" VerticalOptions="End" HorizontalOptions="End"
               Margin="0,0,18,24" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
-            <Button Text="Announcements  !" Clicked="OpenNotificationsButton" BackgroundColor="White" TextColor="#173323"
+            <Button Text="Announcements  !" Clicked="OpenNotificationsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
-            <Button Grid.Row="1" Text="Events  □" Clicked="OpenEventsButton" BackgroundColor="White" TextColor="#173323"
+            <Button Grid.Row="1" Text="Events  □" Clicked="OpenEventsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
-            <Button Grid.Row="2" Text="Sermons  ▶" Clicked="OpenSermonsButton" BackgroundColor="White" TextColor="#173323"
+            <Button Grid.Row="2" Text="Sermons  ▶" Clicked="OpenSermonsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
-            <Button Grid.Row="3" Text="Giving  ＋" Clicked="OpenGivingButton" BackgroundColor="White" TextColor="#173323"
+            <Button Grid.Row="3" Text="Giving  ＋" Clicked="OpenGivingButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
         </Grid>
         <Button Grid.Row="0" x:Name="ShortcutButton" Text="＋" Clicked="ToggleShortcuts"

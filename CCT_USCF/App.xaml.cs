@@ -15,6 +15,7 @@ public partial class App : Application
         MauiProgram.Services
             .GetRequiredService<AppAppearanceService>()
             .ApplyTypography();
+        RequestedThemeChanged += OnRequestedThemeChanged;
         Debug.WriteLine($"[STARTUP] App created at {DateTimeOffset.UtcNow:O}");
 
         // NOTE: Region seeding is temporary and should be run manually.
@@ -23,6 +24,10 @@ public partial class App : Application
         // If you need to run the seeder once, call SeedFirebaseRegionsAsync() manually.
         // _ = SeedFirebaseRegionsAsync();
     }
+
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
+        MauiProgram.Services.GetRequiredService<AppAppearanceService>()
+            .NotifySystemThemeChanged();
 
     private async Task SeedFirebaseRegionsAsync()
     {
@@ -48,6 +53,20 @@ public partial class App : Application
         IActivationState? activationState)
     {
         Debug.WriteLine($"[STARTUP] First page requested at {DateTimeOffset.UtcNow:O}");
-        return new Window(new AppShell());
+        var window = new Window(new AppShell());
+        _ = WarmBibleDataAsync();
+        return window;
+    }
+
+    private static async Task WarmBibleDataAsync()
+    {
+        try
+        {
+            await MauiProgram.Services.GetRequiredService<BibleService>().WarmupDefaultAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[BIBLE] Background warmup failed: {ex}");
+        }
     }
 }
