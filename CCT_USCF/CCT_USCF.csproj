@@ -7,6 +7,8 @@
 
     <OutputType>Exe</OutputType>
     <RootNamespace>CCT_USCF</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
 
     <!-- .NET MAUI -->
     <UseMaui>true</UseMaui>
@@ -106,6 +108,9 @@
 
     <!-- Raw assets -->
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <MauiAsset Remove="Resources\Raw\kjv.json" />
+    <MauiAsset Remove="Resources\Raw\swahili_neno.json" />
+    <MauiAsset Remove="Resources\Raw\bible.db" />
 
   </ItemGroup>
 
@@ -177,8 +182,11 @@
        ========================================================= -->
 
   <ItemGroup>
+    <Compile Remove="USCF.Backend\**\*.cs" />
     <Compile Remove="USCF.Backend.Tests\**\*.cs" />
+    <None Remove="USCF.Backend\**\*" />
     <None Remove="USCF.Backend.Tests\**\*" />
+    <EmbeddedResource Remove="USCF.Backend\**\*" />
     <EmbeddedResource Remove="USCF.Backend.Tests\**\*" />
   </ItemGroup>
 

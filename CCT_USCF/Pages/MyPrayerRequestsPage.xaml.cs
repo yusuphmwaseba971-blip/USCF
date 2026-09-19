@@ -16,10 +16,10 @@ public partial class MyPrayerRequestsPage : ContentPage
         _prayerService = MauiProgram.Services.GetRequiredService<PrayerService>();
     }
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
-        await LoadMyRequestsAsync();
+        _ = LoadMyRequestsAsync();
     }
 
     private async Task LoadMyRequestsAsync()

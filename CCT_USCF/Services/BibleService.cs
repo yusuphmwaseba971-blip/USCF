@@ -1,7 +1,8 @@
+using System.Collections.Concurrent;
 using System.Globalization;
-using System.Text.Json;
 using CCT_USCF.Models;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace CCT_USCF.Services;
 
@@ -21,8 +22,20 @@ public sealed class BibleService
         Dictionary<string, string> Highlights,
         List<BibleNote> Notes);
 
+    private sealed class BibleBookIndex
+    {
+        public string Translation { get; set; } = string.Empty;
+        public int BookId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string ShortName { get; set; } = string.Empty;
+        public string Testament { get; set; } = string.Empty;
+        public int ChapterCount { get; set; }
+    }
+
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly Dictionary<string, BibleTranslation> _translations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _stateWriteGate = new(1, 1);
+    private readonly ConcurrentDictionary<(string Language, int BookId, int Chapter), IReadOnlyList<BibleVerse>> _chapterCache = new();
+    private IReadOnlyList<BibleBookIndex>? _bookIndex;
     private StoredState _state = new(KjvId, "John", 3, 16, 22, "CCT-USCF",
         new(), new(StringComparer.OrdinalIgnoreCase), new());
     private bool _initialized;
@@ -46,110 +59,80 @@ public sealed class BibleService
     {
         var timer = Stopwatch.StartNew();
         await InitializeAsync();
-        await EnsureTranslationLoadedAsync(Language);
-        Debug.WriteLine($"[BIBLE] Persisted {Language} data warmed in {timer.ElapsedMilliseconds} ms");
+        await EnsureIndexReadyAsync();
+
+        var defaultBook = _state.Book;
+        var defaultLanguage = _state.Language;
+        var found = (await EnsureIndexReadyAsync()).FirstOrDefault(item =>
+            item.Translation.Equals(defaultLanguage, StringComparison.OrdinalIgnoreCase) &&
+            item.Name.Equals(defaultBook, StringComparison.OrdinalIgnoreCase));
+
+        if (found is not null)
+            _ = await GetVersesAsync(defaultBook, Math.Clamp(_state.Chapter, 1, found.ChapterCount), defaultLanguage);
+
+        Debug.WriteLine($"[BIBLE PERF] Local Bible index ready in {timer.ElapsedMilliseconds} ms");
     }
 
-    public static async Task<IReadOnlyList<BibleVerse>> GetBundledDefaultVersesAsync()
+    private async Task<IReadOnlyList<BibleBookIndex>> EnsureIndexReadyAsync()
     {
-        using var stream = await FileSystem.OpenAppPackageFileAsync("kjv_john3.json");
-        var verses = await JsonSerializer.DeserializeAsync<string[]>(stream, JsonOptions)
-            ?? Array.Empty<string>();
-        return verses.Select((text, index) => new BibleVerse(index + 1, text)).ToArray();
-    }
-
-    public static async Task<IReadOnlyList<BibleVerse>> GetBundledNenoMathayo1VersesAsync()
-    {
-        using var stream = await FileSystem.OpenAppPackageFileAsync("swahili_neno_mathayo1.json");
-        var verses = await JsonSerializer.DeserializeAsync<string[]>(stream, JsonOptions)
-            ?? Array.Empty<string>();
-        return verses.Select((text, index) => new BibleVerse(index + 1, text)).ToArray();
-    }
-
-    private async Task<BibleTranslation> EnsureTranslationLoadedAsync(string language)
-    {
-        if (_translations.TryGetValue(language, out var translation))
-            return translation;
-
+        if (_bookIndex is not null) return _bookIndex;
         await _gate.WaitAsync();
         try
         {
-            if (_translations.TryGetValue(language, out translation))
-                return translation;
-
-            translation = language.Equals(NenoId, StringComparison.OrdinalIgnoreCase)
-                ? await LoadJsonAsync("swahili_neno.json", NenoBookNames, "Kiswahili", "Biblica Open Kiswahili Contemporary Version (Neno) 2015")
-                : await LoadJsonAsync("kjv.json", KjvBookNames, "English", "King James Version");
-            _translations[language] = translation;
-            return translation;
+            if (_bookIndex is not null) return _bookIndex;
+            await using var stream = await FileSystem.OpenAppPackageFileAsync("bible-index.json");
+            _bookIndex = await JsonSerializer.DeserializeAsync<List<BibleBookIndex>>(stream, JsonOptions)
+                ?? throw new InvalidDataException("The local Bible index is empty.");
+            if (_bookIndex.Count != 132)
+                throw new InvalidDataException($"The local Bible index contains {_bookIndex.Count} books; expected 132.");
+            return _bookIndex;
         }
         finally { _gate.Release(); }
     }
 
-    private static async Task<BibleTranslation> LoadJsonAsync(string assetName, IReadOnlyList<string> bookNames, string language, string translationName)
+    private static string ChapterAssetPath(string language, int bookId, int chapter) =>
+        $"bible-chapters/{language}/{bookId:00}/{chapter:000}.json";
+
+    private async Task<IReadOnlyList<BibleVerse>> ReadChapterAsync(string language, int bookId, int chapter)
     {
-        using var stream = await FileSystem.OpenAppPackageFileAsync(assetName);
-        using var reader = new StreamReader(stream);
-        var json = await reader.ReadToEndAsync();
-        return await Task.Run(() => ParseJson(json, bookNames, language, translationName));
+        var cacheKey = (language, bookId, chapter);
+        if (_chapterCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
+        await using var stream = await FileSystem.OpenAppPackageFileAsync(ChapterAssetPath(language, bookId, chapter));
+        var verses = await JsonSerializer.DeserializeAsync<string[]>(stream, JsonOptions)
+            ?? throw new InvalidDataException($"Chapter data is empty: {language}/{bookId}/{chapter}");
+
+        var result = verses.Select((text, index) => new BibleVerse(index + 1, text)).ToArray();
+        _chapterCache[cacheKey] = result;
+        return result;
     }
-
-    private static BibleTranslation ParseJson(string json, IReadOnlyList<string> bookNames, string language, string translationName)
-    {
-        using var document = JsonDocument.Parse(json);
-        var books = new List<BibleBook>();
-        var index = 0;
-        foreach (var element in document.RootElement.EnumerateArray())
-        {
-            var abbreviation = element.GetProperty("abbrev").GetString() ?? $"b{index + 1}";
-            var chapters = new List<IReadOnlyList<string>>();
-            foreach (var chapter in element.GetProperty("chapters").EnumerateArray())
-                chapters.Add(chapter.EnumerateArray().Select(v => v.GetString() ?? string.Empty).ToArray());
-            books.Add(new BibleBook(index + 1, index < bookNames.Count ? bookNames[index] : abbreviation,
-                abbreviation, index < 39 ? "Old Testament" : "New Testament", chapters));
-            index++;
-        }
-        return new BibleTranslation(language, translationName, books);
-    }
-
-    private static readonly string[] KjvBookNames =
-    {
-        "Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel",
-        "1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs",
-        "Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel",
-        "Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi",
-        "Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians","Galatians","Ephesians",
-        "Philippians","Colossians","1 Thessalonians","2 Thessalonians","1 Timothy","2 Timothy","Titus","Philemon",
-        "Hebrews","James","1 Peter","2 Peter","1 John","2 John","3 John","Jude","Revelation"
-    };
-
-    private static readonly string[] NenoBookNames =
-    {
-        "Mwanzo","Kutoka","Walawi","Hesabu","Kumbukumbu","Yoshua","Waamuzi","Ruthu","1 Samweli","2 Samweli",
-        "1 Wafalme","2 Wafalme","1 Nyakati","2 Nyakati","Ezra","Nehemia","Esta","Ayubu","Zaburi","Mithali",
-        "Mhubiri","Wimbo","Isaya","Yeremia","Maombolezo","Ezekieli","Danieli","Hosea","Yoeli","Amosi",
-        "Obadia","Yona","Mika","Nahumu","Habakuki","Sefania","Hagai","Zekaria","Malaki","Mathayo","Marko",
-        "Luka","Yohana","Matendo","Warumi","1 Wakorintho","2 Wakorintho","Wagalatia","Waefeso","Wafilipi",
-        "Wakolosai","1 Wathesalonike","2 Wathesalonike","1 Timotheo","2 Timotheo","Tito","Filemoni","Waebrania",
-        "Yakobo","1 Petro","2 Petro","1 Yohana","2 Yohana","3 Yohana","Yuda","Ufunuo"
-    };
 
     public async Task<IReadOnlyList<string>> GetLanguagesAsync() { await InitializeAsync(); return new[] { KjvId, NenoId }; }
     public async Task<IReadOnlyList<BibleBook>> GetBooksAsync(string language = KjvId)
     {
         await InitializeAsync();
-        return (await EnsureTranslationLoadedAsync(language)).Books;
+        return (await EnsureIndexReadyAsync())
+            .Where(book => book.Translation.Equals(language, StringComparison.OrdinalIgnoreCase))
+            .Select(book => new BibleBook(book.BookId, book.Name, book.ShortName, book.Testament,
+                Array.Empty<IReadOnlyList<string>>()))
+            .ToArray();
     }
     public async Task<IReadOnlyList<int>> GetChaptersAsync(string book, string language = KjvId)
     {
-        var found = (await GetBooksAsync(language)).FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
-        return found?.Chapters.Select((_, i) => i + 1).ToArray() ?? Array.Empty<int>();
+        var found = (await EnsureIndexReadyAsync()).FirstOrDefault(item =>
+            item.Translation.Equals(language, StringComparison.OrdinalIgnoreCase) &&
+            item.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
+        return found is null ? Array.Empty<int>() : Enumerable.Range(1, found.ChapterCount).ToArray();
     }
     public async Task<IReadOnlyList<BibleVerse>> GetVersesAsync(string book, int chapter, string language = KjvId)
     {
-        var found = (await GetBooksAsync(language)).FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
-        if (found is null || chapter < 1 || chapter > found.Chapters.Count) return Array.Empty<BibleVerse>();
-        return found.Chapters[chapter - 1].Select((text, i) => new BibleVerse(i + 1, text)).ToArray();
+        var found = (await EnsureIndexReadyAsync()).FirstOrDefault(item =>
+            item.Translation.Equals(language, StringComparison.OrdinalIgnoreCase) &&
+            item.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
+        if (found is null || chapter < 1 || chapter > found.ChapterCount)
+            return Array.Empty<BibleVerse>();
+        return await ReadChapterAsync(language, found.BookId, chapter);
     }
     public async Task<string> GetVerseAsync(string book, int chapter, int verse, string language = KjvId) =>
         (await GetVersesAsync(book, chapter, language)).FirstOrDefault(v => v.Number == verse)?.Text ?? string.Empty;
@@ -158,13 +141,28 @@ public sealed class BibleService
         await InitializeAsync();
         if (string.IsNullOrWhiteSpace(query)) return Array.Empty<BibleSearchResult>();
         var normalized = query.Trim();
-        return (await GetBooksAsync(language)).SelectMany(book => book.Chapters.SelectMany((chapter, chapterIndex) =>
-            chapter.Select((text, verseIndex) => new BibleSearchResult(book.Name, chapterIndex + 1, verseIndex + 1, text))))
-            .Where(v => v.Text.Contains(normalized, StringComparison.OrdinalIgnoreCase))
-            .Take(100).ToArray();
+        var results = new List<BibleSearchResult>();
+        foreach (var book in (await EnsureIndexReadyAsync()).Where(item =>
+            item.Translation.Equals(language, StringComparison.OrdinalIgnoreCase)))
+        {
+            for (var chapter = 1; chapter <= book.ChapterCount && results.Count < 100; chapter++)
+            {
+                foreach (var verse in await ReadChapterAsync(language, book.BookId, chapter))
+                {
+                    if (verse.Text.Contains(normalized, StringComparison.OrdinalIgnoreCase))
+                        results.Add(new BibleSearchResult(book.Name, chapter, verse.Number, verse.Text));
+                    if (results.Count == 100) break;
+                }
+            }
+            if (results.Count == 100) break;
+        }
+        return results;
     }
-    public string GetAbbreviationForBook(string book, string language = KjvId) =>
-        _translations.TryGetValue(language, out var t) ? t.Books.FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase))?.ShortName ?? book : book;
+
+    public async Task<string> GetAbbreviationForBookAsync(string book, string language = KjvId) =>
+        (await EnsureIndexReadyAsync()).FirstOrDefault(item =>
+            item.Translation.Equals(language, StringComparison.OrdinalIgnoreCase) &&
+            item.Name.Equals(book, StringComparison.OrdinalIgnoreCase))?.ShortName ?? book;
 
     public async Task<BibleDisplayModel> ResolveBiblePostAsync(BiblePostDto post)
     {
@@ -180,17 +178,60 @@ public sealed class BibleService
         if (!File.Exists(StatePath)) return;
         try
         {
-            var loaded = await JsonSerializer.DeserializeAsync<StoredState>(File.OpenRead(StatePath), JsonOptions);
+            await using var stream = File.OpenRead(StatePath);
+            var loaded = await JsonSerializer.DeserializeAsync<StoredState>(stream, JsonOptions);
             if (loaded is not null)
-            {
-                var language = loaded.Language.Equals("English", StringComparison.OrdinalIgnoreCase) ? KjvId :
-                    loaded.Language.Equals("Swahili", StringComparison.OrdinalIgnoreCase) ? NenoId : loaded.Language;
-                _state = loaded with { Language = language };
-            }
+                _state = await NormalizeStateAsync(loaded);
         }
         catch (JsonException) { /* Corrupt preferences should not prevent Bible reading. */ }
     }
-    private async Task SaveStateAsync() => await File.WriteAllTextAsync(StatePath, JsonSerializer.Serialize(_state, JsonOptions));
+
+    private async Task<StoredState> NormalizeStateAsync(StoredState state)
+    {
+        var language = state.Language.Equals("English", StringComparison.OrdinalIgnoreCase) ? KjvId :
+            state.Language.Equals("Swahili", StringComparison.OrdinalIgnoreCase) ? NenoId : state.Language;
+
+        if (!string.Equals(language, KjvId, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(language, NenoId, StringComparison.OrdinalIgnoreCase))
+            language = KjvId;
+
+        var bookIndex = await EnsureIndexReadyAsync();
+        var translationBooks = bookIndex
+            .Where(item => item.Translation.Equals(language, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (translationBooks.Length == 0)
+            return new StoredState(KjvId, "John", 3, 16, 22, "CCT-USCF",
+                state.Bookmarks, new Dictionary<string, string>(state.Highlights, StringComparer.OrdinalIgnoreCase), state.Notes);
+
+        var book = translationBooks.FirstOrDefault(item => item.Name.Equals(state.Book, StringComparison.OrdinalIgnoreCase))?.Name
+            ?? translationBooks.First().Name;
+
+        var foundBook = translationBooks.First(item => item.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
+        var chapter = Math.Clamp(state.Chapter, 1, foundBook.ChapterCount);
+        var verseCount = (await GetVersesAsync(book, chapter, language)).Count;
+        var verse = Math.Clamp(state.Verse, 1, verseCount == 0 ? 1 : verseCount);
+        var fontSize = double.IsFinite(state.FontSize) && state.FontSize > 0 ? state.FontSize : 22;
+        var background = string.IsNullOrWhiteSpace(state.Background) ? "CCT-USCF" : state.Background;
+
+        return new StoredState(language, book, chapter, verse, fontSize, background,
+            state.Bookmarks, new Dictionary<string, string>(state.Highlights, StringComparer.OrdinalIgnoreCase), state.Notes);
+    }
+    private async Task SaveStateAsync()
+    {
+        await _stateWriteGate.WaitAsync();
+        try
+        {
+            var state = _state;
+            var temporaryPath = $"{StatePath}.tmp";
+            await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(state, JsonOptions));
+            File.Move(temporaryPath, StatePath, true);
+        }
+        finally
+        {
+            _stateWriteGate.Release();
+        }
+    }
     public string Language => _state.Language;
     public string Book => _state.Book;
     public int Chapter => _state.Chapter;
@@ -198,7 +239,22 @@ public sealed class BibleService
     public double FontSize => _state.FontSize;
     public string Background => _state.Background;
     public async Task SetPositionAsync(string language, string book, int chapter, int verse)
-    { _state = _state with { Language = language, Book = book, Chapter = chapter, Verse = verse }; await SaveStateAsync(); }
+    {
+        var normalized = await NormalizeStateAsync(new StoredState(
+            string.Equals(language, "English", StringComparison.OrdinalIgnoreCase) ? KjvId :
+            string.Equals(language, "Swahili", StringComparison.OrdinalIgnoreCase) ? NenoId : language,
+            book,
+            chapter,
+            verse,
+            _state.FontSize,
+            _state.Background,
+            _state.Bookmarks,
+            _state.Highlights,
+            _state.Notes));
+
+        _state = normalized; 
+        await SaveStateAsync();
+    }
     public async Task SetAppearanceAsync(double fontSize, string background)
     { _state = _state with { FontSize = fontSize, Background = background }; await SaveStateAsync(); }
     public bool IsBookmarked(string key) => _state.Bookmarks.Contains(key, StringComparer.OrdinalIgnoreCase);
