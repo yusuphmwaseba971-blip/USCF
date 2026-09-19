@@ -29,10 +29,10 @@ public partial class PrayerPage : ContentPage
         _prayerService.PrayersSynchronized += OnPrayersSynchronized;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _ = LoadPrayerWallAsync();
+        await LoadPrayerWallAsync();
         ShowIntroIfNeeded();
     }
 
@@ -40,12 +40,12 @@ public partial class PrayerPage : ContentPage
     {
         _initialLoadCompleted = false;
         _noMoreRemotePrayers = false;
-        var backgroundLoadStarted = false;
         PrayerLoadingIndicator.IsVisible = true;
         PrayerErrorState.IsVisible = false;
         try
         {
-            var items = await _prayerService.GetCachedPrayersAsync();
+            // Local-first initial load
+            var items = await _prayerService.GetInitialPrayersAsync();
 
             _items.Clear();
             foreach (var item in StableInitialOrder(items))
@@ -53,17 +53,6 @@ public partial class PrayerPage : ContentPage
 
             PrayerCollectionView.ItemsSource = _items;
             _initialLoadCompleted = true;
-
-            if (items.Count == 0)
-            {
-                PrayerLoadingIndicator.IsVisible = true;
-                backgroundLoadStarted = true;
-                _ = LoadInitialPrayerWallInBackgroundAsync();
-            }
-            else
-            {
-                _ = _prayerService.SyncNewAndChangedPrayersAsync();
-            }
         }
         catch (Exception ex)
         {
@@ -72,37 +61,10 @@ public partial class PrayerPage : ContentPage
             PrayerErrorMessage.Text = "Unable to load prayer requests.";
             PrayerErrorState.IsVisible = true;
         }
-
         finally
         {
-            if (!backgroundLoadStarted)
-                PrayerLoadingIndicator.IsVisible = false;
+            PrayerLoadingIndicator.IsVisible = false;
             PrayerRefreshView.IsRefreshing = false;
-        }
-    }
-
-    private async Task LoadInitialPrayerWallInBackgroundAsync()
-    {
-        try
-        {
-            var items = await _prayerService.GetInitialPrayersAsync();
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                ReplaceItems(StableInitialOrder(items));
-                _initialLoadCompleted = true;
-            });
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[PRAYER_BACKGROUND_LOAD_ERROR] {ex}");
-        }
-        finally
-        {
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                PrayerLoadingIndicator.IsVisible = false;
-                PrayerRefreshView.IsRefreshing = false;
-            });
         }
     }
 

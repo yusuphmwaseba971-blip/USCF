@@ -1,13 +1,11 @@
 using Android.App;
-using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
-using AndroidX.Core.App;
-using Plugin.Firebase.AppCheck;
-using Plugin.Firebase.CloudMessaging;
-using Plugin.Firebase.Core.Platforms.Android;
+using Android.Content;
 using System.Threading.Tasks;
+using Plugin.Firebase.AppCheck;
+using Plugin.Firebase.Core.Platforms.Android;
 
 namespace CCT_USCF;
 
@@ -24,11 +22,6 @@ namespace CCT_USCF;
         ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
-    private const string GeneralChannelId = "com.uscf.cct.general";
-    private const string GroupChannelId = "com.uscf.cct.group_messages";
-    private const string AnnouncementChannelId = "com.uscf.cct.announcements";
-    private const string CommunityChannelId = "com.uscf.cct.community";
-    private static readonly string[] ChannelIds = [GeneralChannelId, GroupChannelId, AnnouncementChannelId, CommunityChannelId];
     private static TaskCompletionSource<Intent?>? _googleSignInCompletion;
 
     public static Task<Intent?> StartGoogleSignInAsync(Intent intent, int requestCode)
@@ -62,11 +55,6 @@ public class MainActivity : MauiAppCompatActivity
 #endif
         CrossFirebase.Initialize(this, () => this);
         System.Diagnostics.Debug.WriteLine($"[STARTUP] Firebase initialization requested at {DateTimeOffset.UtcNow:O}");
-        CreateNotificationChannels();
-        CrossFirebaseCloudMessaging.Current.NotificationReceived += OnNotificationReceived;
-        CrossFirebaseCloudMessaging.Current.TokenChanged += OnTokenChanged;
-        CrossFirebaseCloudMessaging.Current.NotificationTapped += OnNotificationTapped;
-        FirebaseCloudMessagingImplementation.OnNewIntent(Intent);
         base.OnCreate(savedInstanceState);
         Window?.SetSoftInputMode(SoftInput.AdjustPan);
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu &&
@@ -74,71 +62,5 @@ public class MainActivity : MauiAppCompatActivity
         {
             RequestPermissions(new[] { Android.Manifest.Permission.PostNotifications }, 1001);
         }
-    }
-
-    protected override void OnNewIntent(Intent? intent)
-    {
-        base.OnNewIntent(intent);
-        if (intent is not null)
-        {
-            FirebaseCloudMessagingImplementation.OnNewIntent(intent);
-        }
-    }
-
-    private void CreateNotificationChannels()
-    {
-        var notificationManager = (NotificationManager?)Android.App.Application.Context.GetSystemService(Context.NotificationService);
-        if (notificationManager is null)
-        {
-            return;
-        }
-
-        foreach (var channelId in ChannelIds)
-        {
-            if (notificationManager.GetNotificationChannel(channelId) is not null)
-            {
-                continue;
-            }
-
-            var name = channelId switch
-            {
-                var id when id == GeneralChannelId => "CCT-USCF General",
-                var id when id == GroupChannelId => "CCT-USCF Group Messages",
-                var id when id == AnnouncementChannelId => "CCT-USCF Announcements",
-                var id when id == CommunityChannelId => "CCT-USCF Community",
-                _ => "CCT-USCF"
-            };
-
-            var importance = channelId == GroupChannelId ? NotificationImportance.High : NotificationImportance.Default;
-            var channel = new NotificationChannel(channelId, name, importance)
-            {
-                Description = "USCF push notifications"
-            };
-            channel.EnableVibration(true);
-            channel.EnableLights(true);
-            notificationManager.CreateNotificationChannel(channel);
-        }
-
-        FirebaseCloudMessagingImplementation.ChannelId = GeneralChannelId;
-    }
-
-    private void OnNotificationReceived(object? sender, Plugin.Firebase.CloudMessaging.EventArgs.FCMNotificationReceivedEventArgs e)
-    {
-        var notification = e?.Notification;
-        var title = notification?.Title ?? "USCF";
-        var body = notification?.Body ?? "New update";
-        System.Diagnostics.Debug.WriteLine($"[FCM_RECEIVED] title={title} body={body}");
-    }
-
-    private void OnTokenChanged(object? sender, Plugin.Firebase.CloudMessaging.EventArgs.FCMTokenChangedEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine($"[FCM_TOKEN_CHANGED] token={e?.Token ?? "empty"}");
-    }
-
-    private void OnNotificationTapped(object? sender, Plugin.Firebase.CloudMessaging.EventArgs.FCMNotificationTappedEventArgs e)
-    {
-        var notification = e?.Notification;
-        var title = notification?.Title ?? "USCF";
-        System.Diagnostics.Debug.WriteLine($"[FCM_TAPPED] title={title} dataCount={notification?.Data?.Count ?? 0}");
     }
 }

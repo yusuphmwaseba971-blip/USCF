@@ -8,7 +8,6 @@ using CCT_USCF.Services.Cloudinary;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
-using Microsoft.Maui.Networking;
 using Microsoft.Maui.Storage;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
@@ -59,10 +58,6 @@ public partial class GroupChatPage : ContentPage
     private int _unreadIncomingCount;
     private bool _isComposerBusy;
     private bool _hasLoadedMessages;
-    private bool _isOffline;
-    private readonly SemaphoreSlim _messageSyncGate = new(1, 1);
-    private bool _connectivitySubscribed;
-    private Task? _initialCacheLoadTask;
 
 #if ANDROID
     private Android.Media.MediaRecorder? _audioRecorder;
@@ -341,7 +336,6 @@ public partial class GroupChatPage : ContentPage
         try
         {
             _realtimeEnabled = true;
-            SubscribeToConnectivity();
 
             if (string.IsNullOrWhiteSpace(_groupId))
             {
@@ -351,12 +345,9 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
-            if (MauiProgram.CurrentUser != null || _auth.CurrentUser != null)
-                _initialCacheLoadTask = LoadMessagesAsync(startRemoteSync: false);
-
             AttachRealtimeListener();
 
-            _ = LoadGroupAsync();
+            await LoadGroupAsync();
         }
         catch (Exception ex)
         {
@@ -378,7 +369,6 @@ public partial class GroupChatPage : ContentPage
 
         _realtimeEnabled = false;
 
-        UnsubscribeFromConnectivity();
         DisposeRealtimeListener();
     }
 
@@ -988,13 +978,7 @@ public partial class GroupChatPage : ContentPage
                 $"[GroupChat] UserUid={GetCurrentUserUid()} GroupId={backendGroupId} " +
                 $"HistoryEnrolled={_chatHistoryEnrolled}");
 
-            if (_initialCacheLoadTask != null)
-                await _initialCacheLoadTask;
-            else
-                await LoadMessagesAsync(startRemoteSync: false);
-
-            if (!_isOffline)
-                _ = SynchronizeMessagesAsync(backendGroupId);
+            await LoadMessagesAsync();
         }
         catch (Exception ex)
         {
@@ -1010,7 +994,7 @@ public partial class GroupChatPage : ContentPage
     // LOAD MESSAGES
     // ============================================================
 
-    private async Task LoadMessagesAsync(bool startRemoteSync = true)
+    private async Task LoadMessagesAsync()
     {
         var communityId =
             GetBackendCommunityId();
@@ -1023,9 +1007,17 @@ public partial class GroupChatPage : ContentPage
 
         try
         {
-            _isOffline = Connectivity.Current.NetworkAccess != NetworkAccess.Internet;
-            var cachedMessages = await _communityService.GetCachedCommunityMessagesAsync(communityId, 100);
-            var cachedUiMessages = cachedMessages
+            var appwriteMessages =
+                await _communityService.LoadGroupMessagesWithCacheAsync(
+                    communityId,
+                    100,
+                    OrganizationalLevel,
+                    _branchId > 0 ? _branchId.ToString() : null,
+                    _regionId > 0 ? _regionId.ToString() : null,
+                    _districtId > 0 ? _districtId.ToString() : null);
+
+            var loadedMessages =
+                appwriteMessages
                     .Where(
                         message =>
                             string.Equals(
@@ -1042,130 +1034,19 @@ public partial class GroupChatPage : ContentPage
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 var hadMessages = _messages.Count > 0;
-                var changed = MergeLoadedMessages(cachedUiMessages);
+                var changed = MergeLoadedMessages(loadedMessages);
                 if (changed || !_hasLoadedMessages)
                 {
                     _hasLoadedMessages = true;
                     RenderMessages(!hadMessages);
                 }
             });
-
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Cache-first open community_id={communityId} " +
-                $"cached_count={cachedUiMessages.Count} " +
-                $"network={Connectivity.Current.NetworkAccess}");
-
-            if (startRemoteSync && !_isOffline)
-                _ = SynchronizeMessagesAsync(communityId);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Cached message load failed: {ex}");
-
-            if (Connectivity.Current.NetworkAccess == NetworkAccess.Internet)
-                _ = SynchronizeMessagesAsync(communityId);
+                $"[GROUP_CHAT] Message load failed: {ex}");
         }
-    }
-
-    private async Task SynchronizeMessagesAsync(string communityId)
-    {
-        if (!_realtimeEnabled ||
-            !string.Equals(communityId, GetBackendCommunityId(), StringComparison.Ordinal) ||
-            Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
-            return;
-
-        if (!await _messageSyncGate.WaitAsync(0))
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Sync coalesced community_id={communityId}");
-            return;
-        }
-
-        try
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Sync started community_id={communityId}");
-
-            var syncedMessages = await _communityService.SyncNewerGroupMessagesAsync(
-                communityId,
-                100,
-                OrganizationalLevel,
-                _branchId > 0 ? _branchId.ToString() : null,
-                _regionId > 0 ? _regionId.ToString() : null,
-                _districtId > 0 ? _districtId.ToString() : null);
-
-            var loadedMessages = syncedMessages
-                .Where(message => string.Equals(
-                    message.CommunityId,
-                    communityId,
-                    StringComparison.Ordinal))
-                .Select(ToUiMessage)
-                .OrderBy(message => message.CreatedAt)
-                .ToList();
-
-            await MainThread.InvokeOnMainThreadAsync(() =>
-            {
-                if (!_realtimeEnabled ||
-                    !string.Equals(communityId, GetBackendCommunityId(), StringComparison.Ordinal))
-                    return;
-
-                var changed = MergeLoadedMessages(loadedMessages);
-                if (changed)
-                    RenderMessages(!_isReadingOlderMessages);
-            });
-
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Sync completed community_id={communityId} " +
-                $"remote_count={syncedMessages.Count} merged_count={loadedMessages.Count}");
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Sync failed community_id={communityId}: {ex.Message}");
-        }
-        finally
-        {
-            _messageSyncGate.Release();
-        }
-    }
-
-    private void SubscribeToConnectivity()
-    {
-        if (_connectivitySubscribed)
-            return;
-
-        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
-        _connectivitySubscribed = true;
-    }
-
-    private void UnsubscribeFromConnectivity()
-    {
-        if (!_connectivitySubscribed)
-            return;
-
-        Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
-        _connectivitySubscribed = false;
-    }
-
-    private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
-    {
-        var wasOffline = _isOffline;
-        _isOffline = e.NetworkAccess != NetworkAccess.Internet;
-
-        System.Diagnostics.Debug.WriteLine(
-            $"[GROUP_CHAT] Connectivity changed previous={(wasOffline ? "offline" : "online")} " +
-            $"current={(_isOffline ? "offline" : "online")} community_id={GetBackendCommunityId()}");
-
-        if (_isOffline ||
-            !wasOffline ||
-            !_realtimeEnabled ||
-            string.IsNullOrWhiteSpace(_groupId))
-            return;
-
-        DisposeRealtimeListener();
-        AttachRealtimeListener();
-        _ = SynchronizeMessagesAsync(GetBackendCommunityId());
     }
 
     // ============================================================
@@ -1385,9 +1266,7 @@ public partial class GroupChatPage : ContentPage
                         },
                         new Label
                         {
-                            Text = _isOffline
-                                ? "No cached messages available offline"
-                                : "Start the conversation",
+                            Text = "Start the conversation",
                             FontSize = 17,
                             FontAttributes = FontAttributes.Bold,
                             TextColor = Color.FromArgb("#102A20"),
@@ -1395,9 +1274,7 @@ public partial class GroupChatPage : ContentPage
                         },
                         new Label
                         {
-                            Text = _isOffline
-                                ? "Reconnect to synchronize this group."
-                                : "Be the first to share something with this community.",
+                            Text = "Be the first to share something with this community.",
                             FontSize = 13,
                             TextColor = Color.FromArgb("#667A70"),
                             HorizontalTextAlignment = Microsoft.Maui.TextAlignment.Center

@@ -203,14 +203,10 @@ public partial class BranchChatPage : ContentPage
     // PAGE LIFECYCLE
     // ============================================================
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _ = InitializeBranchAsync();
-    }
 
-    private async Task InitializeBranchAsync()
-    {
         try
         {
             _realtimeEnabled = true;

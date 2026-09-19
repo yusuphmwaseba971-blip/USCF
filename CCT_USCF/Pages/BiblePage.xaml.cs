@@ -18,10 +18,7 @@ public partial class BiblePage : ContentPage
     private double _fontSize = 22;
     private string _background = "CCT-USCF";
     private Task? _loadTask;
-    private CancellationTokenSource? _navigationCancellation;
-    private int _navigationVersion;
     private bool _isInitializing;
-    private bool _isUpdatingSelectors;
 
     public BiblePage()
     {
@@ -29,8 +26,7 @@ public partial class BiblePage : ContentPage
         _bible = MauiProgram.Services.GetRequiredService<BibleService>();
         VerseList.ItemsSource = _verses;
         SearchResults.ItemsSource = _results;
-        StatusLabel.Text = "Preparing local Bible text…";
-        VerseLoadingLabel.IsVisible = true;
+        RootGrid.Opacity = 0;
         Loaded += (_, _) => _loadTask ??= LoadAsync();
     }
 
@@ -38,193 +34,114 @@ public partial class BiblePage : ContentPage
     {
         var timer = Stopwatch.StartNew();
         _isInitializing = true;
-        Debug.WriteLine("[BIBLE PERF] Local load started");
+        Debug.WriteLine("[BIBLE] Navigation load started");
         try
         {
             await _bible.InitializeAsync();
+            Debug.WriteLine($"[BIBLE] State ready after {timer.ElapsedMilliseconds} ms");
             _language = _bible.Language;
             _book = _bible.Book;
             _chapter = _bible.Chapter;
             _fontSize = _bible.FontSize;
             _background = _bible.Background;
 
-            var books = await _bible.GetBooksAsync(_language);
-            _testament = books.FirstOrDefault(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))?.Testament
-                ?? _testament;
             TranslationLabel.Text = _language == BibleService.KjvId ? "King James Version" : "Kiswahili — Neno";
             TranslationAttribution.IsVisible = _language == BibleService.NenoId;
             ApplyBackground();
+
+            if (_language == BibleService.NenoId &&
+                _book.Equals("Mathayo", StringComparison.OrdinalIgnoreCase) &&
+                _chapter == 1)
+            {
+                var cachedVerses = await BibleService.GetBundledNenoMathayo1VersesAsync();
+                if (cachedVerses.Count > 0)
+                {
+                    RenderVerses(cachedVerses);
+                    RootGrid.Opacity = 1;
+                    Debug.WriteLine($"[BIBLE] Packaged Mathayo 1 rendered after {timer.ElapsedMilliseconds} ms");
+                }
+            }
+
+            _testament = (await _bible.GetBooksAsync(_language))
+                .FirstOrDefault(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))?.Testament
+                ?? _testament;
             TestamentPicker.ItemsSource = new[] { "Old Testament", "New Testament" };
             TestamentPicker.SelectedItem = _testament;
             await RefreshBooksAsync();
             await RefreshChapterAsync();
-            Debug.WriteLine($"[BIBLE PERF] First usable chapter rendered after {timer.ElapsedMilliseconds} ms");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[BIBLE PERF] Local initialization failed after {timer.ElapsedMilliseconds} ms: {ex}");
+            Debug.WriteLine($"[BIBLE] First verse render path completed after {timer.ElapsedMilliseconds} ms");
         }
         finally
         {
             _isInitializing = false;
+            RootGrid.Opacity = 1;
         }
     }
 
     private async Task RefreshBooksAsync()
     {
         var books = (await _bible.GetBooksAsync(_language)).Where(b => b.Testament == _testament).ToArray();
-        _isUpdatingSelectors = true;
-        try
+        BookPicker.ItemsSource = books.Select(b => b.Name).ToArray();
+        if (!books.Any())
         {
-            BookPicker.ItemsSource = books.Select(b => b.Name).ToArray();
-            if (!books.Any())
-            {
-                BookPicker.SelectedItem = null;
-                _verses.Clear();
-                StatusLabel.Text = "No licensed text installed";
-                return;
-            }
-
-            if (!books.Any(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase)))
-            {
-                _book = books[0].Name;
-                _chapter = 1;
-            }
-
-            BookPicker.SelectedItem = _book;
+            BookPicker.SelectedItem = null;
+            _verses.Clear();
+            StatusLabel.Text = "No licensed text installed";
+            return;
         }
-        finally
-        {
-            _isUpdatingSelectors = false;
-        }
+        if (!books.Any(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))) _book = books[0].Name;
+        BookPicker.SelectedItem = _book;
     }
 
     private async Task RefreshChapterAsync()
     {
         var chapters = await _bible.GetChaptersAsync(_book, _language);
-        _isUpdatingSelectors = true;
-        try
-        {
-            if (chapters.Count == 0)
-            {
-                ChapterPicker.ItemsSource = Array.Empty<int>();
-                ChapterPicker.SelectedItem = null;
-                _chapter = 1;
-                return;
-            }
-
-            _chapter = chapters.Contains(_chapter) ? _chapter : chapters.First();
-            ChapterPicker.ItemsSource = chapters.ToArray();
-            ChapterPicker.SelectedItem = _chapter;
-        }
-        finally
-        {
-            _isUpdatingSelectors = false;
-        }
-        await RefreshVersesAsync();
+        ChapterPicker.ItemsSource = chapters.ToArray();
+        ChapterPicker.SelectedItem = chapters.Contains(_chapter) ? _chapter : chapters.FirstOrDefault();
+        if (ChapterPicker.SelectedItem is int chapter) { _chapter = chapter; await RefreshVersesAsync(); }
     }
 
     private async Task RefreshVersesAsync()
     {
         var timer = Stopwatch.StartNew();
-        _navigationCancellation?.Cancel();
-        _navigationCancellation?.Dispose();
-        _navigationCancellation = new CancellationTokenSource();
-        var token = _navigationCancellation.Token;
-        var version = ++_navigationVersion;
-        var language = _language;
-        var book = _book;
-        var chapter = _chapter;
-        IReadOnlyList<BibleVerse> verses;
-        try
-        {
-            verses = await _bible.GetVersesAsync(book, chapter, language);
-            token.ThrowIfCancellationRequested();
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        if (version != _navigationVersion) return;
-        Debug.WriteLine($"[BIBLE PERF] {book} {chapter} ready in {timer.ElapsedMilliseconds} ms ({verses.Count} verses)");
+        var verses = await _bible.GetVersesAsync(_book, _chapter, _language);
+        Debug.WriteLine($"[BIBLE] Local verses read for {_book} {_chapter} in {timer.ElapsedMilliseconds} ms ({verses.Count} verses)");
         RenderVerses(verses);
-        _ = PersistPositionAsync(version, language, book, chapter);
-    }
-
-    private async Task PersistPositionAsync(int version, string language, string book, int chapter)
-    {
-        try
-        {
-            if (version == _navigationVersion)
-                await _bible.SetPositionAsync(language, book, chapter, _bible.Verse);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[BIBLE] Position persistence failed: {ex}");
-        }
+        await _bible.SetPositionAsync(_language, _book, _chapter, _bible.Verse);
     }
 
     private void RenderVerses(IReadOnlyList<BibleVerse> verses)
     {
-        var rows = verses.Select(verse => new VerseRow(
-            verse.Number, verse.Text, _fontSize, _bible.GetHighlight(Key(verse.Number)))).ToArray();
         _verses.Clear();
-        foreach (var row in rows)
-            _verses.Add(row);
+        foreach (var verse in verses)
+            _verses.Add(new VerseRow(verse.Number, verse.Text, _fontSize, _bible.GetHighlight(Key(verse.Number))));
         VerseHeading.Text = $"{_book.ToUpperInvariant()} {_chapter}";
         ContinueLabel.Text = $"Continue reading • {_book} {_chapter}";
         StatusLabel.Text = verses.Count == 0 ? "No translation text available" : "Available offline";
         VerseCard.IsVisible = verses.Count > 0;
         VerseLoadingLabel.IsVisible = verses.Count == 0;
-        VerseCard.InvalidateMeasure();
-        RootGrid.InvalidateMeasure();
     }
 
     private string Key(int verse) => $"{_language}|{_book}|{_chapter}:{verse}";
     private async void OnTestamentChanged(object? s, EventArgs e)
     {
-        if (_isInitializing || _isUpdatingSelectors) return;
+        if (_isInitializing) return;
         _testament = TestamentPicker.SelectedItem?.ToString() ?? _testament;
-        _chapter = 1;
         await RefreshBooksAsync();
         await RefreshChapterAsync();
     }
     private async void OnBookChanged(object? s, EventArgs e)
     {
-        if (_isInitializing || _isUpdatingSelectors) return;
+        if (_isInitializing) return;
         if (BookPicker.SelectedItem is string book) { _book = book; _chapter = 1; await RefreshChapterAsync(); }
     }
     private async void OnChapterChanged(object? s, EventArgs e)
     {
-        if (_isInitializing || _isUpdatingSelectors) return;
+        if (_isInitializing) return;
         if (ChapterPicker.SelectedItem is int chapter) { _chapter = chapter; await RefreshVersesAsync(); }
     }
-    private async void OnSwahiliClicked(object? s, EventArgs e) { await ChangeTranslationAsync(BibleService.NenoId); }
-    private async void OnEnglishClicked(object? s, EventArgs e) { await ChangeTranslationAsync(BibleService.KjvId); }
-
-    private async Task ChangeTranslationAsync(string language)
-    {
-        _isInitializing = true;
-        try
-        {
-            _language = language;
-            TranslationLabel.Text = language == BibleService.KjvId ? "King James Version" : "Kiswahili — Neno";
-            TranslationAttribution.IsVisible = language == BibleService.NenoId;
-            var books = await _bible.GetBooksAsync(language);
-            var matchingBook = books.FirstOrDefault(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase));
-            _testament = matchingBook?.Testament ?? books.FirstOrDefault()?.Testament ?? _testament;
-
-            if (matchingBook is null)
-            {
-                _book = books.FirstOrDefault()?.Name ?? _book;
-                _chapter = 1;
-            }
-
-            await RefreshBooksAsync();
-            await RefreshChapterAsync();
-        }
-        finally { _isInitializing = false; }
-    }
+    private async void OnSwahiliClicked(object? s, EventArgs e) { _language = BibleService.NenoId; TranslationLabel.Text = "Kiswahili — Neno"; TranslationAttribution.IsVisible = true; await RefreshBooksAsync(); await RefreshChapterAsync(); }
+    private async void OnEnglishClicked(object? s, EventArgs e) { _language = BibleService.KjvId; TranslationLabel.Text = "King James Version"; TranslationAttribution.IsVisible = false; await RefreshBooksAsync(); await RefreshChapterAsync(); }
 
     private async void OnSearchPressed(object? s, EventArgs e)
     {
@@ -345,7 +262,7 @@ public partial class BiblePage : ContentPage
         try
         {
             var community = MauiProgram.Services.GetRequiredService<CommunityService>();
-            var created = await community.CreateBiblePostAsync(new Models.BiblePostCreateDto { BookId = await _bible.GetAbbreviationForBookAsync(_book, _language), ChapterNumber = _chapter, VerseStart = _bible.Verse, VerseEnd = _bible.Verse });
+            var created = await community.CreateBiblePostAsync(new Models.BiblePostCreateDto { BookId = _bible.GetAbbreviationForBook(_book, _language), ChapterNumber = _chapter, VerseStart = _bible.Verse, VerseEnd = _bible.Verse });
             if (created is not null) await DisplayAlert("Success", "Bible reading posted.", "OK");
         }
         catch (Exception ex) { await DisplayAlert("Error", ex.Message, "OK"); }

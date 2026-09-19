@@ -18,7 +18,7 @@ public partial class ChurchAnnouncementPage : ContentPage
         InitializeComponent();
         _service = MauiProgram.Services.GetRequiredService<ChurchAnnouncementService>();
         _cloudinary = MauiProgram.Services.GetRequiredService<CloudinaryService>();
-        Loaded += (_, _) => _ = LoadAsync();
+        Loaded += async (_, _) => await LoadAsync();
     }
 
     private async Task LoadAsync()

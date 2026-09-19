@@ -460,14 +460,6 @@ public class PrayerService
         return rows;
     }
 
-    public async Task<List<PrayerRequest>> GetCachedPrayersAsync()
-    {
-        if (_auth.CurrentUser == null)
-            return [];
-
-        return await LoadCachedPrayersAsync();
-    }
-
     public async Task<List<PrayerRequest>> SyncNewAndChangedPrayersAsync()
     {
         try

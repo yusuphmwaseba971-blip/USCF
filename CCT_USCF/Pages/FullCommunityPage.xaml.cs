@@ -17,11 +17,7 @@ public partial class FullCommunityPage : ContentPage
         _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
     }
 
-    protected override void OnAppearing()
-    {
-        base.OnAppearing();
-        _ = LoadFeedAsync();
-    }
+    protected override async void OnAppearing() { base.OnAppearing(); await LoadFeedAsync(); }
 
     private async Task LoadFeedAsync()
     {

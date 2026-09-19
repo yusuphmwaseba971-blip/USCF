@@ -18,10 +18,10 @@ public partial class AnnouncementActivityPage : ContentPage
         _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _ = LoadAsync();
+        await LoadAsync();
     }
 
     private async Task LoadAsync()
