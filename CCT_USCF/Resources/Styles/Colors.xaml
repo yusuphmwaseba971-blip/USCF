@@ -48,6 +48,12 @@
     <Color x:Key="ChatText">#102A20</Color>
     <Color x:Key="ChatMuted">#667A70</Color>
     <Color x:Key="ChatBorder">#DCE7DF</Color>
+    <Color x:Key="BibleTextLight">#102A20</Color>
+    <Color x:Key="BibleTextDark">#F4FFF7</Color>
+    <Color x:Key="BibleSecondaryLight">#64748B</Color>
+    <Color x:Key="BibleSecondaryDark">#D7E8DE</Color>
+    <Color x:Key="BibleAccentLight">#075E36</Color>
+    <Color x:Key="BibleAccentDark">#7BE39A</Color>
 
     <Color x:Key="White">#FFFFFF</Color>
     <Color x:Key="Black">#121212</Color>

@@ -192,6 +192,11 @@ public string SenderUid { get; set; } = string.Empty;
         // SQLITE CACHE DATABASE
         // ============================================================
 
+        public async Task PrepareCacheAsync()
+        {
+            await GetMessageCacheDatabaseAsync();
+        }
+
         private async Task<SQLiteAsyncConnection>
             GetMessageCacheDatabaseAsync()
         {

@@ -11,6 +11,7 @@ using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Storage;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
+using System.Diagnostics;
 
 namespace CCT_USCF.Pages;
 
@@ -1204,6 +1205,7 @@ DateTime? updatedAt =
 
     private async Task LoadMessagesFromCacheFirstAsync()
     {
+        var timer = Stopwatch.StartNew();
         if (_branchId <= 0)
         {
             return;
@@ -1247,6 +1249,7 @@ DateTime? updatedAt =
                 $"FirstMessageCommunityId={messages.FirstOrDefault()?.CommunityId ?? "none"}, " +
                 $"FirstMessageBranchId={messages.FirstOrDefault()?.BranchId ?? "none"}, " +
                 $"FirstMessageSenderUid={messages.FirstOrDefault()?.SenderUid ?? "none"}");
+            Debug.WriteLine($"[BRANCH_CHAT] First-open/cache message load completed in {timer.ElapsedMilliseconds} ms ({uiMessages.Count} messages)");
 
             foreach (var loadedMessage in uiMessages)
             {

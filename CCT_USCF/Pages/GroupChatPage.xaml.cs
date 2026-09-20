@@ -11,6 +11,7 @@ using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Storage;
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
+using System.Diagnostics;
 #if ANDROID
 using Android.Views;
 #endif
@@ -996,6 +997,7 @@ public partial class GroupChatPage : ContentPage
 
     private async Task LoadMessagesAsync()
     {
+        var timer = Stopwatch.StartNew();
         var communityId =
             GetBackendCommunityId();
 
@@ -1041,6 +1043,7 @@ public partial class GroupChatPage : ContentPage
                     RenderMessages(!hadMessages);
                 }
             });
+            Debug.WriteLine($"[GROUP_CHAT] First-open/cache message load completed in {timer.ElapsedMilliseconds} ms ({loadedMessages.Count} messages)");
         }
         catch (Exception ex)
         {

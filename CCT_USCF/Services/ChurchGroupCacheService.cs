@@ -40,6 +40,9 @@ public sealed class ChurchGroupCacheService
         return $"groups:{firebaseUid.Trim()}:{normalizedLevel}:{scopeId}";
     }
 
+    public Task PrepareAsync(CancellationToken cancellationToken = default) =>
+        InitializeAsync(cancellationToken);
+
     public async Task<List<ChurchGroup>?> GetAsync(
         string cacheKey,
         CancellationToken cancellationToken = default)

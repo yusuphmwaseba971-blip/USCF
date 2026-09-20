@@ -54,19 +54,9 @@ public partial class App : Application
     {
         Debug.WriteLine($"[STARTUP] First page requested at {DateTimeOffset.UtcNow:O}");
         var window = new Window(new AppShell());
-        _ = WarmBibleDataAsync();
+        _ = MauiProgram.Services
+            .GetRequiredService<StartupPreloadCoordinator>()
+            .PreloadAsync();
         return window;
-    }
-
-    private static async Task WarmBibleDataAsync()
-    {
-        try
-        {
-            await MauiProgram.Services.GetRequiredService<BibleService>().WarmupDefaultAsync();
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[BIBLE] Background warmup failed: {ex}");
-        }
     }
 }

@@ -20,12 +20,12 @@
             <VerticalStackLayout Padding="16,8,16,24" Spacing="14">
                 <Border BackgroundColor="{StaticResource BrandDeepGreen}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                     <VerticalStackLayout Spacing="4">
-                        <Label Text="BIBLE" FontSize="13" CharacterSpacing="2" TextColor="#D8F3E4" />
-                        <Label x:Name="TranslationLabel" Text="King James Version" FontSize="24" FontAttributes="Bold" TextColor="White" />
+                        <Label Text="BIBLE" FontSize="13" CharacterSpacing="2" TextColor="{StaticResource BibleSecondaryDark}" />
+                        <Label x:Name="TranslationLabel" Text="King James Version" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource White}" />
                         <Label x:Name="TranslationAttribution" IsVisible="False"
                                Text="Biblica® Toleo Wazi Neno: Bibilia Takatifu™&#10;© 1984, 1989, 2009, 2015 Biblica, Inc.&#10;Licensed under CC BY-SA 4.0. Source: eBible.org / Biblica"
-                               FontSize="12" TextColor="#E7FFF0" />
-                        <Label x:Name="ContinueLabel" Text="Continue reading" TextColor="#E7FFF0" />
+                               FontSize="12" TextColor="{StaticResource BibleSecondaryDark}" />
+                        <Label x:Name="ContinueLabel" Text="Continue reading" TextColor="{StaticResource BibleSecondaryDark}" />
                     </VerticalStackLayout>
                 </Border>
 
@@ -39,7 +39,8 @@
                     <CollectionView.ItemTemplate>
                         <DataTemplate>
                             <Grid Padding="8,6" ColumnDefinitions="Auto,*">
-                                <Label Text="{Binding Reference}" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                                <Label Text="{Binding Reference}" FontAttributes="Bold"
+                                       TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleAccentDark}}" />
                                 <Label Grid.Column="1" Text="{Binding Text}" LineBreakMode="TailTruncation" Margin="10,0,0,0" />
                             </Grid>
                         </DataTemplate>
@@ -56,9 +57,9 @@
                     <VerticalStackLayout Spacing="10">
                         <Grid ColumnDefinitions="*,Auto">
                             <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource UscfTextDark}}" />
+                                   TextColor="{AppThemeBinding Light={StaticResource BibleTextLight}, Dark={StaticResource BibleTextDark}}" />
                             <Label x:Name="StatusLabel" Grid.Column="1" Text="Offline"
-                                   TextColor="{AppThemeBinding Light={StaticResource BrandDeepGreen}, Dark={StaticResource Gray300}}"
+                                   TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleSecondaryDark}}"
                                    VerticalOptions="Center" />
                         </Grid>
                         <CollectionView x:Name="VerseList" SelectionMode="None">
@@ -66,9 +67,11 @@
                                 <DataTemplate>
                                     <Border Padding="10" Margin="0,3" StrokeThickness="0" BackgroundColor="{Binding Background}">
                                         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-                                            <Label Text="{Binding Number}" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" FontSize="16" />
+                                            <Label Text="{Binding Number}" FontAttributes="Bold"
+                                                   TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleAccentDark}}"
+                                                   FontSize="16" />
                                             <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}"
-                                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource UscfTextDark}}"
+                                                   TextColor="{AppThemeBinding Light={StaticResource BibleTextLight}, Dark={StaticResource BibleTextDark}}"
                                                    LineHeight="1.35" Margin="10,0,0,0" />
                                             <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,6,0,0">
                                                 <Button Text="Copy" FontSize="12" Padding="8,4" Clicked="OnCopyVerseClicked" CommandParameter="{Binding .}" />

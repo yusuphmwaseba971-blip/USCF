@@ -181,6 +181,7 @@ builder.Services.AddSingleton<
 // Bible
 builder.Services.AddSingleton<
     CCT_USCF.Services.BibleService>();
+builder.Services.AddSingleton<StartupPreloadCoordinator>();
 builder.Services.AddSingleton<ChurchAnnouncementService>();
 builder.Services.AddSingleton<MediaViewerService>();
 builder.Services.AddSingleton<AppAppearanceService>();

@@ -21,10 +21,12 @@ public partial class FullCommunityPage : ContentPage
 
     private async Task LoadFeedAsync()
     {
+        var timer = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             FeedStack.Children.Clear();
-            foreach (var post in await _community.GetNationalPostsAsync())
+            var posts = await _community.GetNationalPostsAsync();
+            foreach (var post in posts)
             {
                 var card = new Border { BackgroundColor = Colors.White, Padding = 14 };
                 var body = new VerticalStackLayout { Spacing = 6 };
@@ -61,6 +63,7 @@ public partial class FullCommunityPage : ContentPage
                 comment.Clicked += async (_, _) => { var text = await DisplayPromptAsync("Comment", "Write a comment"); if (!string.IsNullOrWhiteSpace(text)) { await _community.AddNationalCommentAsync(post.Id, text); await LoadFeedAsync(); } };
                 actions.Children.Add(like); actions.Children.Add(comment); body.Children.Add(actions); card.Content = body; FeedStack.Children.Add(card);
             }
+            System.Diagnostics.Debug.WriteLine($"[COMMUNITY] First-open feed load completed in {timer.ElapsedMilliseconds} ms ({posts.Count} posts)");
         }
         catch (Exception ex) { await DisplayAlert("Full Community", $"Unable to load the national feed: {ex.Message}", "OK"); }
     }
