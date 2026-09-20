@@ -59,6 +59,7 @@ public partial class GroupChatPage : ContentPage
     private int _unreadIncomingCount;
     private bool _isComposerBusy;
     private bool _hasLoadedMessages;
+    private int _openGeneration;
 
 #if ANDROID
     private Android.Media.MediaRecorder? _audioRecorder;
@@ -336,6 +337,7 @@ public partial class GroupChatPage : ContentPage
 
         try
         {
+            var generation = ++_openGeneration;
             _realtimeEnabled = true;
 
             if (string.IsNullOrWhiteSpace(_groupId))
@@ -346,9 +348,21 @@ public partial class GroupChatPage : ContentPage
                 return;
             }
 
+            var openStartedAt = Stopwatch.GetTimestamp();
+            var communityId = GetBackendCommunityId();
+            Debug.WriteLine(
+                $"[GROUP_CHAT_TIMING] GROUP_CHAT_OPEN communityId={communityId} timestamp={DateTimeOffset.UtcNow:O}");
+
+            await LoadCachedMessagesImmediatelyAsync(generation, communityId);
+
+            if (!IsCurrentOpen(generation, communityId))
+                return;
+
+            Debug.WriteLine(
+                $"[GROUP_CHAT_TIMING] FIRST_RENDER communityId={communityId} elapsedMs={Stopwatch.GetElapsedTime(openStartedAt).TotalMilliseconds:F0}");
             AttachRealtimeListener();
 
-            await LoadGroupAsync();
+            _ = LoadGroupAsync(generation, communityId);
         }
         catch (Exception ex)
         {
@@ -368,10 +382,76 @@ public partial class GroupChatPage : ContentPage
     {
         base.OnDisappearing();
 
+        ++_openGeneration;
         _realtimeEnabled = false;
 
         DisposeRealtimeListener();
     }
+
+    private async Task LoadCachedMessagesImmediatelyAsync(
+        int generation,
+        string communityId)
+    {
+        if (string.IsNullOrWhiteSpace(communityId))
+            return;
+
+        var cacheStartedAt = Stopwatch.GetTimestamp();
+        Debug.WriteLine(
+            $"[GROUP_CHAT_TIMING] CACHE_READ_START communityId={communityId}");
+
+        try
+        {
+            var cachedMessages =
+                await _communityService.GetCachedCommunityMessagesAsync(
+                    communityId,
+                    100);
+
+            Debug.WriteLine(
+                $"[GROUP_CHAT_TIMING] CACHE_READ_END communityId={communityId} count={cachedMessages.Count} elapsedMs={Stopwatch.GetElapsedTime(cacheStartedAt).TotalMilliseconds:F0}");
+
+            if (!IsCurrentOpen(generation, communityId))
+                return;
+
+            var loadedMessages = cachedMessages
+                .Where(message => string.Equals(
+                    message.CommunityId,
+                    communityId,
+                    StringComparison.Ordinal))
+                .Select(ToUiMessage)
+                .OrderBy(message => message.CreatedAt)
+                .ToList();
+
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!IsCurrentOpen(generation, communityId))
+                    return;
+
+                var mergeStartedAt = Stopwatch.GetTimestamp();
+                var changed = MergeLoadedMessages(loadedMessages);
+                _hasLoadedMessages = true;
+                if (changed || loadedMessages.Count == 0)
+                    RenderMessages(_messages.Count > 0);
+
+                Debug.WriteLine(
+                    $"[GROUP_CHAT_TIMING] CACHE_MERGE_END communityId={communityId} count={loadedMessages.Count} elapsedMs={Stopwatch.GetElapsedTime(mergeStartedAt).TotalMilliseconds:F0}");
+                Debug.WriteLine(
+                    $"[GROUP_CHAT_TIMING] FIRST_RENDER communityId={communityId} timestamp={DateTimeOffset.UtcNow:O}");
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(
+                $"[GROUP_CHAT] Immediate cache load failed; continuing with normal group load: {ex}");
+        }
+    }
+
+    private bool IsCurrentOpen(int generation, string communityId) =>
+        generation == _openGeneration &&
+        _realtimeEnabled &&
+        string.Equals(
+            GetBackendCommunityId(),
+            communityId,
+            StringComparison.Ordinal);
 
     // ============================================================
     // REALTIME ATTACH
@@ -903,8 +983,11 @@ public partial class GroupChatPage : ContentPage
     // LOAD GROUP
     // ============================================================
 
-    private async Task LoadGroupAsync()
+    private async Task LoadGroupAsync(int generation, string communityId)
     {
+        var remoteStartedAt = Stopwatch.GetTimestamp();
+        Debug.WriteLine(
+            $"[GROUP_CHAT_TIMING] REMOTE_SYNC_START communityId={communityId}");
         GroupStatusLabel.Text =
             "Loading group...";
 
@@ -920,6 +1003,8 @@ public partial class GroupChatPage : ContentPage
 
             if (currentUser == null)
             {
+                if (!IsCurrentOpen(generation, communityId))
+                    return;
                 GroupStatusLabel.Text =
                     "Please sign in to access this group.";
 
@@ -932,6 +1017,8 @@ public partial class GroupChatPage : ContentPage
 
             if (!validation.IsAllowed)
             {
+                if (!IsCurrentOpen(generation, communityId))
+                    return;
                 GroupStatusLabel.Text =
                     validation.Message;
 
@@ -958,6 +1045,9 @@ public partial class GroupChatPage : ContentPage
                     ? "Members (1)"
                     : $"Members ({members.Count})";
 
+            if (!IsCurrentOpen(generation, communityId))
+                return;
+
             GroupStatusLabel.Text =
                 members.Count == 1
                     ? "1 member in this group"
@@ -979,15 +1069,21 @@ public partial class GroupChatPage : ContentPage
                 $"[GroupChat] UserUid={GetCurrentUserUid()} GroupId={backendGroupId} " +
                 $"HistoryEnrolled={_chatHistoryEnrolled}");
 
-            await LoadMessagesAsync();
+            await LoadMessagesAsync(generation, communityId);
+            Debug.WriteLine(
+                $"[GROUP_CHAT_TIMING] REMOTE_SYNC_END communityId={communityId} elapsedMs={Stopwatch.GetElapsedTime(remoteStartedAt).TotalMilliseconds:F0}");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[GROUP_CHAT] Group load failed: {ex}");
 
-            GroupStatusLabel.Text =
-                "Unable to load this group right now.";
+            if (IsCurrentOpen(generation, communityId))
+                GroupStatusLabel.Text =
+                    "Unable to load this group right now.";
+
+            Debug.WriteLine(
+                $"[GROUP_CHAT_TIMING] REMOTE_SYNC_END communityId={communityId} failed=true elapsedMs={Stopwatch.GetElapsedTime(remoteStartedAt).TotalMilliseconds:F0}");
         }
     }
 
@@ -995,11 +1091,9 @@ public partial class GroupChatPage : ContentPage
     // LOAD MESSAGES
     // ============================================================
 
-    private async Task LoadMessagesAsync()
+    private async Task LoadMessagesAsync(int generation, string communityId)
     {
         var timer = Stopwatch.StartNew();
-        var communityId =
-            GetBackendCommunityId();
 
         if (string.IsNullOrWhiteSpace(
                 communityId))
@@ -1035,6 +1129,9 @@ public partial class GroupChatPage : ContentPage
 
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
+                if (!IsCurrentOpen(generation, communityId))
+                    return;
+
                 var hadMessages = _messages.Count > 0;
                 var changed = MergeLoadedMessages(loadedMessages);
                 if (changed || !_hasLoadedMessages)
@@ -1043,7 +1140,7 @@ public partial class GroupChatPage : ContentPage
                     RenderMessages(!hadMessages);
                 }
             });
-            Debug.WriteLine($"[GROUP_CHAT] First-open/cache message load completed in {timer.ElapsedMilliseconds} ms ({loadedMessages.Count} messages)");
+            Debug.WriteLine($"[GROUP_CHAT] Remote message merge completed in {timer.ElapsedMilliseconds} ms ({loadedMessages.Count} messages)");
         }
         catch (Exception ex)
         {
@@ -4152,7 +4249,8 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
-            await LoadMessagesAsync();
+            var communityId = GetBackendCommunityId();
+            await LoadMessagesAsync(_openGeneration, communityId);
         }
         catch (Exception ex)
         {

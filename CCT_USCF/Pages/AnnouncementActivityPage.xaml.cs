@@ -3,6 +3,7 @@ using CCT_USCF.Services;
 
 namespace CCT_USCF.Pages;
 
+[QueryProperty(nameof(AnnouncementId), "announcementId")]
 public partial class AnnouncementActivityPage : ContentPage
 {
     private readonly ChurchAnnouncementService _service;
@@ -10,6 +11,12 @@ public partial class AnnouncementActivityPage : ContentPage
     private IReadOnlyList<ChurchNotification> _all = [];
     private string _category = "NATIONAL";
     private readonly HashSet<Guid> _scheduledReminders = [];
+    private string _announcementId = string.Empty;
+    public string AnnouncementId
+    {
+        get => _announcementId;
+        set => _announcementId = value?.Trim() ?? string.Empty;
+    }
 
     public AnnouncementActivityPage()
     {
@@ -34,6 +41,12 @@ public partial class AnnouncementActivityPage : ContentPage
             _all = await _service.GetNotificationsAsync();
             UpdateCounts();
             ApplyCategory();
+            if (Guid.TryParse(AnnouncementId, out var id))
+            {
+                var target = _all.FirstOrDefault(x => x.AnnouncementId == id);
+                if (target is not null)
+                    await OpenDetailsAsync(target);
+            }
         }
         catch (Exception ex)
         {

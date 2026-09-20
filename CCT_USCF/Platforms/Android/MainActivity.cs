@@ -6,6 +6,7 @@ using Android.Content;
 using System.Threading.Tasks;
 using Plugin.Firebase.AppCheck;
 using Plugin.Firebase.Core.Platforms.Android;
+using Plugin.Firebase.CloudMessaging;
 
 namespace CCT_USCF;
 
@@ -54,6 +55,8 @@ public class MainActivity : MauiAppCompatActivity
         CrossFirebaseAppCheck.Configure(AppCheckOptions.PlayIntegrity);
 #endif
         CrossFirebase.Initialize(this, () => this);
+        CreateNotificationChannel();
+        FirebaseCloudMessagingImplementation.OnNewIntent(Intent);
         System.Diagnostics.Debug.WriteLine($"[STARTUP] Firebase initialization requested at {DateTimeOffset.UtcNow:O}");
         base.OnCreate(savedInstanceState);
         Window?.SetSoftInputMode(SoftInput.AdjustPan);
@@ -62,5 +65,30 @@ public class MainActivity : MauiAppCompatActivity
         {
             RequestPermissions(new[] { Android.Manifest.Permission.PostNotifications }, 1001);
         }
+    }
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        if (intent is not null)
+            FirebaseCloudMessagingImplementation.OnNewIntent(intent);
+    }
+
+    private void CreateNotificationChannel()
+    {
+        if (Build.VERSION.SdkInt < BuildVersionCodes.O)
+            return;
+
+        const string channelId = "cct-uscf.general";
+        var manager = (Android.App.NotificationManager?)
+            GetSystemService(NotificationService);
+        manager?.CreateNotificationChannel(new Android.App.NotificationChannel(
+            channelId,
+            "CCT-USCF notifications",
+            Android.App.NotificationImportance.Default)
+        {
+            Description = "CCT-USCF announcements and group messages"
+        });
+        FirebaseCloudMessagingImplementation.ChannelId = channelId;
     }
 }

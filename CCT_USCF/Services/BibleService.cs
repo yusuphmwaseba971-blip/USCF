@@ -23,6 +23,7 @@ public sealed class BibleService
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, BibleTranslation> _translations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyList<BibleVerse>> _verseCache = new(StringComparer.OrdinalIgnoreCase);
     private StoredState _state = new(KjvId, "John", 3, 16, 22, "CCT-USCF",
         new(), new(StringComparer.OrdinalIgnoreCase), new());
     private bool _initialized;
@@ -46,8 +47,17 @@ public sealed class BibleService
     {
         var timer = Stopwatch.StartNew();
         await InitializeAsync();
-        await EnsureTranslationLoadedAsync(Language);
-        Debug.WriteLine($"[BIBLE] Persisted {Language} data warmed in {timer.ElapsedMilliseconds} ms");
+        await PrepareAsync();
+        Debug.WriteLine($"[BIBLE] All local translations prepared in {timer.ElapsedMilliseconds} ms");
+    }
+
+    public async Task PrepareAsync()
+    {
+        var timer = Stopwatch.StartNew();
+        await InitializeAsync();
+        await EnsureTranslationLoadedAsync(KjvId);
+        await EnsureTranslationLoadedAsync(NenoId);
+        Debug.WriteLine($"[BIBLE] Translation preparation completed in {timer.ElapsedMilliseconds} ms");
     }
 
     public static async Task<IReadOnlyList<BibleVerse>> GetBundledDefaultVersesAsync()
@@ -71,6 +81,7 @@ public sealed class BibleService
         if (_translations.TryGetValue(language, out var translation))
             return translation;
 
+        var timer = Stopwatch.StartNew();
         await _gate.WaitAsync();
         try
         {
@@ -81,6 +92,7 @@ public sealed class BibleService
                 ? await LoadJsonAsync("swahili_neno.json", NenoBookNames, "Kiswahili", "Biblica Open Kiswahili Contemporary Version (Neno) 2015")
                 : await LoadJsonAsync("kjv.json", KjvBookNames, "English", "King James Version");
             _translations[language] = translation;
+            Debug.WriteLine($"[BIBLE] {language} resource discovery/file read/JSON parse/model conversion completed in {timer.ElapsedMilliseconds} ms");
             return translation;
         }
         finally { _gate.Release(); }
@@ -88,10 +100,15 @@ public sealed class BibleService
 
     private static async Task<BibleTranslation> LoadJsonAsync(string assetName, IReadOnlyList<string> bookNames, string language, string translationName)
     {
+        var timer = Stopwatch.StartNew();
         using var stream = await FileSystem.OpenAppPackageFileAsync(assetName);
+        Debug.WriteLine($"[BIBLE] Resource lookup for {assetName} completed in {timer.ElapsedMilliseconds} ms");
         using var reader = new StreamReader(stream);
         var json = await reader.ReadToEndAsync();
-        return await Task.Run(() => ParseJson(json, bookNames, language, translationName));
+        Debug.WriteLine($"[BIBLE] File read for {assetName} completed in {timer.ElapsedMilliseconds} ms");
+        var parsed = await Task.Run(() => ParseJson(json, bookNames, language, translationName));
+        Debug.WriteLine($"[BIBLE] JSON deserialize/model conversion for {assetName} completed in {timer.ElapsedMilliseconds} ms");
+        return parsed;
     }
 
     private static BibleTranslation ParseJson(string json, IReadOnlyList<string> bookNames, string language, string translationName)
@@ -137,8 +154,11 @@ public sealed class BibleService
     public async Task<IReadOnlyList<string>> GetLanguagesAsync() { await InitializeAsync(); return new[] { KjvId, NenoId }; }
     public async Task<IReadOnlyList<BibleBook>> GetBooksAsync(string language = KjvId)
     {
+        var timer = Stopwatch.StartNew();
         await InitializeAsync();
-        return (await EnsureTranslationLoadedAsync(language)).Books;
+        var books = (await EnsureTranslationLoadedAsync(language)).Books;
+        Debug.WriteLine($"[BIBLE] Book metadata/cache lookup for {language} completed in {timer.ElapsedMilliseconds} ms");
+        return books;
     }
     public async Task<IReadOnlyList<int>> GetChaptersAsync(string book, string language = KjvId)
     {
@@ -147,9 +167,20 @@ public sealed class BibleService
     }
     public async Task<IReadOnlyList<BibleVerse>> GetVersesAsync(string book, int chapter, string language = KjvId)
     {
+        var timer = Stopwatch.StartNew();
+        var cacheKey = $"{language}|{book}|{chapter}";
+        if (_verseCache.TryGetValue(cacheKey, out var cached))
+        {
+            Debug.WriteLine($"[BIBLE] Verse cache hit for {cacheKey} in {timer.ElapsedMilliseconds} ms");
+            return cached;
+        }
+
         var found = (await GetBooksAsync(language)).FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
         if (found is null || chapter < 1 || chapter > found.Chapters.Count) return Array.Empty<BibleVerse>();
-        return found.Chapters[chapter - 1].Select((text, i) => new BibleVerse(i + 1, text)).ToArray();
+        var verses = found.Chapters[chapter - 1].Select((text, i) => new BibleVerse(i + 1, text)).ToArray();
+        _verseCache[cacheKey] = verses;
+        Debug.WriteLine($"[BIBLE] Verse model conversion/cache fill for {cacheKey} in {timer.ElapsedMilliseconds} ms");
+        return verses;
     }
     public async Task<string> GetVerseAsync(string book, int chapter, int verse, string language = KjvId) =>
         (await GetVersesAsync(book, chapter, language)).FirstOrDefault(v => v.Number == verse)?.Text ?? string.Empty;

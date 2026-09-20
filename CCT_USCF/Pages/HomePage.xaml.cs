@@ -1,4 +1,3 @@
-using Plugin.Firebase.CloudMessaging;
 using System.Diagnostics;
 using CCT_USCF.Models;
 using CCT_USCF.Services;
@@ -31,7 +30,6 @@ public partial class HomePage : ContentPage
         _ = LoadBibleFeedAsync();
         _ = LoadNationalFeedAsync();
         _ = LoadCctPostsAsync();
-        _ = RegisterMessagingTokenAsync();
         ApplyAppearance();
     }
 
@@ -162,25 +160,6 @@ public partial class HomePage : ContentPage
 
     private async void OpenSettings(object? sender, EventArgs e)
         => await Shell.Current.GoToAsync(nameof(SettingsPage));
-
-    private async Task RegisterMessagingTokenAsync()
-    {
-        try
-        {
-            await CCT_USCF.Services.FirebaseInit.Initialized;
-            if (MauiProgram.CurrentUser is null)
-            {
-                var currentUser = await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
-                if (currentUser is not null)
-                    MauiProgram.SetCurrentUser(currentUser);
-            }
-            var token = await CrossFirebaseCloudMessaging.Current.GetTokenAsync();
-            if (!string.IsNullOrWhiteSpace(token))
-                await MauiProgram.Services.GetRequiredService<CCT_USCF.Services.ChurchAnnouncementService>()
-                    .RegisterTokenAsync(token);
-        }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"RegisterMessagingTokenAsync error: {ex}"); }
-    }
 
     private async Task LoadNationalFeedAsync()
     {

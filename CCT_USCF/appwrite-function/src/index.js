@@ -1205,7 +1205,10 @@ async function upsertDeviceToken(req, log) {
   const body = getRequestBody(req);
   const token = normalizeString(body.token);
   if (!token) throw announcementError("FCM token is required.");
-  const documentId = Buffer.from(firebaseUser.uid).toString("base64url").slice(0, 36);
+  const documentId = createHash("sha256")
+    .update(`${firebaseUser.uid}:${token}`)
+    .digest("hex")
+    .slice(0, 36);
   const data = {
       user_uid: firebaseUser.uid,
       token,
@@ -1522,8 +1525,14 @@ async function createChurchAnnouncement(req, log) {
     if (tokens.length > 0) {
       const delivery = await firebaseMessaging.sendEachForMulticast({
         tokens: tokens.map(token => token.token),
-        notification: { title, body: message },
-        data: { announcementId, targetLevel }
+        notification: { title: `CCT-USCF • Official Announcement`, body: message },
+        data: {
+          notification_type: "announcement",
+          event_id: announcementId,
+          content_id: announcementId,
+          announcement_id: announcementId,
+          scope_type: targetLevel
+        }
       });
       delivered = delivery.successCount;
       if (delivery.failureCount > 0) {
@@ -2844,13 +2853,15 @@ async function notifyBranchMessageRecipients(message, senderUid, log) {
     const result = await firebaseMessaging.sendEachForMulticast({
       tokens,
       notification: {
-        title: message.senderName || "Branch Church Group",
+        title: `CCT-USCF • ${message.senderName || "Church Group"}`,
         body: preview
       },
       data: {
-        type: "group_message",
-        groupId,
-        messageId: normalizeString(message.messageId)
+        notification_type: "group_message",
+        event_id: normalizeString(message.messageId),
+        content_id: normalizeString(message.messageId),
+        group_id: groupId,
+        message_id: normalizeString(message.messageId)
       }
     });
     log(`[FCM] Group notification target group=${groupId} sent=${result.successCount} failed=${result.failureCount}`);
@@ -2970,7 +2981,41 @@ async function createCctPost(req, log) {
       }
     }
   );
-  return mapCctPostDocument(document);
+  const post = mapCctPostDocument(document);
+  if (["official", "announcement", "notice", "update"].includes(postType.toLowerCase())) {
+    await notifyHomeUpdate(post, log);
+  }
+  return post;
+}
+
+async function notifyHomeUpdate(post, log) {
+  try {
+    const tokenPage = await appwriteTableRowRequest(
+      CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+      "GET",
+      "",
+      undefined,
+      [{ method: "limit", values: [500] }]
+    );
+    const tokens = (tokenPage.rows || tokenPage.documents || [])
+      .map(token => normalizeString(token.token))
+      .filter(Boolean);
+    if (!tokens.length) return;
+    const preview = normalizeString(post.content).slice(0, 120);
+    const result = await firebaseMessaging.sendEachForMulticast({
+      tokens,
+      notification: { title: "CCT-USCF • Official Update", body: preview },
+      data: {
+        notification_type: "home_update",
+        event_id: normalizeString(post.id),
+        content_id: normalizeString(post.id),
+        post_id: normalizeString(post.id)
+      }
+    });
+    log(`[CCT_HOME_FCM] success=${result.successCount} failed=${result.failureCount}`);
+  } catch (error) {
+    log(`[CCT_HOME_FCM] failed=${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function submitSupportRequest(req, log) {

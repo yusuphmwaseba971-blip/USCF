@@ -187,6 +187,7 @@ public partial class AppShell : Shell
             }
 
             MauiProgram.SetCurrentUser(firebaseUser);
+            _ = MauiProgram.Services.GetRequiredService<NotificationService>().SynchronizeTokenAsync();
             var authService = MauiProgram.CreateAuthServiceForPages();
             var isVerified = await authService.RefreshEmailVerificationAsync();
             var shell = Shell.Current;

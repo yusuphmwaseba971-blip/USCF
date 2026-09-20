@@ -183,6 +183,7 @@ builder.Services.AddSingleton<
     CCT_USCF.Services.BibleService>();
 builder.Services.AddSingleton<StartupPreloadCoordinator>();
 builder.Services.AddSingleton<ChurchAnnouncementService>();
+builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton<MediaViewerService>();
 builder.Services.AddSingleton<AppAppearanceService>();
 builder.Services.AddSingleton<CloudflareAiService>(_ =>
@@ -231,6 +232,7 @@ builder.Services.AddSingleton<ICctAssistantService, CctAssistantService>();
 
         // Store application's service provider
         Services = app.Services;
+        app.Services.GetRequiredService<NotificationService>().Initialize();
         Debug.WriteLine($"[STARTUP] MAUI initialized in {startupTimer.ElapsedMilliseconds} ms");
 
         return app;
