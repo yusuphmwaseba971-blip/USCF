@@ -8,7 +8,7 @@ namespace CCT_USCF.Pages;
 public partial class BiblePage : ContentPage
 {
     private readonly BibleService _bible;
-    private readonly ObservableCollection<VerseRow> _verses = new();
+    private ObservableCollection<VerseRow> _verses = new();
     private readonly ObservableCollection<SearchRow> _results = new();
     private CancellationTokenSource? _speechCancellation;
     private string _language = BibleService.KjvId;
@@ -37,6 +37,7 @@ public partial class BiblePage : ContentPage
         VerseList.ItemsSource = _verses;
         SearchResults.ItemsSource = _results;
         RootGrid.Opacity = 1;
+        _ = RenderImmediateDefaultChapterAsync();
         Loaded += (_, _) =>
         {
             if (_loadTask is not null && !_loadTask.IsCompleted)
@@ -46,6 +47,35 @@ public partial class BiblePage : ContentPage
         };
     }
 
+    private async Task RenderImmediateDefaultChapterAsync()
+    {
+        try
+        {
+            var verses = await BibleService.GetBundledDefaultVersesAsync();
+            if (_loadTask is not null && !_loadTask.IsCompleted)
+                return;
+
+            _language = BibleService.KjvId;
+            _book = "John";
+            _chapter = 3;
+            _fontSize = 22;
+            TranslationLabel.Text = "King James Version";
+            TranslationAttribution.IsVisible = false;
+            TestamentPicker.ItemsSource = new[] { "Old Testament", "New Testament" };
+            TestamentPicker.SelectedItem = "New Testament";
+            BookPicker.ItemsSource = new[] { "John" };
+            BookPicker.SelectedItem = "John";
+            ChapterPicker.ItemsSource = new[] { 3 };
+            ChapterPicker.SelectedItem = 3;
+            RenderVerses(verses);
+            PerfLog($"[BIBLE] Immediate bundled chapter rendered ({verses.Count} verses)");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[BIBLE] Immediate bundled chapter unavailable: {ex}");
+        }
+    }
+
     private async Task LoadAsync()
     {
         var timer = Stopwatch.StartNew();
@@ -53,7 +83,9 @@ public partial class BiblePage : ContentPage
         PerfLog($"[BIBLE] Navigation load started at {timer.ElapsedMilliseconds} ms");
         try
         {
-            await _bible.EnsureReadyAsync().ConfigureAwait(false);
+            // The selected translation is sufficient to render this page.
+            // Startup continues preparing the other translation in parallel.
+            await _bible.EnsureTranslationReadyAsync(_bible.Language).ConfigureAwait(false);
             PerfLog($"[BIBLE] Preparation/cache ready after {timer.ElapsedMilliseconds} ms");
             _language = _bible.Language;
             _book = _bible.Book;
@@ -146,9 +178,10 @@ public partial class BiblePage : ContentPage
             .Select(verse => new VerseRow(verse.Number, verse.Text, _fontSize, _bible.GetHighlight(Key(verse.Number))))
             .ToList();
 
-        _verses.Clear();
-        foreach (var row in rows)
-            _verses.Add(row);
+        // Replace the source once instead of raising one collection-change
+        // notification and layout pass for every verse in the chapter.
+        _verses = new ObservableCollection<VerseRow>(rows);
+        VerseList.ItemsSource = _verses;
 
         VerseHeading.Text = $"{_book.ToUpperInvariant()} {_chapter}";
         ContinueLabel.Text = $"Continue reading • {_book} {_chapter}";

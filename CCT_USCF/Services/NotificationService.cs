@@ -72,7 +72,11 @@ public sealed class NotificationService
         var extras = intent.Extras;
         if (extras is not null)
         {
-            foreach (var key in extras.KeySet())
+            var keys = extras.KeySet();
+            if (keys is null)
+                return;
+
+            foreach (var key in keys)
             {
                 if (string.IsNullOrWhiteSpace(key))
                     continue;

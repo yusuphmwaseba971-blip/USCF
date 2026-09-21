@@ -83,6 +83,12 @@ public sealed class BibleService
         await PrepareAsync().ConfigureAwait(false);
     }
 
+    public async Task EnsureTranslationReadyAsync(string language)
+    {
+        await InitializeAsync().ConfigureAwait(false);
+        await EnsureTranslationLoadedAsync(language).ConfigureAwait(false);
+    }
+
     private async Task PrepareCoreAsync()
     {
         var timer = Stopwatch.StartNew();
@@ -125,20 +131,9 @@ public sealed class BibleService
                 ? await LoadJsonAsync("swahili_neno.json", NenoBookNames, "Kiswahili", "Biblica Open Kiswahili Contemporary Version (Neno) 2015")
                 : await LoadJsonAsync("kjv.json", KjvBookNames, "English", "King James Version");
             _translations[language] = translation;
-            var cacheTimer = Stopwatch.StartNew();
-            var cachedChapterCount = 0;
-            foreach (var book in translation.Books)
-            {
-                foreach (var (chapter, index) in book.Chapters.Select((chapter, index) => (chapter, index)))
-                {
-                    var cacheKey = $"{language}|{book.Name}|{index + 1}";
-                    _verseCache[cacheKey] = chapter
-                        .Select((text, verseIndex) => new BibleVerse(verseIndex + 1, text))
-                        .ToArray();
-                    cachedChapterCount++;
-                }
-            }
-            PerfLog($"[BIBLE] Prepared {cachedChapterCount} chapter verse caches for {language} in {cacheTimer.ElapsedMilliseconds} ms");
+            // Keep the parsed chapter text indexed in memory, but defer creation
+            // of BibleVerse objects until a chapter is actually displayed.
+            // Eagerly converting all 1,189 chapters blocks the first page.
             PerfLog($"[BIBLE] {language} resource discovery/file read/JSON parse/model conversion completed in {timer.ElapsedMilliseconds} ms");
             return translation;
         }
@@ -202,7 +197,7 @@ public sealed class BibleService
     public async Task<IReadOnlyList<BibleBook>> GetBooksAsync(string language = KjvId)
     {
         var timer = Stopwatch.StartNew();
-        await EnsureReadyAsync().ConfigureAwait(false);
+        await EnsureTranslationReadyAsync(language).ConfigureAwait(false);
         var books = (await EnsureTranslationLoadedAsync(language).ConfigureAwait(false)).Books;
         Debug.WriteLine($"[BIBLE] Book metadata/cache lookup for {language} completed in {timer.ElapsedMilliseconds} ms");
         return books;
@@ -210,7 +205,7 @@ public sealed class BibleService
     public async Task<IReadOnlyList<int>> GetChaptersAsync(string book, string language = KjvId)
     {
         var timer = Stopwatch.StartNew();
-        await EnsureReadyAsync().ConfigureAwait(false);
+        await EnsureTranslationReadyAsync(language).ConfigureAwait(false);
         var found = (await EnsureTranslationLoadedAsync(language).ConfigureAwait(false)).Books.FirstOrDefault(
             b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
         var chapters = found?.Chapters.Select((_, i) => i + 1).ToArray() ?? Array.Empty<int>();
@@ -220,7 +215,7 @@ public sealed class BibleService
     public async Task<IReadOnlyList<BibleVerse>> GetVersesAsync(string book, int chapter, string language = KjvId)
     {
         var timer = Stopwatch.StartNew();
-        await EnsureReadyAsync().ConfigureAwait(false);
+        await EnsureTranslationReadyAsync(language).ConfigureAwait(false);
         var cacheKey = $"{language}|{book}|{chapter}";
         if (_verseCache.TryGetValue(cacheKey, out var cached))
         {
