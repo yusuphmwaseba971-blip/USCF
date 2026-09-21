@@ -27,7 +27,7 @@
                     </Grid>
                 </Border>
 
-                <Label Text="Information Center" TextColor="#173C2C" FontAttributes="Bold" FontSize="20" />
+                <Label Text="Information Center" TextColor="{AppThemeBinding Light=#173C2C, Dark=#F1F7F2}" FontAttributes="Bold" FontSize="20" />
                 <HorizontalStackLayout Spacing="8">
                     <Button x:Name="NationalButton" Text="NATIONAL 0" Clicked="OnCategoryClicked" CommandParameter="NATIONAL" Style="{StaticResource SecondaryButtonStyle}" />
                     <Button x:Name="RegionalButton" Text="REGIONAL 0" Clicked="OnCategoryClicked" CommandParameter="REGIONAL" Style="{StaticResource SecondaryButtonStyle}" />
@@ -56,19 +56,17 @@
                                         <Label Text="{Binding ScopeLabel}" TextColor="#A98232" FontAttributes="Bold" FontSize="11" />
                                         <Label Grid.Column="1" Text="{Binding CreatedAtUtc, StringFormat='{0:dd MMM yyyy}'}" TextColor="#78857B" FontSize="11" />
                                     </Grid>
-                                    <Label Text="{Binding Title}" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" />
+                                    <Label Text="{Binding Title}" TextColor="{AppThemeBinding Light=#173C2C, Dark=#F1F7F2}" FontAttributes="Bold" FontSize="18" />
                                     <Image Source="{Binding ImageUrl}" IsVisible="{Binding HasImage}" HeightRequest="150" Aspect="AspectFill">
                                         <Image.GestureRecognizers>
                                             <TapGestureRecognizer Tapped="OnImageTapped" />
                                         </Image.GestureRecognizers>
                                     </Image>
-                                    <Label Text="{Binding Preview}" TextColor="#4E5D53" LineBreakMode="WordWrap" />
+                                    <Label Text="{Binding Preview}" TextColor="{AppThemeBinding Light=#4E5D53, Dark=#D5E3D8}" LineBreakMode="WordWrap" />
                                     <Label Text="{Binding SenderName, StringFormat='Issued by {0}'}" TextColor="#78857B" FontSize="12" />
                                     <Label Text="{Binding ReadState}" TextColor="#A98232" FontAttributes="Bold" FontSize="11" />
                                     <HorizontalStackLayout Spacing="10">
-                                        <Button Text="READ MORE" Clicked="OnReadClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
-                                        <Button Text="SHARE" Clicked="OnShareClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
-                                        <Button Text="REMINDER" Clicked="OnReminderClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
+                                        <Button Text="MORE  ⋮" Clicked="OnMoreClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
                                     </HorizontalStackLayout>
                                     <Button Text="OPEN ATTACHMENT" IsVisible="{Binding HasAttachment}" Clicked="OnAttachmentClicked" CommandParameter="{Binding .}" Style="{StaticResource SecondaryButtonStyle}" />
                                 </VerticalStackLayout>
@@ -77,7 +75,7 @@
                     </CollectionView.ItemTemplate>
                     <CollectionView.EmptyView>
                         <VerticalStackLayout Padding="20,45" Spacing="8" HorizontalOptions="Center">
-                            <Label Text="No announcements in this category" TextColor="#173C2C" FontAttributes="Bold" FontSize="18" HorizontalTextAlignment="Center" />
+                            <Label Text="No announcements in this category" TextColor="{AppThemeBinding Light=#173C2C, Dark=#F1F7F2}" FontAttributes="Bold" FontSize="18" HorizontalTextAlignment="Center" />
                             <Label Text="Official updates for your area will appear here." TextColor="#78857B" HorizontalTextAlignment="Center" />
                         </VerticalStackLayout>
                     </CollectionView.EmptyView>

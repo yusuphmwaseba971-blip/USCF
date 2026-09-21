@@ -220,6 +220,8 @@ const preferredAnnouncementTable = process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COL
 const preferredNotificationTable = process.env.APPWRITE_CHURCH_NOTIFICATIONS_COLLECTION_ID || process.env.APPWRITE_NOTIFICATIONS_COLLECTION_ID || "notifications";
 const preferredDeviceTokenTable = process.env.APPWRITE_CHURCH_DEVICE_TOKENS_COLLECTION_ID || process.env.APPWRITE_DEVICE_TOKENS_COLLECTION_ID || "device_tokens";
 const prayerActionsTable = process.env.APPWRITE_PRAYER_ACTIONS_TABLE_ID || "cct_prayer_actions";
+const postLikesTable = process.env.APPWRITE_CCT_POST_LIKES_TABLE_ID || "cct_post_likes";
+const postCommentsTable = process.env.APPWRITE_CCT_POST_COMMENTS_TABLE_ID || "cct_post_comments";
 
 const announcementTables = Array.from(new Set([preferredAnnouncementTable, "church_announcements"]));
 const notificationTables = Array.from(new Set([preferredNotificationTable, "church_notifications"]));
@@ -288,6 +290,19 @@ await ensureIndex(
   "unique",
   ["prayer_id", "user_uid"]
 );
+
+await ensureTable(postLikesTable, "CCT Post Likes");
+await ensureVarchar(postLikesTable, "post_id", 128, true);
+await ensureVarchar(postLikesTable, "user_id", 255, true);
+await ensureIndex(postLikesTable, "post_user_unique", "unique", ["post_id", "user_id"]);
+await ensureIndex(postLikesTable, "post_likes_post", "key", ["post_id"]);
+
+await ensureTable(postCommentsTable, "CCT Post Comments");
+await ensureVarchar(postCommentsTable, "post_id", 128, true);
+await ensureVarchar(postCommentsTable, "user_id", 255, true);
+await ensureVarchar(postCommentsTable, "author_name", 255);
+await ensureText(postCommentsTable, "content", true);
+await ensureIndex(postCommentsTable, "post_comments_post", "key", ["post_id"]);
 
 for (const tableId of announcementTables) {
   await ensureTable(tableId, "Church Announcements");
@@ -375,7 +390,9 @@ for (const tableId of Array.from(new Set([
   ...deviceTokenTables,
   groupsTable,
   groupMembersTable,
-  prayerActionsTable
+  prayerActionsTable,
+  postLikesTable,
+  postCommentsTable
 ])) ) {
   console.log(`  - ${tableId}`);
 }

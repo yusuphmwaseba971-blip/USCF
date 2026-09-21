@@ -1727,8 +1727,32 @@ function groupBelongsToProfile(group, profile) {
 }
 
 function canManageGroup(group, profile) {
-  return canManageScope(profile, group.scope_type) &&
-    groupBelongsToProfile(group, profile);
+  return normalizeString(group.created_by_uid) === normalizeString(profile.uid);
+}
+
+async function canManageSpecificGroup(group, profile) {
+  if (!group || !profile || !groupBelongsToProfile(group, profile)) {
+    return false;
+  }
+
+  if (normalizeString(group.created_by_uid) === normalizeString(profile.uid)) {
+    return true;
+  }
+
+  const membership = await appwriteTableRowRequest(
+    GROUP_MEMBERS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [group.group_id] },
+      { method: "equal", attribute: "user_uid", values: [profile.uid] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [1] }
+    ]
+  );
+  const role = normalizeString(membership.rows?.[0]?.role).toLowerCase();
+  return ["owner", "administrator", "admin", "leader"].includes(role);
 }
 
 async function isGroupMember(groupId, uid) {
@@ -1745,6 +1769,24 @@ async function isGroupMember(groupId, uid) {
     ]
   );
   return (rows.rows || []).length > 0;
+}
+
+async function getActiveGroupMemberCount(groupId) {
+  const result = await appwriteTableRowRequest(
+    GROUP_MEMBERS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [groupId] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [1] }
+    ]
+  );
+
+  return Number.isFinite(Number(result.total))
+    ? Number(result.total)
+    : (result.rows || []).length;
 }
 
 function groupMemberRowId(groupId, uid) {
@@ -2008,21 +2050,6 @@ async function listChurchGroups(req, log) {
     undefined,
     [{ method: "limit", values: [500] }]
   );
-  const memberRows = await appwriteTableRowRequest(
-    GROUP_MEMBERS_TABLE_ID,
-    "GET",
-    "",
-    undefined,
-    [{ method: "equal", attribute: "is_active", values: [true] }, { method: "limit", values: [500] }]
-  );
-  const membersByGroup = new Map();
-  for (const member of memberRows.rows || []) {
-    const groupId = member.group_id || "";
-    if (!groupId) continue;
-    const members = membersByGroup.get(groupId) || [];
-    members.push(member);
-    membersByGroup.set(groupId, members);
-  }
   const groups = [];
   const allRows = [
     ...standardGroups,
@@ -2034,9 +2061,13 @@ async function listChurchGroups(req, log) {
     if ((requestedScope && normalizeScopeType(row.scope_type) !== requestedScope) ||
         !groupBelongsToProfile(row, profile)) continue;
     const groupId = row.group_id || row.$id;
-    const members = membersByGroup.get(groupId) || [];
     const canAccess = groupBelongsToProfile(row, profile);
-    groups.push(mapGroupDocument(row, profile, members.length, canAccess));
+    const canManage = await canManageSpecificGroup(row, profile);
+    const memberCount = await getActiveGroupMemberCount(groupId);
+    groups.push({
+      ...mapGroupDocument(row, profile, memberCount, canAccess),
+      canManage
+    });
   }
   return { groups };
 }
@@ -2153,8 +2184,7 @@ async function deleteChurchGroup(req, log, groupId) {
   if (row.is_standard === true || isBranchMainGroup(row)) {
     throw announcementError("Standard groups cannot be deleted.", 409);
   }
-  const canManage = canManageScope(profile, row.scope_type) &&
-    groupBelongsToProfile(row, profile);
+  const canManage = await canManageSpecificGroup(row, profile);
   if (!canManage) {
     throw announcementError("You are not authorized to delete this group.", 403);
   }
@@ -2342,6 +2372,10 @@ async function listGroupMessages(
   const items =
     documents
       .filter(document => {
+        if (document.is_deleted === true) {
+          return false;
+        }
+
         const documentCommunityId =
           normalizeString(document.community_id);
 
@@ -2916,8 +2950,12 @@ async function updateGroupMessage(req, log, messageId, deleted) {
 }
 
 const CCT_POSTS_COLLECTION_ID = "cct_posts";
+const CCT_POST_LIKES_TABLE_ID =
+  process.env.APPWRITE_CCT_POST_LIKES_TABLE_ID || "cct_post_likes";
+const CCT_POST_COMMENTS_TABLE_ID =
+  process.env.APPWRITE_CCT_POST_COMMENTS_TABLE_ID || "cct_post_comments";
 
-function mapCctPostDocument(document) {
+function mapCctPostDocument(document, interaction = {}) {
   const data = document?.data || document || {};
   return {
     id: document.$id || document.id,
@@ -2932,11 +2970,14 @@ function mapCctPostDocument(document) {
     isPublished: data.is_published === true || data.is_published === "true",
     createdAtUtc: safeIsoDate(document.$createdAt || data.created_at),
     updatedAtUtc: safeIsoDate(document.$updatedAt || data.updated_at || document.$createdAt)
+    ,likeCount: interaction.likeCount || 0
+    ,commentCount: interaction.commentCount || 0
+    ,likedByCurrentUser: interaction.likedByCurrentUser === true
   };
 }
 
 async function listCctPosts(req, log) {
-  await verifyFirebaseRequest(req, log);
+  const firebaseUser = await verifyFirebaseRequest(req, log);
   const limit = Math.min(Math.max(parseOptionalInt(new URL(req.url).searchParams.get("limit")) || 20, 1), 50);
   const result = await appwriteTableRowRequest(
     CCT_POSTS_COLLECTION_ID,
@@ -2950,7 +2991,110 @@ async function listCctPosts(req, log) {
       { method: "limit", values: [limit] }
     ]
   );
-  return (result.rows || []).map(mapCctPostDocument);
+  return Promise.all((result.rows || []).map(async row => {
+    const postId = row.$id || row.id;
+    const [likes, userLike, comments] = await Promise.all([
+      appwriteTableRowRequest(CCT_POST_LIKES_TABLE_ID, "GET", "", undefined, [
+        { method: "equal", attribute: "post_id", values: [postId] },
+        { method: "limit", values: [1] }
+      ]),
+      appwriteTableRowRequest(CCT_POST_LIKES_TABLE_ID, "GET", "", undefined, [
+        { method: "equal", attribute: "post_id", values: [postId] },
+        { method: "equal", attribute: "user_id", values: [firebaseUser.uid] },
+        { method: "limit", values: [1] }
+      ]),
+      appwriteTableRowRequest(CCT_POST_COMMENTS_TABLE_ID, "GET", "", undefined, [
+        { method: "equal", attribute: "post_id", values: [postId] },
+        { method: "limit", values: [1] }
+      ])
+    ]);
+    const likeRows = likes.rows || [];
+    return mapCctPostDocument(row, {
+      likeCount: likes.total ?? likeRows.length,
+      commentCount: comments.total ?? (comments.rows || []).length,
+      likedByCurrentUser: (userLike.rows || []).length > 0
+    });
+  }));
+}
+
+async function getCctPost(req, postId) {
+  await appwriteTableRowRequest(CCT_POSTS_COLLECTION_ID, "GET", `/${encodeURIComponent(postId)}`);
+}
+
+async function toggleCctPostLike(req, log, postId, liked) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  await getCctPost(req, postId);
+  const rowId = createHash("sha256").update(`${postId}:${firebaseUser.uid}`).digest("hex").slice(0, 36);
+  if (liked) {
+    try {
+      await appwriteTableRowRequest(CCT_POST_LIKES_TABLE_ID, "DELETE", `/${encodeURIComponent(rowId)}`);
+    } catch (error) {
+      if (error.statusCode !== 404) throw error;
+    }
+  } else {
+    try {
+      await appwriteTableRowRequest(CCT_POST_LIKES_TABLE_ID, "POST", "", {
+        rowId,
+        data: { post_id: postId, user_id: firebaseUser.uid }
+      });
+    } catch (error) {
+      if (error.statusCode !== 409) throw error;
+    }
+  }
+  const likes = await appwriteTableRowRequest(CCT_POST_LIKES_TABLE_ID, "GET", "", undefined, [
+    { method: "equal", attribute: "post_id", values: [postId] },
+    { method: "limit", values: [500] }
+  ]);
+  return {
+    liked: !liked,
+    count: likes.total ?? (likes.rows || []).length
+  };
+}
+
+async function listCctPostComments(req, log, postId) {
+  await verifyFirebaseRequest(req, log);
+  await getCctPost(req, postId);
+  const result = await appwriteTableRowRequest(CCT_POST_COMMENTS_TABLE_ID, "GET", "", undefined, [
+    { method: "equal", attribute: "post_id", values: [postId] },
+    { method: "orderAsc", attribute: "$createdAt" },
+    { method: "limit", values: [100] }
+  ]);
+  return (result.rows || []).map(row => {
+    const data = row.data || row;
+    return {
+      id: row.$id || row.id,
+      postId,
+      authorName: normalizeString(data.author_name || data.user_id),
+      content: normalizeString(data.content),
+      createdAtUtc: safeIsoDate(row.$createdAt || data.created_at)
+    };
+  });
+}
+
+async function createCctPostComment(req, log, postId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  await getCctPost(req, postId);
+  const body = getRequestBody(req);
+  const content = normalizeString(body.content);
+  if (!content) throw announcementError("Comment content is required.", 400);
+  if (content.length > 2000) throw announcementError("Comment is too long.", 400);
+  const document = await appwriteTableRowRequest(CCT_POST_COMMENTS_TABLE_ID, "POST", "", {
+    rowId: randomUUID().replace(/-/g, ""),
+    data: {
+      post_id: postId,
+      user_id: firebaseUser.uid,
+      author_name: normalizeString(firebaseUser.name || firebaseUser.email || firebaseUser.uid),
+      content
+    }
+  });
+  const data = document.data || document;
+  return {
+    id: document.$id || document.id,
+    postId,
+    authorName: normalizeString(data.author_name || firebaseUser.uid),
+    content: normalizeString(data.content),
+    createdAtUtc: safeIsoDate(document.$createdAt || data.created_at)
+  };
 }
 
 async function createCctPost(req, log) {
@@ -3272,6 +3416,34 @@ export default async ({
       if (req.method === "POST") {
         currentStage = "POST CCT post";
         return jsonResponse(res, await createCctPost(req, log), 201);
+      }
+      throw announcementError("Method not allowed.", 405);
+    }
+
+    const postLikeMatch = route.match(/^\/?api\/community\/posts\/([^/]+)\/like$/);
+    if (postLikeMatch) {
+      const postId = decodeURIComponent(postLikeMatch[1]);
+      if (req.method === "POST" || req.method === "DELETE") {
+        currentStage = `${req.method} CCT post like`;
+        return jsonResponse(
+          res,
+          await toggleCctPostLike(req, log, postId, req.method === "DELETE"),
+          200
+        );
+      }
+      throw announcementError("Method not allowed.", 405);
+    }
+
+    const postCommentsMatch = route.match(/^\/?api\/community\/posts\/([^/]+)\/comments$/);
+    if (postCommentsMatch) {
+      const postId = decodeURIComponent(postCommentsMatch[1]);
+      if (req.method === "GET") {
+        currentStage = "GET CCT post comments";
+        return jsonResponse(res, await listCctPostComments(req, log, postId), 200);
+      }
+      if (req.method === "POST") {
+        currentStage = "POST CCT post comment";
+        return jsonResponse(res, await createCctPostComment(req, log, postId), 201);
       }
       throw announcementError("Method not allowed.", 405);
     }

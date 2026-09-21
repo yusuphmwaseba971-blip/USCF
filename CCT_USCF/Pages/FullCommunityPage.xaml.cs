@@ -55,12 +55,62 @@ public partial class FullCommunityPage : ContentPage
                     audio.Clicked += async (_, _) => await _mediaViewer.OpenMediaAsync(post.AudioUrl, "audio");
                     body.Children.Add(audio);
                 }
-                body.Children.Add(new Label { Text = $"{post.CreatedAtUtc.ToLocalTime():g}  •  ❤️ {post.LikeCount}  💬 {post.CommentCount}", FontSize = 12, TextColor = Colors.Gray });
+                var engagement = new Label
+                {
+                    Text = $"{post.CreatedAtUtc.ToLocalTime():g}  •  ❤️ {post.LikeCount}  💬 {post.CommentCount}",
+                    FontSize = 12,
+                    TextColor = Colors.Gray
+                };
+                body.Children.Add(engagement);
                 var actions = new HorizontalStackLayout { Spacing = 8 };
                 var like = new Button { Text = post.LikedByCurrentUser ? "Unlike" : "Like", Padding = 10 };
-                like.Clicked += async (_, _) => { like.IsEnabled = false; var result = await _community.ToggleNationalLikeAsync(post.Id, post.LikedByCurrentUser); like.Text = result.Liked ? "Unlike" : "Like"; like.IsEnabled = true; };
+                like.Clicked += async (_, _) =>
+                {
+                    like.IsEnabled = false;
+                    try
+                    {
+                        var result = await _community.ToggleNationalLikeAsync(post.Id, post.LikedByCurrentUser);
+                        post.LikedByCurrentUser = result.Liked;
+                        post.LikeCount = result.Count;
+                        like.Text = result.Liked ? "Unlike" : "Like";
+                        engagement.Text = $"{post.CreatedAtUtc.ToLocalTime():g}  •  ❤️ {post.LikeCount}  💬 {post.CommentCount}";
+                    }
+                    catch (Exception ex)
+                    {
+                        await DisplayAlert("Unable to update like", ex.Message, "OK");
+                    }
+                    finally
+                    {
+                        like.IsEnabled = true;
+                    }
+                };
                 var comment = new Button { Text = "Comment", Padding = 10 };
-                comment.Clicked += async (_, _) => { var text = await DisplayPromptAsync("Comment", "Write a comment"); if (!string.IsNullOrWhiteSpace(text)) { await _community.AddNationalCommentAsync(post.Id, text); await LoadFeedAsync(); } };
+                comment.Clicked += async (_, _) =>
+                {
+                    try
+                    {
+                        var comments = await _community.GetNationalCommentsAsync(post.Id);
+                        var existing = comments.Count == 0
+                            ? "No comments yet."
+                            : string.Join(Environment.NewLine, comments.Select(x => $"{x.AuthorName}: {x.Content}"));
+                        var text = await DisplayPromptAsync(
+                            "Comments",
+                            $"{existing}{Environment.NewLine}{Environment.NewLine}Write a comment",
+                            initialValue: string.Empty,
+                            maxLength: 2000,
+                            keyboard: Keyboard.Default);
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            await _community.AddNationalCommentAsync(post.Id, text.Trim());
+                            post.CommentCount++;
+                            engagement.Text = $"{post.CreatedAtUtc.ToLocalTime():g}  •  ❤️ {post.LikeCount}  💬 {post.CommentCount}";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        await DisplayAlert("Unable to update comment", ex.Message, "OK");
+                    }
+                };
                 actions.Children.Add(like); actions.Children.Add(comment); body.Children.Add(actions); card.Content = body; FeedStack.Children.Add(card);
             }
             System.Diagnostics.Debug.WriteLine($"[COMMUNITY] First-open feed load completed in {timer.ElapsedMilliseconds} ms ({posts.Count} posts)");
@@ -84,10 +134,6 @@ public partial class FullCommunityPage : ContentPage
                 throw new InvalidOperationException(
                     "Media posting is temporarily unavailable. Please remove the attachment and try a text-only post.");
             await _community.CreateNationalPostAsync(request);
-            if (_attachment is null)
-                await _community.CreateCctPostAsync(
-                    request.Content ?? string.Empty,
-                    "FullCommunity");
             TitleEntry.Text = ContentEditor.Text = LinkEntry.Text = string.Empty; _attachment = null; _attachmentType = null; AttachmentLabel.Text = "No media selected"; AudioDurationEntry.IsVisible = false;
             await LoadFeedAsync();
         }

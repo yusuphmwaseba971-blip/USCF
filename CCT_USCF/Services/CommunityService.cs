@@ -502,7 +502,9 @@ MessageType =
                     : message.MessageId;
 
             var communityId =
-                message.CommunityId?.Trim()
+                (string.IsNullOrWhiteSpace(message.CommunityId)
+                    ? message.GroupId
+                    : message.CommunityId)?.Trim()
                 ?? string.Empty;
 
             var createdAt =
@@ -687,7 +689,9 @@ SenderUid =
             }
 
             var communityId =
-                message.CommunityId?.Trim()
+                (string.IsNullOrWhiteSpace(message.CommunityId)
+                    ? message.GroupId
+                    : message.CommunityId)?.Trim()
                 ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(communityId))
@@ -754,7 +758,9 @@ SenderUid =
                 }
 
                 var communityId =
-                    message.CommunityId?.Trim()
+                    (string.IsNullOrWhiteSpace(message.CommunityId)
+                        ? message.GroupId
+                        : message.CommunityId)?.Trim()
                     ?? string.Empty;
 
                 if (string.IsNullOrWhiteSpace(communityId))
@@ -948,7 +954,9 @@ SenderUid =
                 await GetLocalDeletedMessageIdsAsync(normalizedCommunityId);
 
             return cachedRows
-                .Where(row => !deletedIds.Contains(row.MessageId))
+            .Where(row =>
+                !row.IsDeleted &&
+                !deletedIds.Contains(row.MessageId))
                 .OrderBy(row => row.CreatedAt)
                 .Select(MapCachedCommunityMessage)
                 .ToList();
@@ -1007,6 +1015,9 @@ SenderUid =
                 var remoteMessages = await GetGroupMessagesAsync(
                     normalizedGroupId, safeLimit, null,
                     organizationalLevel, branchId, regionId, districtId);
+                remoteMessages = remoteMessages
+                    .Where(message => !message.IsDeleted)
+                    .ToList();
 
                 System.Diagnostics.Debug.WriteLine(
                     "[BRANCH_CHAT_DIAGNOSTIC] " +
@@ -1101,7 +1112,7 @@ SenderUid =
                 initialMessages =
                     await FilterLocallyDeletedMessagesAsync(
                         normalizedGroupId,
-                        initialMessages);
+                        initialMessages.Where(message => !message.IsDeleted));
 
                 if (initialMessages.Count > 0)
                 {
@@ -1138,7 +1149,7 @@ SenderUid =
             newMessages =
                 await FilterLocallyDeletedMessagesAsync(
                     normalizedGroupId,
-                    newMessages);
+                    newMessages.Where(message => !message.IsDeleted));
 
             var cachedMessageIds =
                 (await database
@@ -1870,6 +1881,9 @@ SenderUid =
                         HttpMethod.Delete,
                         $"api/community/messages/group/{Uri.EscapeDataString(normalizedMessageId)}");
 
+                await MarkCommunityMessageLocallyDeletedAsync(
+                    deleted.CommunityId,
+                    normalizedMessageId);
                 await CacheCommunityMessageAsync(deleted);
 
                 System.Diagnostics.Debug.WriteLine(
@@ -3961,28 +3975,48 @@ ConversationId =
 
         public async Task<List<NationalCommunityPost>> GetNationalPostsAsync(int limit = 20)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/community/national?limit={Math.Clamp(limit, 1, 50)}");
-            await AddFirebaseAuthorizationAsync(request);
-            using var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<NationalCommunityPost>>() ?? new();
-        }
-
-        public async Task<NationalCommunityPost> CreateNationalPostAsync(NationalCommunityCreateRequest requestDto)
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Post, "api/community/national")
-            {
-                Content = JsonContent.Create(requestDto)
-            };
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/community/posts?limit={Math.Clamp(limit, 1, 50)}");
             await AddFirebaseAuthorizationAsync(request);
             using var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException(body);
-            return JsonSerializer.Deserialize<NationalCommunityPost>(
-                body,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                ?? throw new InvalidOperationException("The server returned no post.");
+
+            var posts = JsonSerializer.Deserialize<List<CctPost>>(
+                body, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+            return posts
+                .Where(IsPublishedCctPost)
+                .Select(ToNationalCommunityPost)
+                .ToList();
+        }
+
+        public async Task<NationalCommunityPost> CreateNationalPostAsync(NationalCommunityCreateRequest requestDto)
+        {
+            var post = await CreateCctPostAsync(requestDto.Content ?? string.Empty, "FullCommunity");
+            return ToNationalCommunityPost(post);
+        }
+
+        private static NationalCommunityPost ToNationalCommunityPost(CctPost post)
+        {
+            return new NationalCommunityPost
+            {
+                Id = post.Id,
+                AuthorUid = post.UserId,
+                AuthorName = post.UserId,
+                Content = post.Content,
+                ContributionType = post.PostType,
+                Visibility = "national",
+                CreatedAtUtc = post.CreatedAtUtc,
+                LikeCount = post.LikeCount,
+                CommentCount = post.CommentCount,
+                LikedByCurrentUser = post.LikedByCurrentUser,
+                ImageUrl = post.MediaType.Equals("image", StringComparison.OrdinalIgnoreCase)
+                    ? post.MediaUrl : null,
+                VideoUrl = post.MediaType.Equals("video", StringComparison.OrdinalIgnoreCase)
+                    ? post.MediaUrl : null,
+                AudioUrl = post.MediaType.Equals("audio", StringComparison.OrdinalIgnoreCase)
+                    ? post.MediaUrl : null
+            };
         }
 
         public async Task<CctPost> CreateCctPostAsync(
@@ -4372,32 +4406,48 @@ ConversationId =
             => data.TryGetValue(key, out var value) &&
                bool.TryParse(Convert.ToString(value), out var result) && result;
 
-        public async Task<(bool Liked, int Count)> ToggleNationalLikeAsync(Guid postId, bool liked)
+        public async Task<(bool Liked, int Count)> ToggleNationalLikeAsync(string postId, bool liked)
         {
-            using var request = new HttpRequestMessage(liked ? HttpMethod.Delete : HttpMethod.Post, $"api/community/national/{postId}/like");
+            using var request = new HttpRequestMessage(
+                liked ? HttpMethod.Delete : HttpMethod.Post,
+                $"api/community/posts/{postId}/like");
             await AddFirebaseAuthorizationAsync(request);
             using var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var result = await response.Content.ReadFromJsonAsync<LikeResponse>() ?? new LikeResponse();
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(body);
+            var result = JsonSerializer.Deserialize<LikeResponse>(
+                body,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new LikeResponse();
             return (result.Liked, result.Count);
         }
 
-        public async Task<List<NationalCommunityComment>> GetNationalCommentsAsync(Guid postId)
+        public async Task<List<NationalCommunityComment>> GetNationalCommentsAsync(string postId)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/community/national/{postId}/comments");
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/community/posts/{postId}/comments");
             await AddFirebaseAuthorizationAsync(request);
             using var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<NationalCommunityComment>>() ?? new();
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(body);
+            return JsonSerializer.Deserialize<List<NationalCommunityComment>>(
+                body,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new();
         }
 
-        public async Task AddNationalCommentAsync(Guid postId, string content)
+        public async Task AddNationalCommentAsync(string postId, string content)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/community/national/{postId}/comments")
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"api/community/posts/{postId}/comments")
             { Content = JsonContent.Create(new { content }) };
             await AddFirebaseAuthorizationAsync(request);
             using var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(body);
         }
 
         public async Task<List<NationalCommunityEvent>> GetNationalEventsAsync()

@@ -19,7 +19,7 @@ public sealed class NationalCommunityCreateRequest
 
 public sealed class NationalCommunityPost
 {
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     public string AuthorUid { get; set; } = string.Empty;
     public string AuthorName { get; set; } = string.Empty;
     public string? AuthorPhoto { get; set; }
@@ -75,4 +75,7 @@ public sealed class CctPost
     public bool IsPublished { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
+    public int LikeCount { get; set; }
+    public int CommentCount { get; set; }
+    public bool LikedByCurrentUser { get; set; }
 }

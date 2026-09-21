@@ -33,6 +33,23 @@
 
             <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
 
+            <Border x:Name="GroupSettingsSection" IsVisible="False"
+                    Padding="14" BackgroundColor="#FFF5F4" Stroke="#F2C8C5"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 14">
+                <VerticalStackLayout Spacing="8">
+                    <Label x:Name="GroupSettingsTitle" Text="Group Settings"
+                           FontSize="18" FontAttributes="Bold" TextColor="#A12622" />
+                    <Label Text="Only this group's authorized creator or administrator can deactivate it."
+                           FontSize="13" TextColor="#7A3B38" />
+                    <Button x:Name="DeleteGroupFromSettingsButton"
+                            Text="Delete group"
+                            IsVisible="False"
+                            Clicked="OnDeleteGroupFromSettingsClicked"
+                            BackgroundColor="#A12622" TextColor="White"
+                            CornerRadius="10" HeightRequest="48" />
+                </VerticalStackLayout>
+            </Border>
+
             <Border Padding="14" BackgroundColor="#FFF5F4" Stroke="#F2C8C5"
                     StrokeThickness="1" StrokeShape="RoundRectangle 14">
                 <VerticalStackLayout Spacing="8">

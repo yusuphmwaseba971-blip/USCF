@@ -23,15 +23,38 @@ public partial class AnnouncementActivityPage : ContentPage
         InitializeComponent();
         _service = MauiProgram.Services.GetRequiredService<ChurchAnnouncementService>();
         _mediaViewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
+        _service.AnnouncementsChanged += OnAnnouncementsChanged;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _service.AnnouncementsChanged -= OnAnnouncementsChanged;
+        _service.AnnouncementsChanged += OnAnnouncementsChanged;
         await LoadAsync();
     }
 
+    protected override void OnDisappearing()
+    {
+        _service.AnnouncementsChanged -= OnAnnouncementsChanged;
+        base.OnDisappearing();
+    }
+
     private async Task LoadAsync()
+    {
+        var cached = await _service.GetCachedNotificationsAsync();
+        if (cached.Count > 0)
+        {
+            ApplyNotifications(cached);
+            _ = _service.GetNotificationsAsync();
+            await OpenRequestedAnnouncementAsync();
+            return;
+        }
+
+        await LoadFromNetworkAsync();
+    }
+
+    private async Task LoadFromNetworkAsync()
     {
         RefreshHost.IsRefreshing = true;
         LoadingIndicator.IsVisible = LoadingIndicator.IsRunning = true;
@@ -39,14 +62,8 @@ public partial class AnnouncementActivityPage : ContentPage
         try
         {
             _all = await _service.GetNotificationsAsync();
-            UpdateCounts();
-            ApplyCategory();
-            if (Guid.TryParse(AnnouncementId, out var id))
-            {
-                var target = _all.FirstOrDefault(x => x.AnnouncementId == id);
-                if (target is not null)
-                    await OpenDetailsAsync(target);
-            }
+            ApplyNotifications(_all);
+            await OpenRequestedAnnouncementAsync();
         }
         catch (Exception ex)
         {
@@ -60,6 +77,34 @@ public partial class AnnouncementActivityPage : ContentPage
             LoadingIndicator.IsVisible = LoadingIndicator.IsRunning = false;
             RefreshHost.IsRefreshing = false;
         }
+    }
+
+    private void ApplyNotifications(IReadOnlyList<ChurchNotification> notifications)
+    {
+        _all = notifications;
+        UpdateCounts();
+        ApplyCategory();
+    }
+
+    private async Task OpenRequestedAnnouncementAsync()
+    {
+        if (Guid.TryParse(AnnouncementId, out var id))
+        {
+            var target = _all.FirstOrDefault(x => x.AnnouncementId == id);
+            if (target is not null)
+            {
+                AnnouncementId = string.Empty;
+                await OpenDetailsAsync(target);
+            }
+        }
+    }
+
+    private async void OnAnnouncementsChanged(object? sender, EventArgs e)
+    {
+        await MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            ApplyNotifications(await _service.GetCachedNotificationsAsync());
+        });
     }
 
     private void UpdateCounts()
@@ -91,7 +136,7 @@ public partial class AnnouncementActivityPage : ContentPage
         }
     }
 
-    private async void OnRefreshing(object? sender, EventArgs e) => await LoadAsync();
+    private async void OnRefreshing(object? sender, EventArgs e) => await LoadFromNetworkAsync();
 
     private async void OnSelected(object? sender, SelectionChangedEventArgs e)
     {
@@ -100,32 +145,49 @@ public partial class AnnouncementActivityPage : ContentPage
         NotificationsView.SelectedItem = null;
     }
 
-    private async void OnReadClicked(object? sender, EventArgs e)
+    private async void OnMoreClicked(object? sender, EventArgs e)
     {
-        if ((sender as Button)?.CommandParameter is ChurchNotification item)
-            await OpenDetailsAsync(item);
+        if ((sender as Button)?.CommandParameter is not ChurchNotification item) return;
+
+        var actions = new List<string> { "Read more", "Share", "Reminder" };
+        if (!item.IsRead) actions.Add("Mark as read");
+        actions.Add("Delete");
+        var action = await DisplayActionSheet(item.Title, "Cancel", null, actions.ToArray());
+
+        switch (action)
+        {
+            case "Read more":
+                await OpenDetailsAsync(item);
+                break;
+            case "Share":
+                await ShareAsync(item);
+                break;
+            case "Reminder":
+                await SetReminderAsync(item);
+                break;
+            case "Mark as read":
+                await _service.MarkReadAsync(item.AnnouncementId);
+                break;
+            case "Delete":
+                await DeleteAsync(item);
+                break;
+        }
     }
 
     private async Task OpenDetailsAsync(ChurchNotification item)
     {
-        if (!item.IsRead)
-        {
-            await _service.MarkReadAsync(item.AnnouncementId);
-            _all = _all.Select(notification => notification.AnnouncementId == item.AnnouncementId
-                ? notification with { IsRead = true }
-                : notification).ToList();
-            ApplyCategory();
-        }
-        var details = $"{item.Message}\n\nIssued by: {item.SenderName}\n" +
-                      $"Scope: {item.ScopeLabel}\nPublished: {item.CreatedAtUtc:dd MMM yyyy, HH:mm}";
-        if (item.ExpiresAtUtc is not null)
-            details += $"\nExpires: {item.ExpiresAtUtc:dd MMM yyyy, HH:mm}";
-        await DisplayAlert(item.Title, details, "Close");
+        await Shell.Current.GoToAsync(
+            $"{nameof(AnnouncementDetailPage)}?announcementId={Uri.EscapeDataString(item.AnnouncementId.ToString())}");
     }
 
     private async void OnShareClicked(object? sender, EventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not ChurchNotification item) return;
+        await ShareAsync(item);
+    }
+
+    private static async Task ShareAsync(ChurchNotification item)
+    {
         await Share.Default.RequestAsync(new ShareTextRequest
         {
             Title = "Share CCT-USCF announcement",
@@ -137,6 +199,11 @@ public partial class AnnouncementActivityPage : ContentPage
     private async void OnReminderClicked(object? sender, EventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not ChurchNotification item) return;
+        await SetReminderAsync(item);
+    }
+
+    private async Task SetReminderAsync(ChurchNotification item)
+    {
         var choice = await DisplayActionSheet("Remind me", "Cancel", null,
             "Later today", "Tomorrow", "Choose date and time");
         DateTime reminder = choice switch
@@ -150,9 +217,19 @@ public partial class AnnouncementActivityPage : ContentPage
         if (reminder == DateTime.MinValue) return;
         await AnnouncementReminderService.ScheduleAsync(item, reminder);
         _scheduledReminders.Add(item.AnnouncementId);
-        if (sender is Button reminderButton)
-            reminderButton.Text = "REMINDER SET";
         await DisplayAlert("Reminder set", $"You will be reminded on {reminder:g}.", "OK");
+    }
+
+    private async Task DeleteAsync(ChurchNotification item)
+    {
+        var confirmed = await DisplayAlert(
+            "Delete announcement",
+            "Delete this announcement from your notifications?",
+            "Delete",
+            "Cancel");
+        if (!confirmed) return;
+
+        await _service.DeleteForCurrentUserAsync(item.AnnouncementId);
     }
 
     private async void OnAttachmentClicked(object? sender, EventArgs e)

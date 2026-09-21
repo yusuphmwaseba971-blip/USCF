@@ -15,6 +15,8 @@ public sealed class ChurchAnnouncementService
 
     public ChurchAnnouncementService(HttpClient http, AuthService auth) => (_http, _auth) = (http, auth);
 
+    public event EventHandler? AnnouncementsChanged;
+
     public async Task<ChurchAnnouncementOptions> GetOptionsAsync(CancellationToken ct = default)
     {
         try
@@ -24,7 +26,7 @@ public sealed class ChurchAnnouncementService
             if (options?.Targets is { Count: > 0 })
                 return options;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             System.Diagnostics.Debug.WriteLine($"Announcement audience sync unavailable; using profile: {ex.Message}");
         }
@@ -70,28 +72,57 @@ public sealed class ChurchAnnouncementService
 
     public async Task<IReadOnlyList<ChurchNotification>> GetNotificationsAsync(CancellationToken ct = default)
     {
+        await EnsureCurrentUserAsync();
+        var cached = await AnnouncementCache.GetVisibleAsync();
+        if (cached.Count > 0)
+        {
+            _ = SynchronizeNotificationsAsync();
+            return cached;
+        }
+
+        return await SynchronizeNotificationsAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ChurchNotification>> GetCachedNotificationsAsync()
+    {
+        await EnsureCurrentUserAsync();
+        return await AnnouncementCache.GetVisibleAsync();
+    }
+
+    private async Task EnsureCurrentUserAsync()
+    {
+        if (MauiProgram.CurrentUser is null)
+        {
+            var user = await _auth.GetCurrentUserAsync();
+            if (user is not null)
+                MauiProgram.SetCurrentUser(user);
+        }
+    }
+
+    private async Task<IReadOnlyList<ChurchNotification>> SynchronizeNotificationsAsync(
+        CancellationToken ct = default)
+    {
         System.Diagnostics.Debug.WriteLine(
             $"[ANNOUNCEMENT_FETCH_START] timestamp={DateTimeOffset.UtcNow:O} " +
             "database=cct-uscf-db table=announcements");
-        List<ChurchNotification> remote;
         try
         {
-            remote = await SendAsync<List<ChurchNotification>>(
+            var remote = await SendAsync<List<ChurchNotification>>(
                 HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
             await AnnouncementCache.MergeAsync(remote);
+            var synchronized = await AnnouncementCache.GetVisibleAsync();
+            AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
+            System.Diagnostics.Debug.WriteLine(
+                $"[ANNOUNCEMENT_FETCH_RESULT] rows={remote.Count} visible={synchronized.Count}");
+            return synchronized;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
-            var cached = (await AnnouncementCache.GetAllAsync()).Select(x => x.ToNotification()).ToList();
+            var offline = await AnnouncementCache.GetVisibleAsync();
             System.Diagnostics.Debug.WriteLine(
-                $"[ANNOUNCEMENT_CACHE_FALLBACK] rows={cached.Count} reason={ex.GetType().Name}");
-            return cached.OrderByDescending(x => x.CreatedAtUtc).ToList();
+                $"[ANNOUNCEMENT_CACHE_FALLBACK] rows={offline.Count} reason={ex.GetType().Name}");
+            return offline;
         }
-        System.Diagnostics.Debug.WriteLine(
-            $"[ANNOUNCEMENT_FETCH_RESULT] rows={remote.Count} visible={remote.Count}");
-        return remote
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToList();
     }
 
     public async Task<int> GetUnreadCountAsync(CancellationToken ct = default)
@@ -122,6 +153,7 @@ public sealed class ChurchAnnouncementService
     public async Task MarkReadAsync(Guid id, CancellationToken ct = default)
     {
         await AnnouncementCache.MarkReadAsync(id);
+        AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
         try
         {
             await SendAsync<object>(HttpMethod.Post, $"api/church-announcements/notifications/{id:N}/read", new { }, ct);
@@ -130,6 +162,12 @@ public sealed class ChurchAnnouncementService
         {
             System.Diagnostics.Debug.WriteLine($"Announcement read sync unavailable: {ex.Message}");
         }
+    }
+
+    public async Task DeleteForCurrentUserAsync(Guid id, CancellationToken ct = default)
+    {
+        await AnnouncementCache.MarkDeletedAsync(id);
+        AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task RegisterTokenAsync(string token, CancellationToken ct = default)
@@ -304,19 +342,49 @@ internal static class AnnouncementCache
             if (!_initialized)
             {
                 await Database.CreateTableAsync<CachedChurchNotification>();
+                try
+                {
+                    await Database.ExecuteAsync(
+                        "ALTER TABLE CachedChurchNotification ADD COLUMN IsDeletedByUser INTEGER NOT NULL DEFAULT 0");
+                }
+                catch (SQLiteException)
+                {
+                }
+                try
+                {
+                    await Database.ExecuteAsync(
+                        "ALTER TABLE CachedChurchNotification ADD COLUMN DeletedAtUtc TEXT NULL");
+                }
+                catch (SQLiteException)
+                {
+                }
                 _initialized = true;
             }
         }
         finally { InitializationLock.Release(); }
     }
 
-    public static async Task<List<CachedChurchNotification>> GetAllAsync()
+    public static async Task<List<ChurchNotification>> GetVisibleAsync()
     {
         await InitializeAsync();
-        return await Database.Table<CachedChurchNotification>()
-            .Where(x => x.Id.StartsWith(OwnerKey + ":"))
+        var cached = (await Database.Table<CachedChurchNotification>().ToListAsync())
+            .Where(x => x.Id.StartsWith(OwnerKey + ":", StringComparison.Ordinal) && !x.IsDeletedByUser)
             .OrderByDescending(x => x.CreatedAtUtc)
-            .ToListAsync();
+            .ToList();
+        var notifications = new List<ChurchNotification>(cached.Count);
+        foreach (var item in cached)
+        {
+            if (item.TryToNotification(out var notification))
+            {
+                notifications.Add(notification);
+                continue;
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[ANNOUNCEMENT_CACHE_INVALID] announcementId={item.AnnouncementId} cacheId={item.Id}");
+        }
+
+        return notifications;
     }
 
     public static async Task MergeAsync(IEnumerable<ChurchNotification> notifications)
@@ -324,8 +392,8 @@ internal static class AnnouncementCache
         await InitializeAsync();
         foreach (var notification in notifications)
         {
-            var id = CacheKey(notification.Id);
-            var existing = await Database.FindAsync<CachedChurchNotification>(id);
+            var existing = await FindByAnnouncementIdAsync(notification.AnnouncementId);
+            var id = existing?.Id ?? CacheKey(notification.AnnouncementId);
             await Database.InsertOrReplaceAsync(new CachedChurchNotification
             {
                 Id = id,
@@ -342,7 +410,8 @@ internal static class AnnouncementCache
                 ImageUrl = notification.ImageUrl,
                 AttachmentUrl = notification.AttachmentUrl,
                 ExpiresAtUtc = notification.ExpiresAtUtc,
-                IsActive = notification.IsActive
+                IsActive = notification.IsActive,
+                IsDeletedByUser = existing?.IsDeletedByUser == true
             });
         }
     }
@@ -350,12 +419,37 @@ internal static class AnnouncementCache
     public static async Task MarkReadAsync(Guid id)
     {
         await InitializeAsync();
-        var existing = await Database.FindAsync<CachedChurchNotification>(CacheKey(id));
+        var existing = await FindByAnnouncementIdAsync(id);
         if (existing is not null)
         {
             existing.IsRead = true;
             await Database.UpdateAsync(existing);
         }
+    }
+
+    public static async Task MarkDeletedAsync(Guid id)
+    {
+        await InitializeAsync();
+        var existing = await FindByAnnouncementIdAsync(id);
+        if (existing is not null)
+        {
+            existing.IsDeletedByUser = true;
+            existing.DeletedAtUtc = DateTime.UtcNow;
+            await Database.UpdateAsync(existing);
+        }
+    }
+
+    private static async Task<CachedChurchNotification?> FindByAnnouncementIdAsync(Guid id)
+    {
+        var normalizedId = id.ToString();
+        var current = await Database.FindAsync<CachedChurchNotification>(CacheKey(id));
+        if (current is not null)
+            return current;
+
+        return (await Database.Table<CachedChurchNotification>().ToListAsync())
+            .FirstOrDefault(x =>
+                x.Id.StartsWith(OwnerKey + ":", StringComparison.Ordinal) &&
+                x.AnnouncementId == normalizedId);
     }
 }
 
@@ -370,6 +464,8 @@ internal sealed class CachedChurchNotification
     public string TargetLevel { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public bool IsRead { get; set; }
+    public bool IsDeletedByUser { get; set; }
+    public DateTime? DeletedAtUtc { get; set; }
     public int? RegionId { get; set; }
     public int? DistrictId { get; set; }
     public int? BranchId { get; set; }
@@ -378,8 +474,21 @@ internal sealed class CachedChurchNotification
     public DateTime? ExpiresAtUtc { get; set; }
     public bool IsActive { get; set; } = true;
 
-    public ChurchNotification ToNotification() =>
-        new(Guid.Parse(Id[(Id.IndexOf(':') + 1)..]), Guid.Parse(AnnouncementId), Title, Message, SenderName,
-            TargetLevel, CreatedAtUtc, IsRead, RegionId, DistrictId, BranchId, ImageUrl, AttachmentUrl,
-            ExpiresAtUtc, IsActive);
+    public bool TryToNotification(out ChurchNotification notification)
+    {
+        notification = default!;
+        var separator = Id.IndexOf(':');
+        var notificationIdText = separator >= 0 ? Id[(separator + 1)..] : Id;
+        if (!Guid.TryParse(notificationIdText, out var notificationId) ||
+            !Guid.TryParse(AnnouncementId, out var announcementId))
+        {
+            return false;
+        }
+
+        notification = new ChurchNotification(
+            notificationId, announcementId, Title, Message, SenderName, TargetLevel,
+            CreatedAtUtc, IsRead, RegionId, DistrictId, BranchId, ImageUrl,
+            AttachmentUrl, ExpiresAtUtc, IsActive);
+        return true;
+    }
 }

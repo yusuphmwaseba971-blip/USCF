@@ -2,11 +2,20 @@ using CCT_USCF.Services;
 
 namespace CCT_USCF.Pages;
 
+[QueryProperty(nameof(GroupId), "groupId")]
+[QueryProperty(nameof(GroupName), "groupName")]
+[QueryProperty(nameof(CanDeleteGroup), "canDelete")]
 public partial class SettingsPage : ContentPage
 {
     private readonly Services.AuthService _auth;
     private readonly AppAppearanceService _appearance;
     private readonly ICctAssistantService _assistant;
+    private readonly ChurchGroupService _groupService;
+    private readonly CommunityService _communityService;
+    private readonly ChurchGroupCacheService _groupCache;
+    private string _groupId = string.Empty;
+    private string _groupName = string.Empty;
+    private bool _canDeleteGroup;
 
     public SettingsPage()
     {
@@ -14,10 +23,83 @@ public partial class SettingsPage : ContentPage
         _auth = LoginRegisterHelpers.GetAuthService();
         _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
         _assistant = MauiProgram.Services.GetRequiredService<ICctAssistantService>();
+        _groupService = MauiProgram.Services.GetRequiredService<ChurchGroupService>();
+        _communityService = MauiProgram.Services.GetRequiredService<CommunityService>();
+        _groupCache = MauiProgram.Services.GetRequiredService<ChurchGroupCacheService>();
         LanguagePicker.ItemsSource = AppAppearanceService.Languages.Keys.ToList();
         BackgroundPicker.ItemsSource = AppAppearanceService.Backgrounds.Keys.Concat(["Custom"]).ToList();
         FontPreferencePicker.ItemsSource = AppAppearanceService.FontPreferences.ToList();
         FontSizePreferencePicker.ItemsSource = AppAppearanceService.FontSizePreferences.ToList();
+    }
+
+    public string GroupId
+    {
+        get => _groupId;
+        set
+        {
+            _groupId = value?.Trim() ?? string.Empty;
+            UpdateGroupSettingsVisibility();
+        }
+    }
+
+    public string GroupName
+    {
+        get => _groupName;
+        set
+        {
+            _groupName = Uri.UnescapeDataString(value ?? string.Empty);
+            UpdateGroupSettingsVisibility();
+        }
+    }
+
+    public bool CanDeleteGroup
+    {
+        get => _canDeleteGroup;
+        set
+        {
+            _canDeleteGroup = value;
+            UpdateGroupSettingsVisibility();
+        }
+    }
+
+    private void UpdateGroupSettingsVisibility()
+    {
+        if (GroupSettingsSection == null)
+            return;
+
+        GroupSettingsSection.IsVisible = !string.IsNullOrWhiteSpace(_groupId);
+        GroupSettingsTitle.Text = string.IsNullOrWhiteSpace(_groupName)
+            ? "Group Settings"
+            : $"Group Settings · {_groupName}";
+        DeleteGroupFromSettingsButton.IsVisible = _canDeleteGroup;
+    }
+
+    private async void OnDeleteGroupFromSettingsClicked(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_groupId) || !_canDeleteGroup)
+            return;
+
+        if (!await DisplayAlert(
+                "Delete group?",
+                "This will deactivate this group for all members.",
+                "Delete",
+                "Cancel"))
+            return;
+
+        DeleteGroupFromSettingsButton.IsEnabled = false;
+        try
+        {
+            await _groupService.DeleteGroupAsync(_groupId);
+            await _communityService.RemoveLocalGroupCacheAsync(_groupId);
+            await _groupCache.RemoveGroupAsync(_groupId);
+            await DisplayAlert("Group deleted", "The group is no longer available.", "OK");
+            await Shell.Current.GoToAsync("../..", true);
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Unable to delete group", ex.Message, "OK");
+            DeleteGroupFromSettingsButton.IsEnabled = true;
+        }
     }
 
     protected override void OnAppearing()

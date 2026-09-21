@@ -78,6 +78,35 @@ public sealed class ChurchGroupCacheService
         await _database.InsertOrReplaceAsync(snapshot);
     }
 
+    public async Task RemoveGroupAsync(
+        string groupId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            return;
+
+        await InitializeAsync(cancellationToken);
+        var normalizedGroupId = groupId.Trim();
+        var snapshots = await _database
+            .Table<CachedChurchGroupSnapshot>()
+            .ToListAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var groups = JsonSerializer.Deserialize<List<ChurchGroup>>(snapshot.GroupsJson)
+                ?? new List<ChurchGroup>();
+            var removed = groups.RemoveAll(group =>
+                string.Equals(group.GroupId, normalizedGroupId, StringComparison.Ordinal));
+            if (removed == 0)
+                continue;
+
+            snapshot.GroupsJson = JsonSerializer.Serialize(groups);
+            snapshot.UpdatedAtUtc = DateTime.UtcNow;
+            await _database.InsertOrReplaceAsync(snapshot);
+        }
+    }
+
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
         if (_initialized)

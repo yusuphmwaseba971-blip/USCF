@@ -10,13 +10,16 @@ public partial class HomePage : ContentPage
     private static readonly long StartupTimestamp = Stopwatch.GetTimestamp();
     private static readonly TimeSpan CctPostsFreshnessWindow = TimeSpan.FromMinutes(10);
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
+    private readonly CCT_USCF.Services.ChurchAnnouncementService _announcements;
     private readonly SemaphoreSlim _cctPostsLoadGate = new(1, 1);
 
     public HomePage()
     {
         InitializeComponent();
         _appearance = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.AppAppearanceService>();
+        _announcements = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.ChurchAnnouncementService>();
         _appearance.AppearanceChanged += OnAppearanceChanged;
+        _announcements.AnnouncementsChanged += OnAnnouncementsChanged;
     }
 
     protected override void OnAppearing()
@@ -25,7 +28,10 @@ public partial class HomePage : ContentPage
         System.Diagnostics.Debug.WriteLine(
             $"[STARTUP] Home first render requested after {Stopwatch.GetElapsedTime(StartupTimestamp).TotalMilliseconds:F0} ms");
         CommunityService.CctPostCreated -= OnCctPostCreated;
+        _announcements.AnnouncementsChanged -= OnAnnouncementsChanged;
         CommunityService.CctPostCreated += OnCctPostCreated;
+        _announcements.AnnouncementsChanged -= OnAnnouncementsChanged;
+        _announcements.AnnouncementsChanged += OnAnnouncementsChanged;
         _ = LoadDashboardAsync();
         _ = LoadBibleFeedAsync();
         _ = LoadNationalFeedAsync();
@@ -42,6 +48,7 @@ public partial class HomePage : ContentPage
         base.OnDisappearing();
         _appearance.AppearanceChanged -= OnAppearanceChanged;
         CommunityService.CctPostCreated -= OnCctPostCreated;
+        _announcements.AnnouncementsChanged -= OnAnnouncementsChanged;
     }
 
     private async Task LoadDashboardAsync()
@@ -89,21 +96,8 @@ public partial class HomePage : ContentPage
     {
         try
         {
-            var service = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.ChurchAnnouncementService>();
-            var notifications = await service.GetNotificationsAsync();
-            var count = notifications.Count(notification => !notification.IsRead);
-            UnreadBadge.IsVisible = count > 0;
-            UnreadCountLabel.Text = count > 99 ? "99+" : count.ToString();
-            AnnouncementsCountLabel.Text = count.ToString();
-
-            var latest = notifications.OrderByDescending(notification => notification.CreatedAtUtc).FirstOrDefault();
-            if (latest is not null)
-            {
-                LatestAnnouncementTitleLabel.Text = latest.Title;
-                LatestAnnouncementMessageLabel.Text = latest.Message;
-                LatestAnnouncementMetaLabel.Text =
-                    $"{latest.CreatedAtUtc.ToLocalTime():g}  ·  View announcement  ›";
-            }
+            var notifications = await _announcements.GetNotificationsAsync();
+            ApplyAnnouncementSummary(notifications);
         }
         catch (Exception ex)
         {
@@ -111,6 +105,38 @@ public partial class HomePage : ContentPage
             LatestAnnouncementTitleLabel.Text = "Announcements temporarily unavailable";
             LatestAnnouncementMessageLabel.Text = "Please try again later.";
             System.Diagnostics.Debug.WriteLine($"[HOME_ANNOUNCEMENTS] {ex}");
+        }
+    }
+
+    private async void OnAnnouncementsChanged(object? sender, EventArgs e)
+    {
+        await MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            try
+            {
+                ApplyAnnouncementSummary(await _announcements.GetCachedNotificationsAsync());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HOME_ANNOUNCEMENTS_CACHE] {ex}");
+            }
+        });
+    }
+
+    private void ApplyAnnouncementSummary(IReadOnlyList<ChurchNotification> notifications)
+    {
+        var count = notifications.Count(notification => !notification.IsRead);
+        UnreadBadge.IsVisible = count > 0;
+        UnreadCountLabel.Text = count > 99 ? "99+" : count.ToString();
+        AnnouncementsCountLabel.Text = count.ToString();
+
+        var latest = notifications.OrderByDescending(notification => notification.CreatedAtUtc).FirstOrDefault();
+        if (latest is not null)
+        {
+            LatestAnnouncementTitleLabel.Text = latest.Title;
+            LatestAnnouncementMessageLabel.Text = latest.Message;
+            LatestAnnouncementMetaLabel.Text =
+                $"{latest.CreatedAtUtc.ToLocalTime():g}  ·  View announcement  ›";
         }
     }
 

@@ -40,6 +40,7 @@ public partial class GroupChatPage : ContentPage
     private readonly ChurchGroupService _groupService;
     private readonly AppwriteService _appwriteService;
     private readonly AppAppearanceService _appearance;
+    private readonly ChurchGroupCacheService _groupCache;
 
     // ============================================================
     // MESSAGE STATE
@@ -60,6 +61,9 @@ public partial class GroupChatPage : ContentPage
     private bool _isComposerBusy;
     private bool _hasLoadedMessages;
     private int _openGeneration;
+    private bool _isAppearing;
+    private bool _openStarted;
+    private string _openedGroupId = string.Empty;
 
 #if ANDROID
     private Android.Media.MediaRecorder? _audioRecorder;
@@ -98,6 +102,8 @@ public partial class GroupChatPage : ContentPage
                     : value.Trim();
 
             UpdateGroupTitle();
+            if (_isAppearing)
+                _ = EnsureGroupOpenedAsync();
         }
     }
 
@@ -147,6 +153,7 @@ public partial class GroupChatPage : ContentPage
         }
 
         _selectedMessageIds.Clear();
+        MessageSelectionMenuButton.IsVisible = false;
         RenderMessages();
     }
 
@@ -267,6 +274,9 @@ public partial class GroupChatPage : ContentPage
         _appwriteService =
             MauiProgram.Services
                 .GetRequiredService<AppwriteService>();
+        _groupCache =
+            MauiProgram.Services
+                .GetRequiredService<ChurchGroupCacheService>();
 
         var membersTap =
             new TapGestureRecognizer();
@@ -282,6 +292,11 @@ public partial class GroupChatPage : ContentPage
     }
 
     private async void OnDeleteGroupClicked(object? sender, EventArgs e)
+    {
+        await DeleteGroupAsync();
+    }
+
+    private async Task DeleteGroupAsync()
     {
         if (!CanDelete || string.IsNullOrWhiteSpace(_groupId))
             return;
@@ -299,6 +314,7 @@ public partial class GroupChatPage : ContentPage
         {
             await _groupService.DeleteGroupAsync(_groupId);
             await _communityService.RemoveLocalGroupCacheAsync(GetBackendCommunityId());
+            await _groupCache.RemoveGroupAsync(_groupId);
             await DisplayAlert("Group deleted", "The group is no longer available.", "OK");
             await Shell.Current.GoToAsync("..", true);
         }
@@ -308,6 +324,76 @@ public partial class GroupChatPage : ContentPage
             DeleteGroupButton.IsEnabled = true;
             await DisplayAlert("Unable to delete group", ex.Message, "OK");
         }
+    }
+
+    private async void OnGroupMenuClicked(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_groupId))
+            return;
+
+        var choice = await DisplayActionSheet(
+            GroupName,
+            "Cancel",
+            null,
+            "Settings",
+            "Delete Group",
+            "Group Info",
+            "Members",
+            "Search (coming soon)",
+            "Notifications (coming soon)",
+            "Media / Files / Links (coming soon)",
+            "Contact Team (coming soon)",
+            "Call Team (coming soon)");
+
+        switch (choice)
+        {
+            case "Settings":
+                await Shell.Current.GoToAsync(
+                    $"{nameof(SettingsPage)}?groupId={Uri.EscapeDataString(_groupId)}" +
+                    $"&groupName={Uri.EscapeDataString(GroupName)}&canDelete={CanDelete}");
+                break;
+            case "Delete Group":
+                await OnDeleteGroupFromMenuAsync();
+                break;
+            case "Group Info":
+                await DisplayAlert(
+                    "Group Info",
+                    $"{GroupName}\nGroup ID: {_groupId}\n{GroupStatusLabel.Text}",
+                    "Close");
+                break;
+            case "Members":
+                await ShowMembersAsync();
+                break;
+            case "Notifications (coming soon)":
+                await DisplayAlert(
+                    "Notifications",
+                    "Group notification controls are not available yet.",
+                    "OK");
+                break;
+            case "Search (coming soon)":
+            case "Media / Files / Links (coming soon)":
+            case "Contact Team (coming soon)":
+            case "Call Team (coming soon)":
+                await DisplayAlert(
+                    "Not available yet",
+                    "This group action is not available in the current app build.",
+                    "OK");
+                break;
+        }
+    }
+
+    private async Task OnDeleteGroupFromMenuAsync()
+    {
+        if (!CanDelete)
+        {
+            await DisplayAlert(
+                "Delete Group",
+                "Only this group's authorized creator or administrator can delete it.",
+                "OK");
+            return;
+        }
+
+        await DeleteGroupAsync();
     }
 
     // ============================================================
@@ -331,22 +417,47 @@ public partial class GroupChatPage : ContentPage
     // PAGE APPEARING
     // ============================================================
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
+        _isAppearing = true;
+        _ = EnsureGroupOpenedAsync();
+    }
 
+    private async Task EnsureGroupOpenedAsync()
+    {
+        var groupId = _groupId.Trim();
+        if (string.IsNullOrWhiteSpace(groupId) ||
+            (_openStarted && string.Equals(
+                _openedGroupId,
+                groupId,
+                StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        if (_openStarted &&
+            !string.Equals(_openedGroupId, groupId, StringComparison.Ordinal))
+        {
+            ++_openGeneration;
+            _realtimeEnabled = false;
+            DisposeRealtimeListener();
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                _messages.Clear();
+                _selectedMessageIds.Clear();
+                MessageSelectionMenuButton.IsVisible = false;
+                RenderMessages();
+            });
+        }
+
+        _openedGroupId = groupId;
+        _openStarted = true;
         try
         {
             var generation = ++_openGeneration;
+            _hasLoadedMessages = false;
             _realtimeEnabled = true;
-
-            if (string.IsNullOrWhiteSpace(_groupId))
-            {
-                GroupStatusLabel.Text =
-                    "The selected group is unavailable.";
-
-                return;
-            }
 
             var openStartedAt = Stopwatch.GetTimestamp();
             var communityId = GetBackendCommunityId();
@@ -384,6 +495,10 @@ public partial class GroupChatPage : ContentPage
 
         ++_openGeneration;
         _realtimeEnabled = false;
+        _isAppearing = false;
+        _openStarted = false;
+        _openedGroupId = string.Empty;
+        _hasLoadedMessages = false;
 
         DisposeRealtimeListener();
     }
@@ -414,7 +529,9 @@ public partial class GroupChatPage : ContentPage
 
             var loadedMessages = cachedMessages
                 .Where(message => string.Equals(
-                    message.CommunityId,
+                    string.IsNullOrWhiteSpace(message.GroupId)
+                        ? message.CommunityId
+                        : message.GroupId,
                     communityId,
                     StringComparison.Ordinal))
                 .Select(ToUiMessage)
@@ -901,6 +1018,17 @@ public partial class GroupChatPage : ContentPage
     {
         try
         {
+            if (!string.Equals(
+                    message.GroupId?.Trim(),
+                    GetBackendCommunityId(),
+                    StringComparison.Ordinal))
+            {
+                Debug.WriteLine(
+                    $"[GROUP_CHAT] Ignoring realtime message for another group. " +
+                    $"messageGroup={message.GroupId} currentGroup={GetBackendCommunityId()}");
+                return;
+            }
+
             var currentUser =
                 MauiProgram.CurrentUser
                 ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
@@ -955,7 +1083,8 @@ public partial class GroupChatPage : ContentPage
                         return;
                     }
 
-                    AddOrReplaceMessage(message);
+                    if (!message.IsDeleted)
+                        AddOrReplaceMessage(message);
                     RenderMessages(!_isReadingOlderMessages);
                     if (_isReadingOlderMessages &&
                         !string.Equals(
@@ -969,8 +1098,16 @@ public partial class GroupChatPage : ContentPage
                     }
                 });
 
-            await CacheUiMessageAsync(
-                message);
+            if (message.IsDeleted)
+            {
+                await _communityService.MarkCommunityMessageLocallyDeletedAsync(
+                    message.GroupId,
+                    message.MessageId);
+            }
+            else
+            {
+                await CacheUiMessageAsync(message);
+            }
         }
         catch (Exception ex)
         {
@@ -1117,9 +1254,11 @@ public partial class GroupChatPage : ContentPage
                     .Where(
                         message =>
                             string.Equals(
-                                message.CommunityId,
-                                communityId,
-                                StringComparison.Ordinal))
+                        string.IsNullOrWhiteSpace(message.GroupId)
+                            ? message.CommunityId
+                            : message.GroupId,
+                        communityId,
+                        StringComparison.Ordinal))
                     .Select(
                         ToUiMessage)
                     .OrderBy(
@@ -1168,7 +1307,9 @@ public partial class GroupChatPage : ContentPage
                 message.ClientMessageId,
 
             GroupId =
-                message.CommunityId,
+                string.IsNullOrWhiteSpace(message.GroupId)
+                    ? message.CommunityId
+                    : message.GroupId,
 
             SenderUid =
                 message.SenderUid,
@@ -1726,10 +1867,26 @@ public partial class GroupChatPage : ContentPage
         if (!_selectedMessageIds.Add(message.MessageId))
             _selectedMessageIds.Remove(message.MessageId);
 
+        MessageSelectionMenuButton.IsVisible = _selectedMessageIds.Count > 0;
         GroupStatusLabel.Text = _selectedMessageIds.Count == 0
             ? $"{_messages.Count} messages in this group"
             : $"{_selectedMessageIds.Count} message(s) selected";
         RenderMessages();
+    }
+
+    private async void OnMessageSelectionMenuClicked(object? sender, EventArgs e)
+    {
+        if (_selectedMessageIds.Count == 0)
+            return;
+
+        var choice = await DisplayActionSheet(
+            $"{_selectedMessageIds.Count} message(s) selected",
+            "Cancel",
+            null,
+            "Delete Messages");
+
+        if (choice == "Delete Messages")
+            await DeleteSelectedMessagesAsync();
     }
 
     private static string Shorten(string value) =>
@@ -3543,6 +3700,11 @@ public partial class GroupChatPage : ContentPage
         object? sender,
         EventArgs e)
     {
+        await ShowMembersAsync();
+    }
+
+    private async Task ShowMembersAsync()
+    {
         try
         {
             var members =
@@ -3566,7 +3728,9 @@ public partial class GroupChatPage : ContentPage
                             $"• {member.DisplayName}" +
                             (member.IsCurrentUser
                                 ? " - You"
-                                : $" - {member.LeadershipLevel}")));
+                                : string.Empty) +
+                            $" · Group role: {member.Role}" +
+                            $" · Leadership: {member.LeadershipLevel}"));
 
             await DisplayAlert(
                 $"Group Members ({members.Count})",

@@ -69,12 +69,17 @@
                         MaxLines="1"
                         TextColor="{StaticResource ChatHeaderMuted}" />
                 </VerticalStackLayout>
-                <Label
+                <Button
                     Grid.Column="2"
-                    Text="CHAT"
-                    FontSize="10"
+                    Text="⋮"
+                    FontSize="26"
                     FontAttributes="Bold"
-                    TextColor="{StaticResource ChatHeaderMuted}"
+                    TextColor="White"
+                    BackgroundColor="Transparent"
+                    Padding="0"
+                    WidthRequest="42"
+                    HeightRequest="42"
+                    Clicked="OnGroupMenuClicked"
                     VerticalOptions="Center" />
             </Grid>
         </Border>
@@ -83,7 +88,7 @@
         <Grid
             Grid.Row="1"
             Margin="16,12,16,4"
-            ColumnDefinitions="*,Auto,Auto"
+            ColumnDefinitions="*,Auto,Auto,Auto"
             ColumnSpacing="8"
             VerticalOptions="Center">
 
@@ -112,8 +117,19 @@
                 VerticalOptions="Center" />
 
             <Button
-                x:Name="DeleteGroupButton"
+                x:Name="MessageSelectionMenuButton"
                 Grid.Column="2"
+                Text="⋮"
+                IsVisible="False"
+                Style="{StaticResource ChatActionButton}"
+                BackgroundColor="{StaticResource BrandDeepGreen}"
+                TextColor="White"
+                VerticalOptions="Center"
+                Clicked="OnMessageSelectionMenuClicked" />
+
+            <Button
+                x:Name="DeleteGroupButton"
+                Grid.Column="3"
                 Text="Delete"
                 IsVisible="False"
                 Style="{StaticResource ChatActionButton}"
