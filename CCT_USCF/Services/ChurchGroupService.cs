@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CCT_USCF.Models;
@@ -21,16 +22,29 @@ public sealed class ChurchGroupService
         string scopeType,
         CancellationToken cancellationToken = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var requestCancellationToken = timeout.Token;
+        var startedAt = Stopwatch.GetTimestamp();
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] list_start scope={scopeType}");
+
         using var request = await CreateRequestAsync(
             HttpMethod.Get,
             $"api/community/groups?scopeType={Uri.EscapeDataString(scopeType)}",
-            cancellationToken);
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
+            requestCancellationToken);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] list_request_ready scope={scopeType} elapsed_ms={ElapsedMilliseconds(startedAt):F0}");
+        using var response = await _httpClient.SendAsync(request, requestCancellationToken);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] list_response scope={scopeType} status={(int)response.StatusCode} elapsed_ms={ElapsedMilliseconds(startedAt):F0}");
         await EnsureSuccessAsync(response);
 
         var payload = await response.Content.ReadFromJsonAsync(
             ChurchGroupJsonContext.Default.GroupListResponse,
-            cancellationToken);
+            requestCancellationToken);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] list_parsed scope={scopeType} count={payload?.Groups.Count ?? 0} elapsed_ms={ElapsedMilliseconds(startedAt):F0}");
         return payload?.Groups ?? new List<ChurchGroup>();
     }
 
@@ -92,7 +106,14 @@ public sealed class ChurchGroupService
         string relativePath,
         CancellationToken cancellationToken)
     {
-        var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+        var startedAt = Stopwatch.GetTimestamp();
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] auth_start method={method} path={relativePath}");
+        var token = await _authService
+            .GetCurrentFirebaseIdTokenAsync()
+            .WaitAsync(cancellationToken);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHURCH GROUP] auth_ready method={method} path={relativePath} elapsed_ms={ElapsedMilliseconds(startedAt):F0}");
         System.Diagnostics.Debug.WriteLine(
             $"[CHURCH GROUP] {method} {new Uri(new Uri(ApiConfig.BaseUrl.TrimEnd('/') + "/"), relativePath)}");
         var request = new HttpRequestMessage(
@@ -102,6 +123,9 @@ public sealed class ChurchGroupService
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return request;
     }
+
+    private static double ElapsedMilliseconds(long startedAt) =>
+        Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {
@@ -145,6 +169,7 @@ public sealed class ChurchGroupService
 [JsonSerializable(typeof(ChurchGroupService.GroupListResponse))]
 [JsonSerializable(typeof(ChurchGroupService.CreateGroupRequest))]
 [JsonSerializable(typeof(ChurchGroup))]
+[JsonSerializable(typeof(List<ChurchGroup>))]
 internal partial class ChurchGroupJsonContext : JsonSerializerContext
 {
 }

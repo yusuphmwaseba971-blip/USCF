@@ -56,7 +56,9 @@ public sealed class ChurchGroupCacheService
         if (snapshot == null)
             return null;
 
-        return JsonSerializer.Deserialize<List<ChurchGroup>>(snapshot.GroupsJson)
+        return JsonSerializer.Deserialize(
+                snapshot.GroupsJson,
+                ChurchGroupJsonContext.Default.ListChurchGroup)
             ?? new List<ChurchGroup>();
     }
 
@@ -71,7 +73,9 @@ public sealed class ChurchGroupCacheService
         var snapshot = new CachedChurchGroupSnapshot
         {
             CacheKey = cacheKey,
-            GroupsJson = JsonSerializer.Serialize(groups),
+            GroupsJson = JsonSerializer.Serialize(
+                groups.ToList(),
+                ChurchGroupJsonContext.Default.ListChurchGroup),
             UpdatedAtUtc = DateTime.UtcNow
         };
 
@@ -94,14 +98,18 @@ public sealed class ChurchGroupCacheService
         foreach (var snapshot in snapshots)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var groups = JsonSerializer.Deserialize<List<ChurchGroup>>(snapshot.GroupsJson)
+            var groups = JsonSerializer.Deserialize(
+                    snapshot.GroupsJson,
+                    ChurchGroupJsonContext.Default.ListChurchGroup)
                 ?? new List<ChurchGroup>();
             var removed = groups.RemoveAll(group =>
                 string.Equals(group.GroupId, normalizedGroupId, StringComparison.Ordinal));
             if (removed == 0)
                 continue;
 
-            snapshot.GroupsJson = JsonSerializer.Serialize(groups);
+            snapshot.GroupsJson = JsonSerializer.Serialize(
+                groups,
+                ChurchGroupJsonContext.Default.ListChurchGroup);
             snapshot.UpdatedAtUtc = DateTime.UtcNow;
             await _database.InsertOrReplaceAsync(snapshot);
         }

@@ -122,7 +122,7 @@ public partial class ChurchGroupSelectionPage : ContentPage
         {
             System.Diagnostics.Debug.WriteLine($"[CHURCH GROUP] Loading {level} groups failed: {ex}");
             if (!GroupsLayout.Children.Any())
-                StatusLabel.Text = "Unable to connect to the Church Group right now. Please check your internet connection and try again.";
+                StatusLabel.Text = $"Unable to load {level.ToLowerInvariant()} groups: {ex.Message}";
             else
                 StatusLabel.Text = $"{level} groups • cached (sync failed)";
         }
