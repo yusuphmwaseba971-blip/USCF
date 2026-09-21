@@ -18,6 +18,10 @@ public partial class App : Application
         RequestedThemeChanged += OnRequestedThemeChanged;
         Debug.WriteLine($"[STARTUP] App created at {DateTimeOffset.UtcNow:O}");
 
+        _ = MauiProgram.Services
+            .GetRequiredService<StartupPreloadCoordinator>()
+            .PreloadAsync();
+
         // NOTE: Region seeding is temporary and should be run manually.
         // The automatic seeder was disabled to avoid runtime write attempts
         // (Firestore rules disallow writes to the regions collection in production).
@@ -53,10 +57,6 @@ public partial class App : Application
         IActivationState? activationState)
     {
         Debug.WriteLine($"[STARTUP] First page requested at {DateTimeOffset.UtcNow:O}");
-        var window = new Window(new AppShell());
-        _ = MauiProgram.Services
-            .GetRequiredService<StartupPreloadCoordinator>()
-            .PreloadAsync();
-        return window;
+        return new Window(new AppShell());
     }
 }

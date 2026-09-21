@@ -29,8 +29,17 @@ public sealed class BibleService
         new(), new(StringComparer.OrdinalIgnoreCase), new());
     private bool _initialized;
     private Task? _preparationTask;
+    public bool IsPrepared => _translations.Count >= 2 && _preparationTask is not null && _preparationTask.IsCompletedSuccessfully;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private string StatePath => Path.Combine(FileSystem.AppDataDirectory, "bible-state.json");
+
+    private static void PerfLog(string message)
+    {
+        Debug.WriteLine(message);
+#if ANDROID
+        Android.Util.Log.Debug("BiblePerf", message);
+#endif
+    }
 
     public async Task InitializeAsync()
     {
@@ -49,22 +58,39 @@ public sealed class BibleService
     {
         var timer = Stopwatch.StartNew();
         await PrepareAsync();
-        Debug.WriteLine($"[BIBLE] All local translations prepared in {timer.ElapsedMilliseconds} ms");
+        PerfLog($"[BIBLE] All local translations prepared in {timer.ElapsedMilliseconds} ms");
     }
 
-    public Task PrepareAsync()
+    public async Task PrepareAsync()
     {
+        if (IsPrepared)
+            return;
+
+        Task task;
         lock (_preparationLock)
-            return _preparationTask ??= PrepareCoreAsync();
+        {
+            task = _preparationTask ??= PrepareCoreAsync();
+        }
+
+        await task.ConfigureAwait(false);
+    }
+
+    public async Task EnsureReadyAsync()
+    {
+        if (IsPrepared)
+            return;
+
+        await PrepareAsync().ConfigureAwait(false);
     }
 
     private async Task PrepareCoreAsync()
     {
         var timer = Stopwatch.StartNew();
-        await InitializeAsync();
-        await EnsureTranslationLoadedAsync(KjvId);
-        await EnsureTranslationLoadedAsync(NenoId);
-        Debug.WriteLine($"[BIBLE] Translation preparation completed in {timer.ElapsedMilliseconds} ms");
+        await InitializeAsync().ConfigureAwait(false);
+        await Task.WhenAll(
+            EnsureTranslationLoadedAsync(KjvId),
+            EnsureTranslationLoadedAsync(NenoId)).ConfigureAwait(false);
+        PerfLog($"[BIBLE] Translation preparation completed in {timer.ElapsedMilliseconds} ms");
     }
 
     public static async Task<IReadOnlyList<BibleVerse>> GetBundledDefaultVersesAsync()
@@ -112,8 +138,8 @@ public sealed class BibleService
                     cachedChapterCount++;
                 }
             }
-            Debug.WriteLine($"[BIBLE] Prepared {cachedChapterCount} chapter verse caches for {language} in {cacheTimer.ElapsedMilliseconds} ms");
-            Debug.WriteLine($"[BIBLE] {language} resource discovery/file read/JSON parse/model conversion completed in {timer.ElapsedMilliseconds} ms");
+            PerfLog($"[BIBLE] Prepared {cachedChapterCount} chapter verse caches for {language} in {cacheTimer.ElapsedMilliseconds} ms");
+            PerfLog($"[BIBLE] {language} resource discovery/file read/JSON parse/model conversion completed in {timer.ElapsedMilliseconds} ms");
             return translation;
         }
         finally { _gate.Release(); }
@@ -172,34 +198,38 @@ public sealed class BibleService
         "Yakobo","1 Petro","2 Petro","1 Yohana","2 Yohana","3 Yohana","Yuda","Ufunuo"
     };
 
-    public async Task<IReadOnlyList<string>> GetLanguagesAsync() { await InitializeAsync(); return new[] { KjvId, NenoId }; }
+    public async Task<IReadOnlyList<string>> GetLanguagesAsync() { await InitializeAsync().ConfigureAwait(false); return new[] { KjvId, NenoId }; }
     public async Task<IReadOnlyList<BibleBook>> GetBooksAsync(string language = KjvId)
     {
         var timer = Stopwatch.StartNew();
-        await InitializeAsync();
-        var books = (await EnsureTranslationLoadedAsync(language)).Books;
+        await EnsureReadyAsync().ConfigureAwait(false);
+        var books = (await EnsureTranslationLoadedAsync(language).ConfigureAwait(false)).Books;
         Debug.WriteLine($"[BIBLE] Book metadata/cache lookup for {language} completed in {timer.ElapsedMilliseconds} ms");
         return books;
     }
     public async Task<IReadOnlyList<int>> GetChaptersAsync(string book, string language = KjvId)
     {
         var timer = Stopwatch.StartNew();
-        var found = (await GetBooksAsync(language)).FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
+        await EnsureReadyAsync().ConfigureAwait(false);
+        var found = (await EnsureTranslationLoadedAsync(language).ConfigureAwait(false)).Books.FirstOrDefault(
+            b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
         var chapters = found?.Chapters.Select((_, i) => i + 1).ToArray() ?? Array.Empty<int>();
-        Debug.WriteLine($"[BIBLE] Chapter index lookup for {language}|{book} completed in {timer.ElapsedMilliseconds} ms");
+        PerfLog($"[BIBLE] Chapter index lookup for {language}|{book} completed in {timer.ElapsedMilliseconds} ms");
         return chapters;
     }
     public async Task<IReadOnlyList<BibleVerse>> GetVersesAsync(string book, int chapter, string language = KjvId)
     {
         var timer = Stopwatch.StartNew();
+        await EnsureReadyAsync().ConfigureAwait(false);
         var cacheKey = $"{language}|{book}|{chapter}";
         if (_verseCache.TryGetValue(cacheKey, out var cached))
         {
-            Debug.WriteLine($"[BIBLE] Verse cache lookup hit for {cacheKey} in {timer.ElapsedMilliseconds} ms");
+            PerfLog($"[BIBLE] Verse cache lookup hit for {cacheKey} in {timer.ElapsedMilliseconds} ms");
             return cached;
         }
 
-        var found = (await GetBooksAsync(language)).FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
+        var translation = await EnsureTranslationLoadedAsync(language).ConfigureAwait(false);
+        var found = translation.Books.FirstOrDefault(b => b.Name.Equals(book, StringComparison.OrdinalIgnoreCase));
         if (found is null || chapter < 1 || chapter > found.Chapters.Count) return Array.Empty<BibleVerse>();
         var verses = found.Chapters[chapter - 1].Select((text, i) => new BibleVerse(i + 1, text)).ToArray();
         _verseCache[cacheKey] = verses;

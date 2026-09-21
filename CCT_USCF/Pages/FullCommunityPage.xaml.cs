@@ -4,12 +4,20 @@ using Microsoft.Maui.Controls.Shapes;
 
 namespace CCT_USCF.Pages;
 
+[QueryProperty(nameof(PostId), "postId")]
 public partial class FullCommunityPage : ContentPage
 {
     private readonly CommunityService _community;
     private readonly MediaViewerService _mediaViewer;
     private FileResult? _attachment;
+    private string _postId = string.Empty;
     private string? _attachmentType;
+
+    public string PostId
+    {
+        get => _postId;
+        set => _postId = value?.Trim() ?? string.Empty;
+    }
     private readonly List<NationalCommunityPost> _posts = [];
     private readonly HashSet<string> _postIds = new(StringComparer.Ordinal);
     private int _nextOffset;
@@ -29,6 +37,25 @@ public partial class FullCommunityPage : ContentPage
         base.OnAppearing();
         if (!_initialLoadComplete)
             await LoadFeedAsync();
+
+        if (!string.IsNullOrWhiteSpace(PostId) && _posts.Count > 0)
+        {
+            var postIndex = _posts.FindIndex(post => string.Equals(post.Id, PostId, StringComparison.Ordinal));
+            if (postIndex >= 0)
+            {
+                var feed = FeedStack;
+                if (feed.Children.Count > postIndex)
+                {
+                    var target = feed.Children[postIndex];
+                    if (target is VisualElement element)
+                    {
+                        var scroll = FeedScroll as ScrollView;
+                        if (scroll is not null)
+                            await scroll.ScrollToAsync(element, ScrollToPosition.Start, false);
+                    }
+                }
+            }
+        }
     }
 
     private async Task LoadFeedAsync()
@@ -183,3 +210,4 @@ public partial class FullCommunityPage : ContentPage
         finally { PostButton.IsEnabled = true; }
     }
 }
+

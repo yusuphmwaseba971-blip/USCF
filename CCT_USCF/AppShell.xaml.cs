@@ -125,6 +125,7 @@ public partial class AppShell : Shell
         base.OnAppearing();
 
         _ = UpdateAuthUIAsync();
+        _ = NotificationService.ProcessQueuedNotificationAsync();
     }
 
     // =========================================================
@@ -416,3 +417,4 @@ public partial class AppShell : Shell
         }
     }
 }
+

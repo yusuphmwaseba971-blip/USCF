@@ -40,6 +40,10 @@ public class AuthService
 
         public string? Error { get; set; }
 
+        public string? ErrorCode { get; set; }
+
+        public string? FailureState { get; set; }
+
         public int StatusCode { get; set; }
 
         public bool RequiresProfileSetup { get; set; }
@@ -232,13 +236,43 @@ public class AuthService
         try
         {
             await FirebaseInit.Initialized;
-            if (!await Platforms.Android.GoogleSignInBridge.SignInAsync())
+
+            var sessionResult = await Platforms.Android.GoogleSignInBridge.SignInAsync();
+            if (!sessionResult.Success)
             {
+                var message = sessionResult.ErrorMessage ?? "Google Sign-In could not be completed.";
+                var code = GetGoogleFailureCode(sessionResult.FailureCode, sessionResult.Exception);
+                System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Google sign-in failed with state={sessionResult.FailureCode}, code={code}, message={message}");
+
                 return new AuthResult
                 {
                     Success = false,
-                    Error = "Google Sign-In was cancelled.",
-                    StatusCode = 499
+                    Error = message,
+                    ErrorCode = code,
+                    FailureState = sessionResult.FailureCode.ToString(),
+                    StatusCode = sessionResult.FailureCode switch
+                    {
+                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.Cancelled => 499,
+                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.AccountSelectionFailed => 400,
+                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.DeveloperConfigurationError => 500,
+                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.TokenCreationFailed => 401,
+                        _ => 401
+                    }
+                };
+            }
+
+            var firebaseUser = _auth.CurrentUser;
+            if (firebaseUser == null)
+            {
+                var exception = new InvalidOperationException("Google sign-in succeeded but Firebase did not return a user.");
+                System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Firebase user missing after Google success: {exception}");
+                return new AuthResult
+                {
+                    Success = false,
+                    Error = "Google authentication succeeded, but the Firebase session could not be confirmed. Please try again.",
+                    ErrorCode = "firebase-user-missing",
+                    FailureState = "FirebaseAuthenticationFailed",
+                    StatusCode = 401
                 };
             }
 
@@ -246,37 +280,45 @@ public class AuthService
             var currentUser = await LoadCurrentUserAsync();
             if (currentUser == null)
             {
+                var uid = firebaseUser.Uid;
+                System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Firebase UID {uid} authenticated, but no CCT profile exists. Starting Google onboarding.");
+
                 return new AuthResult
                 {
                     Success = true,
                     EmailVerified = true,
                     RequiresProfileSetup = true,
-                    Token = _auth.CurrentUser?.Uid,
-                    RefreshToken = _auth.CurrentUser?.Email,
+                    Token = uid,
+                    RefreshToken = firebaseUser.Email,
                     ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
-                    StatusCode = 200
+                    StatusCode = 200,
+                    ErrorCode = "profile-missing"
                 };
             }
 
             MauiProgram.SetCurrentUser(currentUser);
+            System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Existing Google user authenticated and profile loaded for UID {firebaseUser.Uid}.");
             return new AuthResult
             {
                 Success = true,
                 EmailVerified = true,
-                Token = _auth.CurrentUser?.Uid,
-                RefreshToken = _auth.CurrentUser?.Email,
+                Token = firebaseUser.Uid,
+                RefreshToken = firebaseUser.Email,
                 ExpiresAtUtc = DateTime.UtcNow.AddDays(30),
-                StatusCode = 200
+                StatusCode = 200,
+                ErrorCode = "success"
             };
         }
-
         catch (Exception ex)
         {
+            var message = GetFirebaseErrorMessage(ex);
             System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Sign-in failed: {ex}");
             return new AuthResult
             {
                 Success = false,
-                Error = GetFirebaseErrorMessage(ex),
+                Error = string.IsNullOrWhiteSpace(message) ? "Google Sign-In could not be completed. Please try again." : message,
+                ErrorCode = GetErrorCodeFromException(ex),
+                FailureState = "FirebaseAuthenticationFailed",
                 StatusCode = 401
             };
         }
@@ -286,6 +328,8 @@ public class AuthService
         {
             Success = false,
             Error = "Google Sign-In is available on Android only.",
+            ErrorCode = "unsupported-platform",
+            FailureState = "GoogleAccountSelectionFailed",
             StatusCode = 501
         };
 #endif
@@ -1522,6 +1566,80 @@ public async Task<bool> PostHolyWordAsync(
     }
 
     // =========================================================
+    // GOOGLE AUTH ERROR CLASSIFICATION
+    // =========================================================
+
+    private static string GetGoogleFailureCode(
+        CCT_USCF.Platforms.Android.GoogleSignInFailureCode failureCode,
+        Exception? exception)
+    {
+        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.Cancelled)
+            return "google-signin-cancelled";
+
+        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.AccountSelectionFailed)
+            return "google-account-selection-failed";
+
+        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.DeveloperConfigurationError)
+            return "google-config-error";
+
+        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.TokenCreationFailed)
+            return "google-token-creation-failed";
+
+        if (exception is not null)
+        {
+            var combined = $"{exception.Message} {exception.InnerException?.Message}".Trim();
+            if (combined.Contains("account-exists-with-different-credential", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("EMAIL_EXISTS", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("account exists with different credential", StringComparison.OrdinalIgnoreCase))
+            {
+                return "account-exists-with-different-credential";
+            }
+
+            if (combined.Contains("invalid-credential", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("invalid credential", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("wrong-password", StringComparison.OrdinalIgnoreCase))
+            {
+                return "invalid-credential";
+            }
+
+            if (combined.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+                combined.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                return "firebase-network-error";
+            }
+        }
+
+        return "firebase-authentication-failed";
+    }
+
+    private static string GetErrorCodeFromException(Exception ex)
+    {
+        var message = $"{ex.Message} {ex.InnerException?.Message}".Trim();
+
+        if (message.Contains("account-exists-with-different-credential", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("already exists with different credential", StringComparison.OrdinalIgnoreCase))
+            return "account-exists-with-different-credential";
+
+        if (message.Contains("invalid-credential", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("invalid credential", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("wrong-password", StringComparison.OrdinalIgnoreCase))
+            return "invalid-credential";
+
+        if (message.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+            return "firebase-network-error";
+
+        if (message.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
+            return "firebase-permission-denied";
+
+        if (message.Contains("not found", StringComparison.OrdinalIgnoreCase) &&
+            message.Contains("profile", StringComparison.OrdinalIgnoreCase))
+            return "profile-missing";
+
+        return "firebase-authentication-failed";
+    }
+
+    // =========================================================
     // FIREBASE ERROR HANDLING
     // =========================================================
 
@@ -1591,9 +1709,11 @@ public async Task<bool> PostHolyWordAsync(
             combined.Contains("wrong-password", StringComparison.OrdinalIgnoreCase) ||
             combined.Contains("password is invalid", StringComparison.OrdinalIgnoreCase) ||
             combined.Contains("email or password", StringComparison.OrdinalIgnoreCase) ||
-            combined.Contains("invalid password", StringComparison.OrdinalIgnoreCase))
+            combined.Contains("invalid password", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("account-exists-with-different-credential", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("account exists with different credential", StringComparison.OrdinalIgnoreCase))
         {
-            return "Incorrect username/email or password.";
+            return "This Google account is already connected to a different sign-in method. Please use your original CCT-USCF account or contact support.";
         }
 
         if (combined.Contains("permission denied", StringComparison.OrdinalIgnoreCase) ||

@@ -1,12 +1,19 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Android.Content;
+using CCT_USCF.Pages;
+using CCT_USCF.Services;
 using Plugin.Firebase.CloudMessaging;
 using Plugin.Firebase.CloudMessaging.EventArgs;
 
-namespace CCT_USCF.Services;
+namespace CCT_USCF;
 
 public sealed class NotificationService
 {
+    private static readonly object PendingRouteLock = new();
+    private static string? _queuedNotificationRoute;
+    private static readonly ConcurrentDictionary<string, byte> RouteEvents = new(StringComparer.Ordinal);
+
     private readonly ChurchAnnouncementService _announcements;
     private readonly AuthService _auth;
     private readonly ConcurrentDictionary<string, byte> _handledEvents = new(StringComparer.Ordinal);
@@ -56,6 +63,72 @@ public sealed class NotificationService
         }
     }
 
+    public static void ProcessIntent(Intent? intent)
+    {
+        if (intent is null)
+            return;
+
+        var data = new Dictionary<string, string>(StringComparer.Ordinal);
+        var extras = intent.Extras;
+        if (extras is not null)
+        {
+            foreach (var key in extras.KeySet())
+            {
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+
+                var value = extras.GetString(key);
+                if (string.IsNullOrWhiteSpace(value))
+                    value = extras.Get(key)?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(value))
+                    data[key] = value;
+            }
+        }
+
+        RouteData(data);
+    }
+
+    public static Task ProcessQueuedNotificationAsync()
+    {
+        string? route;
+        lock (PendingRouteLock)
+        {
+            route = _queuedNotificationRoute;
+            _queuedNotificationRoute = null;
+        }
+
+        if (string.IsNullOrWhiteSpace(route))
+            return Task.CompletedTask;
+
+        return MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            if (Shell.Current is null)
+            {
+                lock (PendingRouteLock)
+                {
+                    if (string.IsNullOrWhiteSpace(_queuedNotificationRoute))
+                        _queuedNotificationRoute = route;
+                }
+
+                return;
+            }
+
+            try
+            {
+                await Shell.Current.GoToAsync(route);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[FCM] Pending route failed: {route} :: {ex.Message}");
+                lock (PendingRouteLock)
+                {
+                    _queuedNotificationRoute = route;
+                }
+            }
+        });
+    }
+
     private void OnTokenChanged(object? sender, FCMTokenChangedEventArgs e)
     {
         Debug.WriteLine("[FCM] Registration token refreshed");
@@ -67,7 +140,7 @@ public sealed class NotificationService
         var notification = e.Notification;
         Debug.WriteLine(
             $"[FCM] Notification received type={Read(notification, "notification_type", "type")} " +
-            $"contentId={Read(notification, "content_id", "messageId", "announcementId")}");
+            $"contentId={Read(notification, "content_id", "messageId", "announcementId", "postId")}");
     }
 
     private void OnNotificationTapped(object? sender, FCMNotificationTappedEventArgs e)
@@ -75,55 +148,90 @@ public sealed class NotificationService
         var notification = e.Notification;
         Debug.WriteLine(
             $"[FCM] Notification tapped type={Read(notification, "notification_type", "type")} " +
-            $"contentId={Read(notification, "content_id", "messageId", "announcementId")}");
-        _ = RouteAsync(notification);
+            $"contentId={Read(notification, "content_id", "messageId", "announcementId", "postId")}");
+        RouteData(notification.Data);
     }
 
     private static void OnMessagingError(object? sender, FCMErrorEventArgs e) =>
         Debug.WriteLine($"[FCM] Messaging error: {e.Message}");
 
-    private async Task RouteAsync(FCMNotification notification)
+    private static void RouteData(IDictionary<string, string>? data)
     {
-        var data = notification.Data;
-        var type = Read(notification, "notification_type", "type").ToLowerInvariant();
-        var eventId = Read(notification, "event_id", "content_id", "messageId", "announcementId", "postId");
-        if (!string.IsNullOrWhiteSpace(eventId) && !_handledEvents.TryAdd(eventId, 0))
+        var notificationType = Read(data, "notification_type", "type", "notificationType").Trim();
+        if (string.IsNullOrWhiteSpace(notificationType))
+            return;
+
+        var eventId = Read(data, "event_id", "content_id", "messageId", "announcementId", "postId", "group_id", "groupId");
+        if (!string.IsNullOrWhiteSpace(eventId) && !RouteEvents.TryAdd(eventId, 0))
         {
             Debug.WriteLine($"[FCM] Duplicate event ignored id={eventId}");
             return;
         }
 
-        await MainThread.InvokeOnMainThreadAsync(async () =>
+        var route = BuildRoute(notificationType, data);
+        if (string.IsNullOrWhiteSpace(route))
+            return;
+
+        lock (PendingRouteLock)
         {
-            switch (type)
-            {
-                case "group_message":
-                    var groupId = Read(notification, "group_id", "groupId");
-                    if (string.IsNullOrWhiteSpace(groupId))
-                        return;
-                    await Shell.Current.GoToAsync(
-                        $"{nameof(Pages.GroupChatPage)}?groupId={Uri.EscapeDataString(groupId)}");
-                    break;
+            if (string.IsNullOrWhiteSpace(_queuedNotificationRoute))
+                _queuedNotificationRoute = route;
+            else if (!string.Equals(_queuedNotificationRoute, route, StringComparison.Ordinal))
+                _queuedNotificationRoute = route;
+        }
 
-                case "announcement":
-                    var announcementId = Read(notification, "announcement_id", "announcementId", "content_id");
-                    await Shell.Current.GoToAsync(
-                        $"{nameof(Pages.AnnouncementActivityPage)}?announcementId={Uri.EscapeDataString(announcementId)}");
-                    break;
-
-                case "home_update":
-                    await Shell.Current.GoToAsync("//home");
-                    break;
-            }
-        });
+        _ = ProcessQueuedNotificationAsync();
     }
 
-    private static string Read(FCMNotification notification, params string[] keys)
+    private static string BuildRoute(string notificationType, IDictionary<string, string>? data)
     {
+        var normalized = notificationType.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return string.Empty;
+
+        normalized = normalized.ToLowerInvariant();
+        var announcementId = Read(data, "announcement_id", "announcementId", "content_id");
+        var groupId = Read(data, "group_id", "groupId");
+        var postId = Read(data, "post_id", "postId", "content_id");
+
+        switch (normalized)
+        {
+            case "announcement":
+                if (string.IsNullOrWhiteSpace(announcementId))
+                    return string.Empty;
+                return $"{nameof(Pages.AnnouncementActivityPage)}?announcementId={Uri.EscapeDataString(announcementId)}";
+
+            case "group_message":
+                if (string.IsNullOrWhiteSpace(groupId))
+                    return string.Empty;
+                return $"{nameof(Pages.GroupChatPage)}?groupId={Uri.EscapeDataString(groupId)}";
+
+            case "home_update":
+            case "post":
+            case "official_update":
+                if (string.IsNullOrWhiteSpace(postId))
+                    return string.Empty;
+                return $"{nameof(Pages.FullCommunityPage)}?postId={Uri.EscapeDataString(postId)}";
+
+            default:
+                return string.Empty;
+        }
+    }
+
+    private static string Read(IDictionary<string, string>? data, params string[] keys)
+    {
+        if (data is null)
+            return string.Empty;
+
         foreach (var key in keys)
-            if (notification.Data?.TryGetValue(key, out var value) == true &&
-                !string.IsNullOrWhiteSpace(value))
+        {
+            if (data.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
                 return value;
+        }
+
         return string.Empty;
     }
+
+    private static string Read(FCMNotification notification, params string[] keys) =>
+        Read(notification.Data, keys);
 }

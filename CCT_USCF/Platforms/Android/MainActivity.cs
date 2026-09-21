@@ -1,8 +1,10 @@
 using Android.App;
 using Android.Content.PM;
+using Android.Graphics;
 using Android.OS;
 using Android.Views;
 using Android.Content;
+using AndroidX.Core.App;
 using System.Threading.Tasks;
 using Plugin.Firebase.AppCheck;
 using Plugin.Firebase.Core.Platforms.Android;
@@ -56,7 +58,10 @@ public class MainActivity : MauiAppCompatActivity
 #endif
         CrossFirebase.Initialize(this, () => this);
         CreateNotificationChannel();
-        FirebaseCloudMessagingImplementation.OnNewIntent(Intent);
+
+        var launchIntent = Intent;
+        CCT_USCF.NotificationService.ProcessIntent(launchIntent);
+        FirebaseCloudMessagingImplementation.OnNewIntent(launchIntent);
         System.Diagnostics.Debug.WriteLine($"[STARTUP] Firebase initialization requested at {DateTimeOffset.UtcNow:O}");
         base.OnCreate(savedInstanceState);
         Window?.SetSoftInputMode(SoftInput.AdjustPan);
@@ -71,7 +76,11 @@ public class MainActivity : MauiAppCompatActivity
     {
         base.OnNewIntent(intent);
         if (intent is not null)
-            FirebaseCloudMessagingImplementation.OnNewIntent(intent);
+        {
+            var androidIntent = intent;
+            CCT_USCF.NotificationService.ProcessIntent(androidIntent);
+            FirebaseCloudMessagingImplementation.OnNewIntent(androidIntent);
+        }
     }
 
     private void CreateNotificationChannel()
@@ -81,7 +90,7 @@ public class MainActivity : MauiAppCompatActivity
 
         const string channelId = "cct-uscf.general";
         var manager = (Android.App.NotificationManager?)
-            GetSystemService(NotificationService);
+            GetSystemService(Context.NotificationService);
         manager?.CreateNotificationChannel(new Android.App.NotificationChannel(
             channelId,
             "CCT-USCF notifications",
@@ -90,5 +99,40 @@ public class MainActivity : MauiAppCompatActivity
             Description = "CCT-USCF announcements and group messages"
         });
         FirebaseCloudMessagingImplementation.ChannelId = channelId;
+        FirebaseCloudMessagingImplementation.NotificationBuilderProvider = notification =>
+        {
+            var largeIcon = BitmapFactory.DecodeResource(Resources, Resource.Drawable.notification_icon);
+            var builder = new NotificationCompat.Builder(this, channelId)
+                .SetSmallIcon(Resource.Drawable.notification_icon)
+                .SetLargeIcon(largeIcon)
+                .SetAutoCancel(true)
+                .SetPriority(NotificationCompat.PriorityDefault);
+
+            if (!string.IsNullOrWhiteSpace(notification.Title))
+                builder.SetContentTitle(notification.Title);
+
+            if (!string.IsNullOrWhiteSpace(notification.Body))
+                builder.SetContentText(notification.Body);
+
+            var intent = new Intent(this, typeof(MainActivity));
+            intent.SetAction(Intent.ActionMain);
+            intent.AddCategory(Intent.CategoryLauncher);
+            intent.AddFlags(ActivityFlags.ClearTop | ActivityFlags.SingleTop | ActivityFlags.NewTask);
+
+            if (notification.Data is not null)
+            {
+                foreach (var pair in notification.Data)
+                    intent.PutExtra(pair.Key, pair.Value);
+            }
+
+            var pendingIntent = PendingIntent.GetActivity(
+                this,
+                0,
+                intent,
+                PendingIntentFlags.UpdateCurrent | PendingIntentFlags.Immutable);
+            builder.SetContentIntent(pendingIntent);
+            return builder;
+        };
     }
 }
+

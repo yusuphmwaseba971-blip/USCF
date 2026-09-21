@@ -22,25 +22,39 @@ public partial class BiblePage : ContentPage
     private bool _isUpdatingSelectors;
     private int _navigationVersion;
 
+    private static void PerfLog(string message)
+    {
+        Debug.WriteLine(message);
+#if ANDROID
+        Android.Util.Log.Debug("BiblePerf", message);
+#endif
+    }
+
     public BiblePage()
     {
         InitializeComponent();
         _bible = MauiProgram.Services.GetRequiredService<BibleService>();
         VerseList.ItemsSource = _verses;
         SearchResults.ItemsSource = _results;
-        RootGrid.Opacity = 0;
-        Loaded += (_, _) => _loadTask ??= LoadAsync();
+        RootGrid.Opacity = 1;
+        Loaded += (_, _) =>
+        {
+            if (_loadTask is not null && !_loadTask.IsCompleted)
+                return;
+
+            _loadTask = LoadAsync();
+        };
     }
 
     private async Task LoadAsync()
     {
         var timer = Stopwatch.StartNew();
         _isInitializing = true;
-        Debug.WriteLine("[BIBLE] Navigation load started");
+        PerfLog($"[BIBLE] Navigation load started at {timer.ElapsedMilliseconds} ms");
         try
         {
-            await _bible.PrepareAsync();
-            Debug.WriteLine($"[BIBLE] State ready after {timer.ElapsedMilliseconds} ms");
+            await _bible.EnsureReadyAsync().ConfigureAwait(false);
+            PerfLog($"[BIBLE] Preparation/cache ready after {timer.ElapsedMilliseconds} ms");
             _language = _bible.Language;
             _book = _bible.Book;
             _chapter = _bible.Chapter;
@@ -54,11 +68,13 @@ public partial class BiblePage : ContentPage
             _testament = (await _bible.GetBooksAsync(_language))
                 .FirstOrDefault(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))?.Testament
                 ?? _testament;
+            PerfLog($"[BIBLE] Selected testament ready after {timer.ElapsedMilliseconds} ms");
             TestamentPicker.ItemsSource = new[] { "Old Testament", "New Testament" };
             TestamentPicker.SelectedItem = _testament;
             await RefreshBooksAsync(requestVersion: _navigationVersion);
+            PerfLog($"[BIBLE] Selected book ready after {timer.ElapsedMilliseconds} ms");
             await RefreshChapterAsync(requestVersion: _navigationVersion);
-            Debug.WriteLine($"[BIBLE] First verse render path completed after {timer.ElapsedMilliseconds} ms");
+            PerfLog($"[BIBLE] First verse render path completed after {timer.ElapsedMilliseconds} ms");
         }
         finally
         {
@@ -109,6 +125,7 @@ public partial class BiblePage : ContentPage
     private async Task RefreshVersesAsync()
     {
         var timer = Stopwatch.StartNew();
+        PerfLog($"[BIBLE] Chapter lookup started for {_language}|{_book}|{_chapter}");
         var requestVersion = _navigationVersion;
         var verses = await _bible.GetVersesAsync(_book, _chapter, _language);
         if (requestVersion != _navigationVersion)
@@ -116,23 +133,41 @@ public partial class BiblePage : ContentPage
             Debug.WriteLine($"[BIBLE] Ignored stale verse request for {_book} {_chapter}");
             return;
         }
-        Debug.WriteLine($"[BIBLE] Local verses read for {_book} {_chapter} in {timer.ElapsedMilliseconds} ms ({verses.Count} verses)");
+        PerfLog($"[BIBLE] Chapter lookup completed in {timer.ElapsedMilliseconds} ms ({verses.Count} verses)");
         RenderVerses(verses);
-        await _bible.SetPositionAsync(_language, _book, _chapter, _bible.Verse);
+        PerfLog($"[BIBLE] UI chapter update completed in {timer.ElapsedMilliseconds} ms");
+        _ = PersistPositionAsync();
     }
 
     private void RenderVerses(IReadOnlyList<BibleVerse> verses)
     {
         var timer = Stopwatch.StartNew();
+        var rows = verses
+            .Select(verse => new VerseRow(verse.Number, verse.Text, _fontSize, _bible.GetHighlight(Key(verse.Number))))
+            .ToList();
+
         _verses.Clear();
-        foreach (var verse in verses)
-            _verses.Add(new VerseRow(verse.Number, verse.Text, _fontSize, _bible.GetHighlight(Key(verse.Number))));
+        foreach (var row in rows)
+            _verses.Add(row);
+
         VerseHeading.Text = $"{_book.ToUpperInvariant()} {_chapter}";
         ContinueLabel.Text = $"Continue reading • {_book} {_chapter}";
         StatusLabel.Text = verses.Count == 0 ? "No translation text available" : "Available offline";
         VerseCard.IsVisible = verses.Count > 0;
         VerseLoadingLabel.IsVisible = verses.Count == 0;
-        Debug.WriteLine($"[BIBLE] Visible verse collection replacement completed in {timer.ElapsedMilliseconds} ms ({verses.Count} verses)");
+        PerfLog($"[BIBLE] Visible verse collection replacement completed in {timer.ElapsedMilliseconds} ms ({verses.Count} verses)");
+    }
+
+    private async Task PersistPositionAsync()
+    {
+        try
+        {
+            await _bible.SetPositionAsync(_language, _book, _chapter, _bible.Verse);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[BIBLE] Position persistence failed after render: {ex}");
+        }
     }
 
     private string Key(int verse) => $"{_language}|{_book}|{_chapter}:{verse}";

@@ -1,6 +1,7 @@
 
 using AuthLocation = CCT_USCF.Services.AuthService.LocationItem;
 using CCT_USCF.Services;
+using Plugin.Firebase.Auth;
 
 namespace CCT_USCF.Pages;
 
@@ -86,6 +87,18 @@ public partial class RegisterPage : ContentPage
         AuthenticationCredentialsSection.IsVisible = !_googleOnboarding;
         Title = _googleOnboarding ? "Complete your USCF profile" : "Create USCF Account";
         CreateAccountButton.Text = _googleOnboarding ? "CONTINUE" : "CREATE ACCOUNT";
+
+        if (_googleOnboarding)
+        {
+            var firebaseUser = CrossFirebaseAuth.Current?.CurrentUser;
+            if (!string.IsNullOrWhiteSpace(firebaseUser?.DisplayName))
+                FullNameEntry.Text = firebaseUser.DisplayName.Trim();
+
+            if (!string.IsNullOrWhiteSpace(firebaseUser?.Email))
+            {
+                EmailEntry.Text = firebaseUser.Email.Trim();
+            }
+        }
     }
 
     // =========================================================
@@ -974,8 +987,8 @@ public partial class RegisterPage : ContentPage
 
             CreateAccountButton.Text =
                 loading
-                    ? "CREATING ACCOUNT..."
-                    : "CREATE ACCOUNT";
+                    ? (_googleOnboarding ? "CONTINUING..." : "CREATING ACCOUNT...")
+                    : (_googleOnboarding ? "CONTINUE" : "CREATE ACCOUNT");
         });
     }
 }

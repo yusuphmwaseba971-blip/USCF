@@ -2895,7 +2895,9 @@ async function notifyBranchMessageRecipients(message, senderUid, log) {
         event_id: normalizeString(message.messageId),
         content_id: normalizeString(message.messageId),
         group_id: groupId,
-        message_id: normalizeString(message.messageId)
+        message_id: normalizeString(message.messageId),
+        route: "group_message",
+        target_id: normalizeString(groupId)
       }
     });
     log(`[FCM] Group notification target group=${groupId} sent=${result.successCount} failed=${result.failureCount}`);
@@ -3164,7 +3166,9 @@ async function notifyHomeUpdate(post, log) {
         notification_type: "home_update",
         event_id: normalizeString(post.id),
         content_id: normalizeString(post.id),
-        post_id: normalizeString(post.id)
+        post_id: normalizeString(post.id),
+        route: "post",
+        target_id: normalizeString(post.id)
       }
     });
     log(`[CCT_HOME_FCM] success=${result.successCount} failed=${result.failureCount}`);
@@ -3699,3 +3703,4 @@ export default async ({
     );
   }
 };
+

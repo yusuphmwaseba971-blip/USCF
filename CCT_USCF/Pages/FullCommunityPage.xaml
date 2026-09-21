@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
 x:Class="CCT_USCF.Pages.FullCommunityPage" Title="Full Community" BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
-    <ScrollView Scrolled="OnFeedScrolled">
+    <ScrollView x:Name="FeedScroll" Scrolled="OnFeedScrolled">
         <VerticalStackLayout Padding="16" Spacing="12">
             <Label Text="🌍 Full Community" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
             <Label Text="One national feed for the whole CCT community." TextColor="{StaticResource TextSecondary}" />
@@ -26,3 +26,4 @@ x:Class="CCT_USCF.Pages.FullCommunityPage" Title="Full Community" BackgroundColo
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
+
