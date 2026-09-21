@@ -2978,19 +2978,30 @@ function mapCctPostDocument(document, interaction = {}) {
 
 async function listCctPosts(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
-  const limit = Math.min(Math.max(parseOptionalInt(new URL(req.url).searchParams.get("limit")) || 20, 1), 50);
+  const url = new URL(req.url);
+  const limit = Math.min(Math.max(parseOptionalInt(url.searchParams.get("limit")) || 20, 1), 50);
+  const offset = Math.max(parseOptionalInt(url.searchParams.get("offset")) || 0, 0);
+  const scope = normalizeString(url.searchParams.get("scope")).toLowerCase();
+  const queries = [
+    { method: "equal", attribute: "is_published", values: [true] },
+    { method: "equal", attribute: "status", values: ["published"] },
+    { method: "orderDesc", attribute: "$createdAt" },
+    { method: "limit", values: [limit] }
+  ];
+  if (scope === "national") {
+    queries.splice(2, 0, { method: "equal", attribute: "post_type", values: ["FullCommunity"] });
+  }
+  if (offset > 0) {
+    queries.splice(queries.length - 1, 0, { method: "offset", values: [offset] });
+  }
   const result = await appwriteTableRowRequest(
     CCT_POSTS_COLLECTION_ID,
     "GET",
     "",
     undefined,
-    [
-      { method: "equal", attribute: "is_published", values: [true] },
-      { method: "equal", attribute: "status", values: ["published"] },
-      { method: "orderDesc", attribute: "$createdAt" },
-      { method: "limit", values: [limit] }
-    ]
+    queries
   );
+  log(`[CCT_POSTS_FETCH] scope=${scope || "all"} offset=${offset} requestedLimit=${limit} rows=${result.rows?.length || 0}`);
   return Promise.all((result.rows || []).map(async row => {
     const postId = row.$id || row.id;
     const [likes, userLike, comments] = await Promise.all([

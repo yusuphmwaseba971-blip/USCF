@@ -3973,21 +3973,99 @@ ConversationId =
             public int VerseEnd { get; set; }
         }
 
+        public sealed class NationalPostsPage
+        {
+            public IReadOnlyList<NationalCommunityPost> Posts { get; init; } = [];
+            public bool HasMore { get; init; }
+        }
+
+        public async Task<IReadOnlyList<NationalCommunityPost>> GetCachedNationalPostsAsync()
+        {
+            var database = await GetMessageCacheDatabaseAsync();
+            var cached = await database.Table<CachedCctPost>()
+                .Where(post =>
+                    post.IsPublished &&
+                    post.Status.ToLower() == "published" &&
+                    post.PostType.ToLower() == "fullcommunity")
+                .OrderByDescending(post => post.CreatedAtUtc)
+                .ToListAsync();
+            return cached.Select(ToCctPost).Select(ToNationalCommunityPost).ToList();
+        }
+
+        public async Task<NationalPostsPage> GetNationalPostsPageAsync(
+            int offset,
+            int limit = 5)
+        {
+            limit = Math.Clamp(limit, 1, 50);
+            offset = Math.Max(offset, 0);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/community/posts?scope=national&offset={offset}&limit={limit}");
+            await AddFirebaseAuthorizationAsync(request);
+            try
+            {
+                using var response = await _httpClient.SendAsync(request);
+                var body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                    throw new InvalidOperationException(body);
+
+                var posts = (JsonSerializer.Deserialize<List<CctPost>>(
+                        body, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [])
+                    .Where(IsPublishedCctPost)
+                    .Where(post => string.Equals(post.PostType, "FullCommunity", StringComparison.OrdinalIgnoreCase))
+                    .GroupBy(post => post.Id, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .Take(limit)
+                    .ToList();
+                await CacheCctPostsAsync(posts);
+                Debug.WriteLine(
+                    $"[NATIONAL_FEED] offset={offset} requestedLimit={limit} received={posts.Count} " +
+                    $"hasMore={posts.Count == limit}");
+                return new NationalPostsPage
+                {
+                    Posts = posts.Select(ToNationalCommunityPost).ToList(),
+                    HasMore = posts.Count == limit
+                };
+            }
+            catch (Exception ex)
+            {
+                var cached = await GetCachedNationalPostsAsync();
+                var page = cached.Skip(offset).Take(limit).ToList();
+                Debug.WriteLine(
+                    $"[NATIONAL_FEED] offline fallback offset={offset} requestedLimit={limit} " +
+                    $"cacheCount={cached.Count} returned={page.Count}: {ex.Message}");
+                return new NationalPostsPage
+                {
+                    Posts = page,
+                    HasMore = page.Count == limit && offset + page.Count < cached.Count
+                };
+            }
+        }
+
+        private async Task CacheCctPostsAsync(IReadOnlyList<CctPost> posts)
+        {
+            if (posts.Count == 0)
+                return;
+            var database = await GetMessageCacheDatabaseAsync();
+            var existing = await database.Table<CachedCctPost>().ToListAsync();
+            var existingById = existing.ToDictionary(post => post.Id, StringComparer.Ordinal);
+            await database.RunInTransactionAsync(transaction =>
+            {
+                foreach (var post in posts)
+                {
+                    var cached = ToCachedCctPost(post);
+                    if (!existingById.TryGetValue(post.Id, out var previous) ||
+                        !CachedPostEquals(previous, cached))
+                        transaction.InsertOrReplace(cached);
+                }
+            });
+            Debug.WriteLine($"[NATIONAL_FEED] cache merged count={posts.Count}");
+        }
+
         public async Task<List<NationalCommunityPost>> GetNationalPostsAsync(int limit = 20)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/community/posts?limit={Math.Clamp(limit, 1, 50)}");
-            await AddFirebaseAuthorizationAsync(request);
-            using var response = await _httpClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException(body);
-
-            var posts = JsonSerializer.Deserialize<List<CctPost>>(
-                body, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
-            return posts
-                .Where(IsPublishedCctPost)
-                .Select(ToNationalCommunityPost)
-                .ToList();
+            var page = await GetNationalPostsPageAsync(0, Math.Clamp(limit, 1, 50));
+            return page.Posts.ToList();
         }
 
         public async Task<NationalCommunityPost> CreateNationalPostAsync(NationalCommunityCreateRequest requestDto)

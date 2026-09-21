@@ -39,7 +39,7 @@ public partial class BiblePage : ContentPage
         Debug.WriteLine("[BIBLE] Navigation load started");
         try
         {
-            await _bible.InitializeAsync();
+            await _bible.PrepareAsync();
             Debug.WriteLine($"[BIBLE] State ready after {timer.ElapsedMilliseconds} ms");
             _language = _bible.Language;
             _book = _bible.Book;
@@ -50,19 +50,6 @@ public partial class BiblePage : ContentPage
             TranslationLabel.Text = _language == BibleService.KjvId ? "King James Version" : "Kiswahili — Neno";
             TranslationAttribution.IsVisible = _language == BibleService.NenoId;
             ApplyBackground();
-
-            if (_language == BibleService.NenoId &&
-                _book.Equals("Mathayo", StringComparison.OrdinalIgnoreCase) &&
-                _chapter == 1)
-            {
-                var cachedVerses = await BibleService.GetBundledNenoMathayo1VersesAsync();
-                if (cachedVerses.Count > 0)
-                {
-                    RenderVerses(cachedVerses);
-                    RootGrid.Opacity = 1;
-                    Debug.WriteLine($"[BIBLE] Packaged Mathayo 1 rendered after {timer.ElapsedMilliseconds} ms");
-                }
-            }
 
             _testament = (await _bible.GetBooksAsync(_language))
                 .FirstOrDefault(b => b.Name.Equals(_book, StringComparison.OrdinalIgnoreCase))?.Testament
