@@ -34,6 +34,7 @@ public sealed class CloudflareAiService
             using var response = await _http.PostAsJsonAsync(
                 Endpoint,
                 new ChatRequest(prompt),
+                CloudflareAiJsonContext.Default.ChatRequest,
                 cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
@@ -45,7 +46,9 @@ public sealed class CloudflareAiService
             ChatResponse? result;
             try
             {
-                result = JsonSerializer.Deserialize<ChatResponse>(body);
+                result = JsonSerializer.Deserialize(
+                    body,
+                    CloudflareAiJsonContext.Default.ChatResponse);
             }
             catch (JsonException ex)
             {
@@ -103,10 +106,16 @@ public sealed class CloudflareAiService
 #endif
     }
 
-    private sealed record ChatRequest(
+    internal sealed record ChatRequest(
         [property: JsonPropertyName("message")] string Message);
 
-    private sealed record ChatResponse(
+    internal sealed record ChatResponse(
         [property: JsonPropertyName("success")] bool Success,
         [property: JsonPropertyName("response")] string? Response);
+}
+
+[JsonSerializable(typeof(CloudflareAiService.ChatRequest))]
+[JsonSerializable(typeof(CloudflareAiService.ChatResponse))]
+internal partial class CloudflareAiJsonContext : JsonSerializerContext
+{
 }

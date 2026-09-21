@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CCT_USCF.Models;
 
 namespace CCT_USCF.Services;
@@ -27,8 +28,9 @@ public sealed class ChurchGroupService
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response);
 
-        var payload = await response.Content.ReadFromJsonAsync<GroupListResponse>(
-            cancellationToken: cancellationToken);
+        var payload = await response.Content.ReadFromJsonAsync(
+            ChurchGroupJsonContext.Default.GroupListResponse,
+            cancellationToken);
         return payload?.Groups ?? new List<ChurchGroup>();
     }
 
@@ -43,18 +45,15 @@ public sealed class ChurchGroupService
             HttpMethod.Post,
             "api/community/groups",
             cancellationToken);
-        request.Content = JsonContent.Create(new
-        {
-            name,
-            description,
-            groupType,
-            scopeType
-        });
+        request.Content = JsonContent.Create(
+            new CreateGroupRequest(name, description, groupType, scopeType),
+            ChurchGroupJsonContext.Default.CreateGroupRequest);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response);
-        var group = await response.Content.ReadFromJsonAsync<ChurchGroup>(
-            cancellationToken: cancellationToken);
+        var group = await response.Content.ReadFromJsonAsync(
+            ChurchGroupJsonContext.Default.ChurchGroup,
+            cancellationToken);
         return group ?? throw new InvalidOperationException("The group service returned an empty group.");
     }
 
@@ -127,8 +126,25 @@ public sealed class ChurchGroupService
             $"Group request failed ({(int)response.StatusCode}): {message}");
     }
 
-    private sealed class GroupListResponse
+    internal sealed class GroupListResponse
     {
         public List<ChurchGroup> Groups { get; set; } = new();
     }
+
+    internal sealed record CreateGroupRequest(
+        [property: JsonPropertyName("name")]
+        string Name,
+        [property: JsonPropertyName("description")]
+        string Description,
+        [property: JsonPropertyName("groupType")]
+        string GroupType,
+        [property: JsonPropertyName("scopeType")]
+        string ScopeType);
+}
+
+[JsonSerializable(typeof(ChurchGroupService.GroupListResponse))]
+[JsonSerializable(typeof(ChurchGroupService.CreateGroupRequest))]
+[JsonSerializable(typeof(ChurchGroup))]
+internal partial class ChurchGroupJsonContext : JsonSerializerContext
+{
 }
