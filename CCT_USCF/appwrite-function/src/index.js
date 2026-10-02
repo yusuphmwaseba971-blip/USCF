@@ -3,6 +3,10 @@ import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import {
+  buildGroupMessageQueries,
+  getTrustedRegistrationCutoff
+} from "./group-message-visibility.js";
 
 /*
  * ============================================================
@@ -136,7 +140,7 @@ if (!appwriteApiKey) {
 
 const DEFAULT_DATABASE_ID =
   process.env.APPWRITE_DATABASE_ID ||
-  "cct-uscf-db";
+  "database-cct-uscf-db";
 
 const ANNOUNCEMENTS_TABLE_ID =
   process.env.APPWRITE_ANNOUNCEMENTS_TABLE_ID ||
@@ -2208,6 +2212,11 @@ async function listGroupMessages(
     );
 
   const profile = await getAnnouncementProfile(firebaseUser);
+  const registrationCutoff =
+    await getTrustedRegistrationCutoff(
+      auth,
+      firebaseUser.uid
+    );
 
   const body =
     getRequestBody(req);
@@ -2281,15 +2290,6 @@ async function listGroupMessages(
       ? newerThan.getTime()
       : null;
 
-  const membershipSince =
-    parseRequestDate(
-      getQueryValue(req, "membershipSince") ??
-      getQueryValue(req, "membership_since") ??
-      body.membershipSince ??
-      body.membership_since ??
-      profile.createdAt
-    );
-
   if (
     organizationalLevel.toLowerCase() === "branch" &&
     (!profile.branchId || profile.branchId !== branchId)
@@ -2330,29 +2330,27 @@ async function listGroupMessages(
     ""
   );
 
-  const queries = [
-    { method: "equal", attribute: "community_id", values: [communityId] },
-    { method: "equal", attribute: "organization_type", values: [organizationalLevel || "Branch"] },
-    { method: "limit", values: [Math.min(limit, 50)] },
-    { method: "orderDesc", attribute: "created_at" }
-  ];
-
-  if (branchId !== null) queries.push({ method: "equal", attribute: "branch_id", values: [String(branchId)] });
-  if (regionId !== null) queries.push({ method: "equal", attribute: "region_id", values: [String(regionId)] });
-  if (districtId !== null) queries.push({ method: "equal", attribute: "district_id", values: [String(districtId)] });
-  if (membershipSince && !Number.isNaN(membershipSince.getTime())) {
-    queries.push({ method: "greaterThanEqual", attribute: "created_at", values: [membershipSince.toISOString()] });
-  }
-  if (newerThan && !Number.isNaN(newerThan.getTime())) {
-    queries.push({ method: "greaterThan", attribute: "created_at", values: [newerThan.toISOString()] });
-  }
-  if (cursor) queries.push({ method: "cursorAfter", values: [cursor] });
+  const effectiveLimit = Math.min(limit, 50);
+  const queries = buildGroupMessageQueries({
+    communityId,
+    organizationalLevel,
+    branchId,
+    regionId,
+    districtId,
+    registrationCutoff,
+    newerThan: newerThan && !Number.isNaN(newerThan.getTime())
+      ? newerThan.toISOString()
+      : null,
+    cursor,
+    limit: effectiveLimit
+  });
 
   log(
     `[CCT_MESSAGE_LIST] Appwrite TablesDB query ` +
     `communityId=${communityId} branchId=${branchId ?? "none"} ` +
-    `membershipSince=${membershipSince?.toISOString() ?? "none"} ` +
-    `limit=${Math.min(limit, 50)} cursor=${cursor || "none"}`
+    `registrationCutoff=${registrationCutoff} ` +
+    `requestedLimit=${limit} effectiveLimit=${effectiveLimit} ` +
+    `cursor=${cursor || "none"}`
   );
 
   const page = await appwriteTableRowRequest(
@@ -2365,7 +2363,7 @@ async function listGroupMessages(
   const documents = Array.isArray(page.rows)
     ? page.rows
     : (Array.isArray(page.documents) ? page.documents : []);
-  const nextCursor = documents.length === Math.min(limit, 50)
+  const nextCursor = documents.length === effectiveLimit
     ? documents[documents.length - 1].$id
     : null;
 
@@ -2380,6 +2378,18 @@ async function listGroupMessages(
           normalizeString(document.community_id);
 
         if (documentCommunityId !== communityId) {
+          return false;
+        }
+
+        const messageCreatedAt = new Date(
+          document.created_at ??
+          document.$createdAt ??
+          0
+        ).getTime();
+        if (
+          Number.isNaN(messageCreatedAt) ||
+          messageCreatedAt < Date.parse(registrationCutoff)
+        ) {
           return false;
         }
 
@@ -2446,7 +2456,12 @@ async function listGroupMessages(
 
   log(
     `[CCT_MESSAGE_LIST] Filtered response count=${items.length} ` +
-    `membershipSinceApplied=${membershipSince !== null} cursor=${nextCursor ?? "none"}`
+    `requestedLimit=${limit} effectiveLimit=${effectiveLimit} ` +
+    `registrationCutoff=${registrationCutoff} ` +
+    `earliestReturnedCreatedAt=${items.length > 0
+      ? items[items.length - 1].createdAt
+      : "none"} ` +
+    `cursor=${nextCursor ?? "none"}`
   );
 
   return {
@@ -3703,4 +3718,3 @@ export default async ({
     );
   }
 };
-

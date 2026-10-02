@@ -995,12 +995,6 @@ SenderUid =
 
             try
             {
-                var enrolled = await GetChatHistoryEnrolledAsync(normalizedGroupId);
-                if (!enrolled)
-                {
-                    Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} ChatHistoryEnrolled=false HistoricalFetch=SKIPPED Reason=NEW_USER");
-                    return cachedMessages;
-                }
                 if (await IsLocalGroupHistoryClearedAsync(normalizedGroupId))
                 {
                     Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} LocalHistoryCleared=true HistoricalFetch=SKIPPED");
@@ -1064,12 +1058,6 @@ SenderUid =
             var safeLimit =
                 Math.Clamp(limit, 1, 100);
 
-            if (!await GetChatHistoryEnrolledAsync(normalizedGroupId))
-            {
-                Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} IncrementalSync=SKIPPED ChatHistoryEnrolled=false");
-                return new List<CommunityMessage>();
-            }
-
             if (await IsLocalGroupHistoryClearedAsync(normalizedGroupId))
             {
                 Debug.WriteLine($"[COMMUNITY_CHAT_STATE] GroupId={normalizedGroupId} IncrementalSync=SKIPPED LocalHistoryCleared=true");
@@ -1125,6 +1113,8 @@ SenderUid =
 
             var newestCreatedAt =
                 EnsureUtc(newestCached.CreatedAt);
+            var inclusiveSyncBoundary =
+                newestCreatedAt.AddMilliseconds(-1);
 
             System.Diagnostics.Debug.WriteLine(
                 "[COMMUNITY_CACHE] Incremental sync: " +
@@ -1135,13 +1125,13 @@ SenderUid =
                 "[BRANCH_CHAT_DIAGNOSTIC] " +
                 $"SyncCommunityId={normalizedGroupId}, " +
                 $"NewestCachedCreatedAt={newestCreatedAt:O}, " +
-                $"NewerThan={newestCreatedAt:O}");
+                $"NewerThan={inclusiveSyncBoundary:O}");
 
             var newMessages =
                 await GetGroupMessagesAsync(
                     normalizedGroupId,
                     safeLimit,
-                    newestCreatedAt,
+                    inclusiveSyncBoundary,
                     organizationalLevel,
                     branchId,
                     regionId,
@@ -1173,7 +1163,7 @@ SenderUid =
                                 : message.MessageId;
 
                         return !cachedMessageIds.Contains(messageId) &&
-                            EnsureUtc(message.CreatedAt) > newestCreatedAt;
+                            EnsureUtc(message.CreatedAt) >= newestCreatedAt;
                     })
                     .ToList();
 
@@ -1937,10 +1927,6 @@ SenderUid =
             var normalizedCommunityId =
                 communityId.Trim();
 
-            var currentUser = await _authService.GetCurrentUserAsync()
-                ?? throw new InvalidOperationException(
-                    "The current user profile is not available.");
-
             var safeLimit =
                 Math.Clamp(limit, 1, 100);
 
@@ -1975,11 +1961,6 @@ SenderUid =
                     BuildOptionalQuery("regionId", regionId) +
                     BuildOptionalQuery("districtId", districtId) +
                     BuildOptionalDateQuery("newerThan", newerThan) +
-                    BuildOptionalDateQuery(
-                        "membershipSince",
-                        currentUser.RegisteredAtUtc > DateTime.UnixEpoch
-                            ? currentUser.RegisteredAtUtc
-                            : null) +
                     $"&limit={safeLimit}";
 
                 var messages =

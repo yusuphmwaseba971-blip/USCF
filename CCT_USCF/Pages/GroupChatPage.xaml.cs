@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Net.WebSockets;
-using System.Text;
 using System.Text.Json;
 using CCT_USCF.Services;
 using CCT_USCF.Services.Appwrite;
@@ -73,7 +71,6 @@ public partial class GroupChatPage : ContentPage
     // REALTIME
     // ============================================================
 
-    private ClientWebSocket? _appwriteRealtimeSocket;
     private CancellationTokenSource? _appwriteRealtimeCts;
 
     // ============================================================
@@ -601,18 +598,18 @@ public partial class GroupChatPage : ContentPage
                 {
                     try
                     {
-                        await ListenForAppwriteMessagesAsync(
+                        await SyncGroupMessagesUntilCancelledAsync(
                             cancellationToken);
                     }
                     catch (OperationCanceledException)
                     {
                         System.Diagnostics.Debug.WriteLine(
-                            "[GROUP_CHAT] Realtime listener cancelled.");
+                            "[GROUP_CHAT] Authenticated message sync cancelled.");
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine(
-                            $"[GROUP_CHAT] Realtime listener failed: {ex}");
+                            $"[GROUP_CHAT] Authenticated message sync stopped: {ex}");
 
                         _realtimeListenerAttached = false;
                     }
@@ -646,118 +643,48 @@ public partial class GroupChatPage : ContentPage
 
         _appwriteRealtimeCts = null;
 
-        try
-        {
-            _appwriteRealtimeSocket?.Abort();
-            _appwriteRealtimeSocket?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[GROUP_CHAT] Realtime socket dispose failed: {ex}");
-        }
-
-        _appwriteRealtimeSocket = null;
     }
 
     // ============================================================
     // REALTIME LISTENER
     // ============================================================
 
-    private async Task ListenForAppwriteMessagesAsync(
+    private async Task SyncGroupMessagesUntilCancelledAsync(
         CancellationToken cancellationToken)
     {
-        using var socket =
-            new ClientWebSocket();
-
-        _appwriteRealtimeSocket = socket;
-
-        var uriBuilder =
-            new UriBuilder(
-                AppwriteService.Endpoint)
-            {
-                Scheme =
-                    Uri.UriSchemeWss,
-
-                Path =
-                    "/v1/realtime",
-
-                Query =
-                    $"project={Uri.EscapeDataString(
-                        AppwriteService.ProjectId)}"
-            };
-
-        var channel =
-            _communityService
-                .GetCommunityMessagesChannel();
-
-        var subscription =
-            JsonSerializer.Serialize(
-                new
-                {
-                    type = "subscribe",
-
-                    channels =
-                        new[]
-                        {
-                            channel
-                        }
-                });
-
-        await socket.ConnectAsync(
-            uriBuilder.Uri,
-            cancellationToken);
-
-        await socket.SendAsync(
-            Encoding.UTF8.GetBytes(
-                subscription),
-            WebSocketMessageType.Text,
-            true,
-            cancellationToken);
-
-        var buffer =
-            new byte[16 * 1024];
-
-        var builder =
-            new StringBuilder();
-
-        while (
-            socket.State ==
-                WebSocketState.Open &&
-            !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var result =
-                await socket.ReceiveAsync(
-                    new ArraySegment<byte>(
-                        buffer),
-                    cancellationToken);
-
-            if (result.MessageType ==
-                WebSocketMessageType.Close)
+            try
             {
-                break;
+                var messages =
+                    await _communityService.SyncNewerGroupMessagesAsync(
+                        GetBackendCommunityId(),
+                        50,
+                        OrganizationalLevel,
+                        _branchId > 0 ? _branchId.ToString() : null,
+                        _regionId > 0 ? _regionId.ToString() : null,
+                        _districtId > 0 ? _districtId.ToString() : null);
+
+                foreach (var message in messages)
+                {
+                    await HandleRealtimeMessageAsync(
+                        ToUiMessage(message));
+                }
+            }
+            catch (OperationCanceledException) when (
+                cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(
+                    $"[GROUP_CHAT] Authenticated incremental sync failed; cached messages remain available: {ex}");
             }
 
-            var chunk =
-                Encoding.UTF8.GetString(
-                    buffer,
-                    0,
-                    result.Count);
-
-            builder.Append(chunk);
-
-            if (!result.EndOfMessage)
-            {
-                continue;
-            }
-
-            var rawMessage =
-                builder.ToString();
-
-            builder.Clear();
-
-            ProcessRealtimeMessage(
-                rawMessage);
+            await Task.Delay(
+                TimeSpan.FromSeconds(3),
+                cancellationToken);
         }
     }
 
@@ -1033,13 +960,13 @@ public partial class GroupChatPage : ContentPage
                 MauiProgram.CurrentUser
                 ?? await MauiProgram.CreateAuthServiceForPages().GetCurrentUserAsync();
 
-            if (string.Equals(
+            var wrongBranch =
+                string.Equals(
                     NormalizeLevel(OrganizationalLevel),
                     "Branch",
                     StringComparison.OrdinalIgnoreCase) &&
-                (currentUser?.BranchId != _branchId ||
-                 (currentUser.RegisteredAtUtc > DateTime.UnixEpoch &&
-                  message.CreatedAt < currentUser.RegisteredAtUtc)))
+                currentUser?.BranchId != _branchId;
+            if (wrongBranch)
             {
                 System.Diagnostics.Debug.WriteLine(
                     $"[COMMUNITY_REALTIME] Ignored ineligible group message group={_groupId} createdAt={message.CreatedAt:O}");

@@ -4,6 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+#if ANDROID
+using Android.Gms.Auth.Api;
+using Android.Gms.Auth.Api.SignIn;
+#endif
+
 using Plugin.Firebase.Auth;
 using Plugin.Firebase.Firestore;
 
@@ -237,29 +242,64 @@ public class AuthService
         {
             await FirebaseInit.Initialized;
 
-            var sessionResult = await Platforms.Android.GoogleSignInBridge.SignInAsync();
-            if (!sessionResult.Success)
+            var activity =
+                Microsoft.Maui.ApplicationModel.Platform.CurrentActivity
+                ?? throw new InvalidOperationException(
+                    "No active Android activity is available.");
+            var webClientId =
+                activity.GetString(Resource.String.default_web_client_id);
+            if (string.IsNullOrWhiteSpace(webClientId))
             {
-                var message = sessionResult.ErrorMessage ?? "Google Sign-In could not be completed.";
-                var code = GetGoogleFailureCode(sessionResult.FailureCode, sessionResult.Exception);
-                System.Diagnostics.Debug.WriteLine($"[GOOGLE AUTH] Google sign-in failed with state={sessionResult.FailureCode}, code={code}, message={message}");
+                throw new InvalidOperationException(
+                    "Google Sign-In client configuration is missing.");
+            }
 
+            var signInOptions =
+                new GoogleSignInOptions.Builder(
+                    GoogleSignInOptions.DefaultSignIn)
+                    .RequestIdToken(webClientId)
+                    .RequestEmail()
+                    .Build();
+            var signInClient =
+                GoogleSignIn.GetClient(activity, signInOptions);
+            var signInIntent =
+                await CCT_USCF.MainActivity.StartGoogleSignInAsync(
+                    signInClient.SignInIntent,
+                    9101);
+
+            if (signInIntent == null)
+            {
                 return new AuthResult
                 {
                     Success = false,
-                    Error = message,
-                    ErrorCode = code,
-                    FailureState = sessionResult.FailureCode.ToString(),
-                    StatusCode = sessionResult.FailureCode switch
-                    {
-                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.Cancelled => 499,
-                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.AccountSelectionFailed => 400,
-                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.DeveloperConfigurationError => 500,
-                        CCT_USCF.Platforms.Android.GoogleSignInFailureCode.TokenCreationFailed => 401,
-                        _ => 401
-                    }
+                    Error = "Google Sign-In was cancelled.",
+                    ErrorCode = "google-signin-cancelled",
+                    FailureState = "Cancelled",
+                    StatusCode = 499
                 };
             }
+
+            var accountResult =
+                await AwaitAndroidTaskAsync(
+                    GoogleSignIn.GetSignedInAccountFromIntent(
+                        signInIntent));
+            var googleAccount =
+                accountResult as GoogleSignInAccount
+                ?? throw new InvalidOperationException(
+                    "Google Sign-In did not return an account.");
+            if (string.IsNullOrWhiteSpace(googleAccount.IdToken))
+            {
+                throw new InvalidOperationException(
+                    "Google Sign-In did not return an ID token.");
+            }
+
+            var firebaseCredential =
+                Firebase.Auth.GoogleAuthProvider.GetCredential(
+                    googleAccount.IdToken,
+                    null);
+            await AwaitAndroidTaskAsync(
+                Firebase.Auth.FirebaseAuth.Instance.SignInWithCredential(
+                    firebaseCredential));
 
             var firebaseUser = _auth.CurrentUser;
             if (firebaseUser == null)
@@ -317,7 +357,7 @@ public class AuthService
             {
                 Success = false,
                 Error = string.IsNullOrWhiteSpace(message) ? "Google Sign-In could not be completed. Please try again." : message,
-                ErrorCode = GetErrorCodeFromException(ex),
+                ErrorCode = GetGoogleFailureCode(ex),
                 FailureState = "FirebaseAuthenticationFailed",
                 StatusCode = 401
             };
@@ -1569,48 +1609,65 @@ public async Task<bool> PostHolyWordAsync(
     // GOOGLE AUTH ERROR CLASSIFICATION
     // =========================================================
 
-    private static string GetGoogleFailureCode(
-        CCT_USCF.Platforms.Android.GoogleSignInFailureCode failureCode,
-        Exception? exception)
+    private static string GetGoogleFailureCode(Exception exception)
     {
-        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.Cancelled)
-            return "google-signin-cancelled";
-
-        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.AccountSelectionFailed)
-            return "google-account-selection-failed";
-
-        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.DeveloperConfigurationError)
-            return "google-config-error";
-
-        if (failureCode == CCT_USCF.Platforms.Android.GoogleSignInFailureCode.TokenCreationFailed)
-            return "google-token-creation-failed";
-
-        if (exception is not null)
+        var combined =
+            $"{exception.Message} {exception.InnerException?.Message}".Trim();
+        if (combined.Contains("account-exists-with-different-credential", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("EMAIL_EXISTS", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("account exists with different credential", StringComparison.OrdinalIgnoreCase))
         {
-            var combined = $"{exception.Message} {exception.InnerException?.Message}".Trim();
-            if (combined.Contains("account-exists-with-different-credential", StringComparison.OrdinalIgnoreCase) ||
-                combined.Contains("EMAIL_EXISTS", StringComparison.OrdinalIgnoreCase) ||
-                combined.Contains("account exists with different credential", StringComparison.OrdinalIgnoreCase))
-            {
-                return "account-exists-with-different-credential";
-            }
-
-            if (combined.Contains("invalid-credential", StringComparison.OrdinalIgnoreCase) ||
-                combined.Contains("invalid credential", StringComparison.OrdinalIgnoreCase) ||
-                combined.Contains("wrong-password", StringComparison.OrdinalIgnoreCase))
-            {
-                return "invalid-credential";
-            }
-
-            if (combined.Contains("network", StringComparison.OrdinalIgnoreCase) ||
-                combined.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
-            {
-                return "firebase-network-error";
-            }
+            return "account-exists-with-different-credential";
         }
 
-        return "firebase-authentication-failed";
+        if (combined.Contains("invalid-credential", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("invalid credential", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("wrong-password", StringComparison.OrdinalIgnoreCase))
+        {
+            return "invalid-credential";
+        }
+
+        if (combined.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+            combined.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            return "firebase-network-error";
+        }
+
+        return "google-signin-failed";
     }
+
+#if ANDROID
+    private static Task<Java.Lang.Object?> AwaitAndroidTaskAsync(
+        Android.Gms.Tasks.Task task)
+    {
+        var completionSource =
+            new TaskCompletionSource<Java.Lang.Object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        task.AddOnCompleteListener(
+            new GoogleTaskCompletionListener(completionSource));
+        return completionSource.Task;
+    }
+
+    private sealed class GoogleTaskCompletionListener(
+        TaskCompletionSource<Java.Lang.Object?> completionSource)
+        : Java.Lang.Object, Android.Gms.Tasks.IOnCompleteListener
+    {
+        public void OnComplete(Android.Gms.Tasks.Task task)
+        {
+            if (task.IsSuccessful)
+            {
+                completionSource.TrySetResult(
+                    task.Result as Java.Lang.Object);
+                return;
+            }
+
+            completionSource.TrySetException(
+                new InvalidOperationException(
+                    task.Exception?.Message ??
+                    "Google or Firebase sign-in failed."));
+        }
+    }
+#endif
 
     private static string GetErrorCodeFromException(Exception ex)
     {
