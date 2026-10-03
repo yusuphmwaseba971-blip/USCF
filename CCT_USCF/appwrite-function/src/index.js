@@ -3583,6 +3583,10 @@ async function createGroupMessage(
   );
 
   log(
+    `[CCT_MESSAGE_CREATE] CreatedAt=${createdAt}`
+  );
+
+  log(
     `[CCT_MESSAGE_CREATE] Verified Firebase UID=${senderUid}`
   );
 
@@ -3682,6 +3686,7 @@ async function createGroupMessage(
   log("[CCT_MESSAGE_CREATE] Appwrite REST create START");
 
   let document;
+  let wasCreated = false;
 
   try {
     document = await appwriteTableRowRequest(
@@ -3693,6 +3698,7 @@ async function createGroupMessage(
         data: documentData
       }
     );
+    wasCreated = true;
 
     log(
       `[CCT_MESSAGE_CREATE] Appwrite TablesDB create SUCCESS rowId=${document.$id || document.id || ""}`
@@ -3705,7 +3711,45 @@ async function createGroupMessage(
       "Appwrite createDocument"
     );
 
-    throw error;
+    if (!clientMessageId || error?.statusCode !== 409) {
+      throw error;
+    }
+
+    log(
+      `[CCT_MESSAGE_CREATE] Duplicate row id; checking idempotent retry rowId=${messageId}`
+    );
+
+    let existingDocument;
+    try {
+      existingDocument = await appwriteTableRowRequest(
+        COMMUNITY_MESSAGES_COLLECTION_ID,
+        "GET",
+        `/${encodeURIComponent(messageId)}`
+      );
+    } catch (lookupError) {
+      logErrorDetails(
+        log,
+        lookupError,
+        "Appwrite idempotent message lookup"
+      );
+      throw error;
+    }
+
+    const existingMatchesRequest =
+      normalizeString(existingDocument.message_id ?? existingDocument.$id ?? existingDocument.id) === messageId &&
+      normalizeString(existingDocument.client_message_id) === clientMessageId &&
+      normalizeString(existingDocument.sender_uid) === senderUid &&
+      normalizeString(existingDocument.community_id) === communityId &&
+      normalizeString(existingDocument.content) === content;
+
+    if (!existingMatchesRequest) {
+      throw error;
+    }
+
+    document = existingDocument;
+    log(
+      `[CCT_MESSAGE_CREATE] Idempotent retry reused rowId=${messageId}`
+    );
   }
 
   const message =
@@ -3713,11 +3757,13 @@ async function createGroupMessage(
       document
     );
 
-  await notifyBranchMessageRecipients(
-    message,
-    firebaseUser.uid,
-    log
-  );
+  if (wasCreated) {
+    await notifyBranchMessageRecipients(
+      message,
+      firebaseUser.uid,
+      log
+    );
+  }
 
   log(
     `[CCT_MESSAGE_CREATE] Mapped response MessageId=${message.messageId}`

@@ -1199,8 +1199,8 @@ SenderUid =
         {
             return
                 $"databases.{AppwriteService.DatabaseId}" +
-                $".collections.{CommunityMessagesCollectionId}" +
-                ".documents";
+                $".tables.{CommunityMessagesCollectionId}" +
+                ".rows";
         }
 
         public string GetMessagesChannel()
@@ -1587,100 +1587,55 @@ SenderUid =
                     "The current user profile is not available.");
             }
 
-            var senderName =
-                currentUser.Username?.Trim();
-
-            if (string.IsNullOrWhiteSpace(senderName))
-            {
-                senderName = currentUser.FullName?.Trim();
-            }
-
-            if (string.IsNullOrWhiteSpace(senderName) ||
-                senderName.Contains('@', StringComparison.Ordinal))
-            {
-                senderName = "Community member";
-            }
-
             branchId ??= currentUser.BranchId?.ToString();
             regionId ??= currentUser.RegionId?.ToString();
             districtId ??= currentUser.DistrictId?.ToString();
 
-            var messageId =
-                Guid.NewGuid().ToString("N");
+            var normalizedClientMessageId =
+                string.IsNullOrWhiteSpace(clientMessageId)
+                    ? null
+                    : clientMessageId.Trim();
 
-            var createdAt =
-                DateTime.UtcNow;
+            var requestStartedAt =
+                DateTimeOffset.UtcNow;
 
             try
             {
                 System.Diagnostics.Debug.WriteLine(
-                    "================================================");
+                    "[APPWRITE_COMMUNITY_MESSAGE] CREATE START " +
+                    $"database={AppwriteService.DatabaseId} " +
+                    $"table={CommunityMessagesCollectionId} " +
+                    $"groupId={normalizedCommunityId} senderUid={firebaseUid} " +
+                    $"clientMessageId={normalizedClientMessageId ?? "server-generated"} " +
+                    $"textLength={(normalizedMessageType == "text" ? trimmed.Length : 0)} " +
+                    $"replyToMessageId={replyToMessageId ?? "none"} " +
+                    $"requestStartedAtUtc={requestStartedAt:O}");
 
-                System.Diagnostics.Debug.WriteLine(
-                    "[APPWRITE_COMMUNITY_MESSAGE] CREATE START");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Database={AppwriteService.DatabaseId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"Collection={CommunityMessagesCollectionId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"DocumentId={messageId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"sender_uid={firebaseUid}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"sender_name={senderName}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"community_id={normalizedCommunityId}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"message_type={normalizedMessageType}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"media_url={mediaUrl}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"file_name={fileName}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"file_size={fileSize}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"duration={duration}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    $"created_at={createdAt:O}");
-
-                System.Diagnostics.Debug.WriteLine(
-                    "================================================");
+                var requestBody = JsonSerializer.SerializeToElement(
+                    new CreateGroupMessageRequest(
+                        normalizedCommunityId,
+                        normalizedClientMessageId,
+                        organizationalLevel ?? "Branch",
+                        ParseOptionalInt(branchId),
+                        ParseOptionalInt(regionId),
+                        ParseOptionalInt(districtId),
+                        trimmed,
+                        normalizedMessageType,
+                        mediaUrl?.Trim(),
+                        thumbnailUrl?.Trim(),
+                        fileName?.Trim(),
+                        Math.Max(0, fileSize),
+                        Math.Max(0, duration),
+                        replyToMessageId,
+                        replyToSenderName,
+                        replyToPreview),
+                    CommunityMessageApiJsonContext.Default.CreateGroupMessageRequest);
 
                 var createdMessage =
                     await SendAuthorizedCommunityApiAsync<CommunityMessage>(
                         HttpMethod.Post,
                         "api/community/messages/group",
-                        new
-                        {
-                            communityId = normalizedCommunityId,
-                            clientMessageId = clientMessageId?.Trim(),
-                            organizationalLevel = organizationalLevel ?? "Branch",
-                            branchId = ParseOptionalInt(branchId),
-                            regionId = ParseOptionalInt(regionId),
-                            districtId = ParseOptionalInt(districtId),
-                            content = trimmed,
-                            messageType = normalizedMessageType,
-                            mediaUrl = mediaUrl?.Trim(),
-                            thumbnailUrl = thumbnailUrl?.Trim(),
-                            fileName = fileName?.Trim(),
-                            fileSize = Math.Max(0, fileSize),
-                            duration = Math.Max(0, duration),
-                            replyToMessageId,
-                            replyToSenderName,
-                            replyToPreview
-                        });
+                        requestBody);
 
                 System.Diagnostics.Debug.WriteLine(
                     "[APPWRITE_COMMUNITY_MESSAGE] CREATE SUCCESS");
@@ -1802,7 +1757,9 @@ SenderUid =
                     await SendAuthorizedCommunityApiAsync<CommunityMessage>(
                         HttpMethod.Patch,
                         $"api/community/messages/group/{Uri.EscapeDataString(normalizedMessageId)}",
-                        new { content = trimmedContent });
+                        JsonSerializer.SerializeToElement(
+                            new UpdateGroupMessageRequest(trimmedContent),
+                            CommunityMessageApiJsonContext.Default.UpdateGroupMessageRequest));
 
                 await CacheCommunityMessageAsync(updated);
 
@@ -2051,7 +2008,9 @@ SenderUid =
                if (body != null)
                {
                    request.Content =
-                       JsonContent.Create(body);
+                       body is JsonElement jsonElement
+                           ? JsonContent.Create(jsonElement)
+                           : JsonContent.Create(body);
                }
 
                return await _httpClient.SendAsync(request);
@@ -2094,8 +2053,12 @@ SenderUid =
                System.Diagnostics.Debug.WriteLine(
                    $"[APPWRITE_COMMUNITY] RESPONSE CONTENT-TYPE: " +
                    $"{response.Content.Headers.ContentType}");
-               System.Diagnostics.Debug.WriteLine(
-                   $"[APPWRITE_COMMUNITY] RAW RESPONSE: {rawJson}");
+
+               if (!response.IsSuccessStatusCode)
+               {
+                   System.Diagnostics.Debug.WriteLine(
+                       $"[APPWRITE_COMMUNITY] ERROR RESPONSE: {rawJson}");
+               }
 
                if (response.StatusCode ==
                    System.Net.HttpStatusCode.Unauthorized)
@@ -2143,8 +2106,7 @@ SenderUid =
                {
                    var message =
                        DeserializeCommunityMessage(
-                           rawJson,
-                           options);
+                           rawJson);
 
                    return (T)(object)message;
                }
@@ -2154,8 +2116,7 @@ SenderUid =
                {
                    var messages =
                        DeserializeCommunityMessages(
-                           rawJson,
-                           options);
+                           rawJson);
 
                    return (T)(object)messages;
                }
@@ -2200,8 +2161,7 @@ SenderUid =
 
         private static CommunityMessage
             DeserializeCommunityMessage(
-                string json,
-                JsonSerializerOptions options)
+                string json)
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
@@ -2212,16 +2172,16 @@ SenderUid =
                 if (TryGetPropertyIgnoreCase(root, "message", out var messageValue) &&
                     messageValue.ValueKind == JsonValueKind.Object)
                 {
-                    return DeserializeMessageObject(messageValue, options);
+                    return DeserializeMessageObject(messageValue);
                 }
 
                 if (TryGetPropertyIgnoreCase(root, "data", out var dataValue) &&
                     dataValue.ValueKind == JsonValueKind.Object)
                 {
-                    return DeserializeMessageObject(dataValue, options);
+                    return DeserializeMessageObject(dataValue);
                 }
 
-                return DeserializeMessageObject(root, options);
+                return DeserializeMessageObject(root);
             }
 
             throw new JsonException(
@@ -2234,8 +2194,7 @@ SenderUid =
 
         private static List<CommunityMessage>
             DeserializeCommunityMessages(
-                string json,
-                JsonSerializerOptions options)
+                string json)
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
@@ -2243,7 +2202,7 @@ SenderUid =
             if (root.ValueKind ==
                 JsonValueKind.Array)
             {
-                return DeserializeMessageArray(root, options);
+                return DeserializeMessageArray(root);
             }
 
             if (root.ValueKind ==
@@ -2254,7 +2213,7 @@ SenderUid =
                     if (TryGetPropertyIgnoreCase(root, propertyName, out var value) &&
                         value.ValueKind == JsonValueKind.Array)
                     {
-                        return DeserializeMessageArray(value, options);
+                        return DeserializeMessageArray(value);
                     }
                 }
             }
@@ -2264,12 +2223,11 @@ SenderUid =
         }
 
         private static CommunityMessage DeserializeMessageObject(
-            JsonElement value,
-            JsonSerializerOptions options)
+            JsonElement value)
         {
-            var message = JsonSerializer.Deserialize<CommunityMessage>(
-                value.GetRawText(),
-                options);
+            var message = JsonSerializer.Deserialize(
+                value,
+                CommunityMessageApiJsonContext.Default.CommunityMessage);
 
             if (message is null ||
                 (string.IsNullOrWhiteSpace(message.MessageId) &&
@@ -2283,8 +2241,7 @@ SenderUid =
         }
 
         private static List<CommunityMessage> DeserializeMessageArray(
-            JsonElement value,
-            JsonSerializerOptions options)
+            JsonElement value)
         {
             var messages = new List<CommunityMessage>();
 
@@ -2298,8 +2255,7 @@ SenderUid =
 
                 messages.Add(
                     DeserializeMessageObject(
-                        item,
-                        options));
+                        item));
             }
 
             return messages;

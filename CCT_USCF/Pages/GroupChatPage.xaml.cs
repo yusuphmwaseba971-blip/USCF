@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net.WebSockets;
+using System.Text;
 using System.Text.Json;
 using CCT_USCF.Services;
 using CCT_USCF.Services.Appwrite;
@@ -72,6 +74,7 @@ public partial class GroupChatPage : ContentPage
     // ============================================================
 
     private CancellationTokenSource? _appwriteRealtimeCts;
+    private ClientWebSocket? _appwriteRealtimeSocket;
 
     // ============================================================
     // PENDING ATTACHMENT
@@ -468,7 +471,6 @@ public partial class GroupChatPage : ContentPage
 
             Debug.WriteLine(
                 $"[GROUP_CHAT_TIMING] FIRST_RENDER communityId={communityId} elapsedMs={Stopwatch.GetElapsedTime(openStartedAt).TotalMilliseconds:F0}");
-            AttachRealtimeListener();
 
             _ = LoadGroupAsync(generation, communityId);
         }
@@ -598,18 +600,18 @@ public partial class GroupChatPage : ContentPage
                 {
                     try
                     {
-                        await SyncGroupMessagesUntilCancelledAsync(
+                        await ListenForAppwriteMessagesWithReconnectAsync(
                             cancellationToken);
                     }
                     catch (OperationCanceledException)
                     {
                         System.Diagnostics.Debug.WriteLine(
-                            "[GROUP_CHAT] Authenticated message sync cancelled.");
+                            "[GROUP_CHAT] Realtime listener cancelled.");
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine(
-                            $"[GROUP_CHAT] Authenticated message sync stopped: {ex}");
+                            $"[GROUP_CHAT] Realtime listener stopped: {ex}");
 
                         _realtimeListenerAttached = false;
                     }
@@ -632,59 +634,162 @@ public partial class GroupChatPage : ContentPage
     {
         _realtimeListenerAttached = false;
 
-        try
-        {
-            _appwriteRealtimeCts?.Cancel();
-            _appwriteRealtimeCts?.Dispose();
-        }
-        catch
-        {
-        }
+        _appwriteRealtimeCts?.Cancel();
+        _appwriteRealtimeCts?.Dispose();
 
         _appwriteRealtimeCts = null;
 
+        if (_appwriteRealtimeSocket is not null)
+        {
+            try
+            {
+                _appwriteRealtimeSocket.Abort();
+                _appwriteRealtimeSocket.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(
+                    $"[GROUP_CHAT] Realtime socket disposal failed: {ex}");
+            }
+
+            _appwriteRealtimeSocket = null;
+        }
     }
 
     // ============================================================
     // REALTIME LISTENER
     // ============================================================
 
-    private async Task SyncGroupMessagesUntilCancelledAsync(
+    private async Task ListenForAppwriteMessagesWithReconnectAsync(
         CancellationToken cancellationToken)
     {
+        var reconnectDelay = TimeSpan.FromSeconds(1);
+
         while (!cancellationToken.IsCancellationRequested)
         {
+            var connectionStartedAt = Stopwatch.GetTimestamp();
             try
             {
-                var messages =
-                    await _communityService.SyncNewerGroupMessagesAsync(
-                        GetBackendCommunityId(),
-                        50,
-                        OrganizationalLevel,
-                        _branchId > 0 ? _branchId.ToString() : null,
-                        _regionId > 0 ? _regionId.ToString() : null,
-                        _districtId > 0 ? _districtId.ToString() : null);
+                await ListenForAppwriteMessagesAsync(
+                    cancellationToken);
 
-                foreach (var message in messages)
+                if (Stopwatch.GetElapsedTime(connectionStartedAt) >= TimeSpan.FromSeconds(30))
                 {
-                    await HandleRealtimeMessageAsync(
-                        ToUiMessage(message));
+                    reconnectDelay = TimeSpan.FromSeconds(1);
                 }
+
+                if (!cancellationToken.IsCancellationRequested)
+                    Debug.WriteLine("[REALTIME] Connection closed; reconnecting.");
             }
             catch (OperationCanceledException) when (
                 cancellationToken.IsCancellationRequested)
             {
-                throw;
+                return;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(
-                    $"[GROUP_CHAT] Authenticated incremental sync failed; cached messages remain available: {ex}");
+                    $"[REALTIME] Subscription failed groupId={GetBackendCommunityId()}: {ex}");
             }
 
-            await Task.Delay(
-                TimeSpan.FromSeconds(3),
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            await Task.Delay(reconnectDelay, cancellationToken);
+            reconnectDelay = TimeSpan.FromSeconds(
+                Math.Min(reconnectDelay.TotalSeconds * 2, 15));
+        }
+    }
+
+    private async Task ListenForAppwriteMessagesAsync(
+        CancellationToken cancellationToken)
+    {
+        var groupId = GetBackendCommunityId();
+        using var socket = new ClientWebSocket();
+        _appwriteRealtimeSocket = socket;
+
+        var uriBuilder = new UriBuilder(AppwriteService.Endpoint)
+        {
+            Scheme = Uri.UriSchemeWss,
+            Path = "/v1/realtime",
+            Query = $"project={Uri.EscapeDataString(AppwriteService.ProjectId)}"
+        };
+
+        var channel = _communityService.GetCommunityMessagesChannel();
+        var subscription =
+            $"{{\"type\":\"subscribe\",\"channels\":[{JsonSerializer.Serialize(channel)}]}}";
+
+        await socket.ConnectAsync(uriBuilder.Uri, cancellationToken);
+        await socket.SendAsync(
+            new ArraySegment<byte>(Encoding.UTF8.GetBytes(subscription)),
+            WebSocketMessageType.Text,
+            true,
+            cancellationToken);
+
+        Debug.WriteLine(
+            $"[REALTIME SUBSCRIBE] groupId={groupId} channel={channel} endpoint={uriBuilder.Uri}");
+
+        try
+        {
+            await SyncGroupMessagesOnceAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (
+            cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(
+                $"[REALTIME] Catch-up sync failed groupId={groupId}: {ex}");
+        }
+
+        var buffer = new byte[16 * 1024];
+        using var messageBuffer = new MemoryStream();
+
+        while (socket.State == WebSocketState.Open &&
+               !cancellationToken.IsCancellationRequested)
+        {
+            var result = await socket.ReceiveAsync(
+                new ArraySegment<byte>(buffer),
                 cancellationToken);
+
+            if (result.MessageType == WebSocketMessageType.Close)
+                return;
+
+            if (result.MessageType != WebSocketMessageType.Text)
+                continue;
+
+            messageBuffer.Write(buffer, 0, result.Count);
+
+            if (!result.EndOfMessage)
+                continue;
+
+            var rawMessage = Encoding.UTF8.GetString(
+                messageBuffer.GetBuffer(),
+                0,
+                checked((int)messageBuffer.Length));
+            messageBuffer.SetLength(0);
+            ProcessRealtimeMessage(rawMessage);
+        }
+    }
+
+    private async Task SyncGroupMessagesOnceAsync(
+        CancellationToken cancellationToken)
+    {
+        var messages = await _communityService.SyncNewerGroupMessagesAsync(
+            GetBackendCommunityId(),
+            50,
+            OrganizationalLevel,
+            _branchId > 0 ? _branchId.ToString() : null,
+            _regionId > 0 ? _regionId.ToString() : null,
+            _districtId > 0 ? _districtId.ToString() : null);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        foreach (var message in messages)
+        {
+            await HandleRealtimeMessageAsync(ToUiMessage(message));
         }
     }
 
@@ -777,6 +882,9 @@ public partial class GroupChatPage : ContentPage
             {
                 return;
             }
+
+            Debug.WriteLine(
+                $"[REALTIME EVENT RECEIVED] groupId={communityId} messageId={messageId}");
 
             var senderUid =
                 TryGetString(
@@ -925,6 +1033,9 @@ public partial class GroupChatPage : ContentPage
             if (message.IsDeleted)
                 message.Text = "Message deleted";
 
+            Debug.WriteLine(
+                $"[REALTIME MESSAGE PARSED] groupId={message.GroupId} messageId={message.MessageId} textLength={message.Text.Length}");
+
             _ =
                 HandleRealtimeMessageAsync(
                     message);
@@ -1007,12 +1118,16 @@ public partial class GroupChatPage : ContentPage
                         RenderMessages();
                         System.Diagnostics.Debug.WriteLine(
                             $"[GROUP_CHAT] Duplicate realtime message suppressed. message_id={message.MessageId}, group={message.GroupId}");
+                        Debug.WriteLine(
+                            $"[REALTIME UI UPDATE] groupId={message.GroupId} messageId={message.MessageId} action=replace");
                         return;
                     }
 
                     if (!message.IsDeleted)
                         AddOrReplaceMessage(message);
                     RenderMessages(!_isReadingOlderMessages);
+                    Debug.WriteLine(
+                        $"[REALTIME UI UPDATE] groupId={message.GroupId} messageId={message.MessageId} action={(message.IsDeleted ? "delete" : "insert")}");
                     if (_isReadingOlderMessages &&
                         !string.Equals(
                             message.SenderUid,
@@ -1133,6 +1248,10 @@ public partial class GroupChatPage : ContentPage
                 $"[GroupChat] UserUid={GetCurrentUserUid()} GroupId={backendGroupId} " +
                 $"HistoryEnrolled={_chatHistoryEnrolled}");
 
+            if (!IsCurrentOpen(generation, communityId))
+                return;
+
+            AttachRealtimeListener();
             await LoadMessagesAsync(generation, communityId);
             Debug.WriteLine(
                 $"[GROUP_CHAT_TIMING] REMOTE_SYNC_END communityId={communityId} elapsedMs={Stopwatch.GetElapsedTime(remoteStartedAt).TotalMilliseconds:F0}");
@@ -1613,6 +1732,42 @@ public partial class GroupChatPage : ContentPage
                 HorizontalOptions =
                     LayoutOptions.End
             });
+
+        if (isCurrentUser &&
+            string.Equals(message.MessageType, "text", StringComparison.OrdinalIgnoreCase))
+        {
+            var deliveryStatus = message.Status.ToLowerInvariant() switch
+            {
+                "pending" => "Sending...",
+                "failed" => "Failed to send",
+                _ => "Sent"
+            };
+
+            stack.Children.Add(new Label
+            {
+                Text = deliveryStatus,
+                FontSize = 10 * _appearance.ChatFontScale,
+                TextColor = string.Equals(message.Status, "failed", StringComparison.OrdinalIgnoreCase)
+                    ? Color.FromArgb("#B91C1C")
+                    : Color.FromArgb("#64748B"),
+                HorizontalOptions = LayoutOptions.End
+            });
+
+            if (string.Equals(message.Status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                var retryButton = new Button
+                {
+                    Text = "Retry",
+                    FontSize = 11 * _appearance.ChatFontScale,
+                    Padding = new Thickness(8, 2),
+                    MinimumHeightRequest = 30,
+                    HorizontalOptions = LayoutOptions.End
+                };
+                retryButton.Clicked += async (_, _) =>
+                    await RetryFailedMessageAsync(message);
+                stack.Children.Add(retryButton);
+            }
+        }
 
         border.Content =
             stack;
@@ -2316,11 +2471,7 @@ public partial class GroupChatPage : ContentPage
         }
 
         _isComposerBusy = true;
-        SetComposerBusy(
-            true,
-            _pendingAttachment == null
-                ? "Sending..."
-                : $"Uploading {_pendingAttachmentType}...");
+        SetComposerBusy(true);
 
         try
         {
@@ -2336,7 +2487,7 @@ public partial class GroupChatPage : ContentPage
         finally
         {
             _isComposerBusy = false;
-            SetComposerBusy(false, null);
+            SetComposerBusy(false);
         }
     }
 
@@ -2424,7 +2575,7 @@ public partial class GroupChatPage : ContentPage
             _replyingTo = null;
             ReplyPreviewLayout.IsVisible = false;
 
-            _ = PersistOptimisticTextAsync(
+            await PersistOptimisticTextAsync(
                 optimistic,
                 clientMessageId,
                 replyToMessageId,
@@ -2440,6 +2591,48 @@ public partial class GroupChatPage : ContentPage
                 "Message failed to send",
                 ex.Message,
                 "OK");
+        }
+    }
+
+    private async Task RetryFailedMessageAsync(
+        GroupChatMessageUi message)
+    {
+        if (_isComposerBusy ||
+            !string.Equals(message.Status, "failed", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(message.MessageType, "text", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(message.GroupId, GetBackendCommunityId(), StringComparison.Ordinal) ||
+            !string.Equals(message.SenderUid, GetCurrentUserUid(), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(message.ClientMessageId))
+        {
+            await DisplayAlert(
+                "Retry unavailable",
+                "This message does not have a retry identifier. Please compose it again.",
+                "OK");
+            return;
+        }
+
+        _isComposerBusy = true;
+        SetComposerBusy(true);
+        message.Status = "pending";
+        RenderMessages();
+
+        try
+        {
+            await PersistOptimisticTextAsync(
+                message,
+                message.ClientMessageId,
+                message.ReplyToMessageId,
+                message.ReplyToSenderName,
+                message.ReplyToPreview);
+        }
+        finally
+        {
+            _isComposerBusy = false;
+            SetComposerBusy(false);
         }
     }
 
@@ -3408,9 +3601,7 @@ public partial class GroupChatPage : ContentPage
     // COMPOSER BUSY STATE
     // ============================================================
 
-    private void SetComposerBusy(
-        bool busy,
-        string? status)
+    private void SetComposerBusy(bool busy)
     {
         void Update()
         {
@@ -3426,12 +3617,6 @@ public partial class GroupChatPage : ContentPage
             SendButton.Text =
                 busy ? "…" : "↑";
 
-            if (!string.IsNullOrWhiteSpace(
-                    status))
-            {
-                GroupStatusLabel.Text =
-                    status;
-            }
         }
 
         if (MainThread.IsMainThread)
