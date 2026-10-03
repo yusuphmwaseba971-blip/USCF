@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.ContactInformationPage"
+             Title="Contact / Official Information"
+             BackgroundColor="{DynamicResource AppPageBackground}">
+    <ScrollView>
+        <VerticalStackLayout Padding="18,16,18,28" Spacing="14">
+            <Label Text="Contact / Official Information" FontSize="27" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <Label x:Name="StatusLabel" Text="Loading contact information..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+            <VerticalStackLayout x:Name="ContactStack" Spacing="12" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

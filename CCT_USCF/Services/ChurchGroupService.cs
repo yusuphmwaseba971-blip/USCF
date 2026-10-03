@@ -40,12 +40,79 @@ public sealed class ChurchGroupService
             $"[CHURCH GROUP] list_response scope={scopeType} status={(int)response.StatusCode} elapsed_ms={ElapsedMilliseconds(startedAt):F0}");
         await EnsureSuccessAsync(response);
 
-        var payload = await response.Content.ReadFromJsonAsync(
-            ChurchGroupJsonContext.Default.GroupListResponse,
-            requestCancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(requestCancellationToken);
+        LogGroupResponseDiagnostics(scopeType, responseBody);
+        var payload = JsonSerializer.Deserialize(
+            responseBody,
+            ChurchGroupJsonContext.Default.GroupListResponse);
         System.Diagnostics.Debug.WriteLine(
             $"[CHURCH GROUP] list_parsed scope={scopeType} count={payload?.Groups.Count ?? 0} elapsed_ms={ElapsedMilliseconds(startedAt):F0}");
+        foreach (var group in payload?.Groups ?? new List<ChurchGroup>())
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] mapped id={group.GroupId} name={group.GroupName} scope={group.ScopeType} branchId={group.BranchId?.ToString() ?? "none"} districtId={group.DistrictId?.ToString() ?? "none"} regionId={group.RegionId?.ToString() ?? "none"} active={group.IsActive}");
+        }
         return payload?.Groups ?? new List<ChurchGroup>();
+    }
+
+    private static void LogGroupResponseDiagnostics(string scopeType, string responseBody)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(responseBody);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP-DIAGNOSTIC] response scope={scopeType} rootKind={root.ValueKind}");
+                return;
+            }
+
+            var propertyNames = root.EnumerateObject()
+                .Select(property => property.Name)
+                .ToArray();
+            var groupsProperty = root.EnumerateObject()
+                .FirstOrDefault(property =>
+                    string.Equals(property.Name, "groups", StringComparison.OrdinalIgnoreCase));
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] response scope={scopeType} rootKeys={string.Join(",", propertyNames)}");
+            if (groupsProperty.Value.ValueKind != JsonValueKind.Array)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP-DIAGNOSTIC] response scope={scopeType} groupsKind={groupsProperty.Value.ValueKind}");
+                return;
+            }
+
+            var groups = groupsProperty.Value;
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] response scope={scopeType} groupsCount={groups.GetArrayLength()}");
+            foreach (var group in groups.EnumerateArray())
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GROUP-DIAGNOSTIC] responseGroup id={ReadString(group, "groupId", "$id", "id")} name={ReadString(group, "groupName", "name")} scope={ReadString(group, "scopeType", "scope_type")} branchId={ReadString(group, "branchId", "branch_id")}");
+            }
+        }
+        catch (JsonException ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] response scope={scopeType} invalidJson={ex.Message}");
+        }
+    }
+
+    private static string ReadString(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!element.TryGetProperty(propertyName, out var value))
+                continue;
+
+            return value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? string.Empty
+                : value.ToString();
+        }
+
+        return string.Empty;
     }
 
     public async Task<ChurchGroup> CreateGroupAsync(
@@ -166,6 +233,7 @@ public sealed class ChurchGroupService
         string ScopeType);
 }
 
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(ChurchGroupService.GroupListResponse))]
 [JsonSerializable(typeof(ChurchGroupService.CreateGroupRequest))]
 [JsonSerializable(typeof(ChurchGroup))]

@@ -4,8 +4,8 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.CommunityPage"
-    Title="Community"
-    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    Title="{DynamicResource AppText_Community_Title}"
+    BackgroundColor="{DynamicResource AppPageBackground}">
 
     <Grid RowDefinitions="*,Auto">
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
@@ -23,10 +23,10 @@
                                HorizontalOptions="End" VerticalOptions="End" TranslationY="28" />
                         <VerticalStackLayout Spacing="7">
                             <Label Text="♧" FontSize="28" TextColor="#D6F5E0" />
-                            <Label Text="Community" FontSize="34" FontAttributes="Bold" TextColor="White" />
-                            <Label Text="Connect, encourage and grow together." FontSize="17"
+                            <Label Text="{DynamicResource AppText_Community_Title}" FontSize="34" FontAttributes="Bold" TextColor="White" />
+                            <Label Text="{DynamicResource AppText_Community_Connect}" FontSize="17"
                                    TextColor="#E7F8EC" />
-                            <Label Text="Together in Christ" FontSize="13" FontAttributes="Italic"
+                            <Label Text="{DynamicResource AppText_Community_TogetherInChrist}" FontSize="13" FontAttributes="Italic"
                                    TextColor="#C9EED5" Margin="0,8,0,0" />
                         </VerticalStackLayout>
                     </Grid>
@@ -34,7 +34,7 @@
 
                 <Border Padding="18,16" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
-                        SemanticProperties.Description="Create a post">
+                        SemanticProperties.Description="{DynamicResource AppText_Community_CreatePostDescription}">
                     <Border.Shadow>
                         <Shadow Brush="#173B28" Offset="0,3" Radius="12" Opacity="0.10" />
                     </Border.Shadow>
@@ -48,8 +48,8 @@
                                    HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
-                            <Label Text="Create Post" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                            <Label Text="Share your thoughts, prayers or testimony" FontSize="12" TextColor="#718096" />
+                            <Label Text="{DynamicResource AppText_Community_CreatePost}" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                            <Label Text="{DynamicResource AppText_Community_SharePrompt}" FontSize="12" TextColor="#718096" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="30" TextColor="#087A32"
                                VerticalOptions="Center" />
@@ -58,7 +58,7 @@
 
                 <Border Padding="20" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 22"
-                        SemanticProperties.Description="Open the Church Community feed">
+                        SemanticProperties.Description="{DynamicResource AppText_Community_FeedDescription}">
                     <Border.Shadow>
                         <Shadow Brush="#173B28" Offset="0,4" Radius="14" Opacity="0.10" />
                     </Border.Shadow>
@@ -73,25 +73,25 @@
                                        HorizontalOptions="Center" VerticalOptions="Center" />
                             </Border>
                             <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                                <Label Text="Church Community" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                                <Label Text="A place to share and belong" FontSize="13" TextColor="#718096" />
+                                <Label Text="{DynamicResource AppText_Community_ChurchCommunity}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                <Label Text="{DynamicResource AppText_Community_Belong}" FontSize="13" TextColor="#718096" />
                             </VerticalStackLayout>
                         </Grid>
-                        <Label Text="Welcome to the CCT community. Share encouragement, Bible verses and testimonies."
+                        <Label Text="{DynamicResource AppText_Community_Welcome}"
                                FontSize="15" TextColor="#334155" LineHeight="1.15" />
                         <Grid ColumnDefinitions="*,Auto" Margin="0,2,0,0">
-                            <Label Text="Explore the community feed" FontSize="13" TextColor="#087A32" />
+                            <Label Text="{DynamicResource AppText_Community_Explore}" FontSize="13" TextColor="#087A32" />
                             <Label Grid.Column="1" Text="›" FontSize="25" TextColor="#087A32" />
                         </Grid>
                     </VerticalStackLayout>
                 </Border>
 
-                <Label Text="Discover" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}"
+                <Label Text="{DynamicResource AppText_Community_Discover}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}"
                        Margin="2,3,0,0" />
 
                 <Border Padding="16" BackgroundColor="{StaticResource AccentBlueTint}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
-                        SemanticProperties.Description="Open Prayer Requests">
+                        SemanticProperties.Description="{DynamicResource AppText_Community_OpenPrayer}">
                     <Border.GestureRecognizers>
                         <TapGestureRecognizer Tapped="OnPrayerRequestsClicked" />
                     </Border.GestureRecognizers>
@@ -102,8 +102,8 @@
                                    HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                            <Label Text="Prayer Requests" FontSize="17" FontAttributes="Bold" TextColor="#123B73" />
-                            <Label Text="Share your needs and stand with others." FontSize="12" TextColor="#54708B" />
+                            <Label Text="{DynamicResource AppText_Home_PrayerRequests}" FontSize="17" FontAttributes="Bold" TextColor="#123B73" />
+                            <Label Text="{DynamicResource AppText_Community_PrayerDescription}" FontSize="12" TextColor="#54708B" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="29" TextColor="#1769AA"
                                VerticalOptions="Center" />
@@ -112,7 +112,7 @@
 
                 <Border Padding="16" BackgroundColor="{StaticResource AccentPurpleTint}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
-                        SemanticProperties.Description="Open Church Announcements">
+                        SemanticProperties.Description="{DynamicResource AppText_Community_OpenAnnouncements}">
                     <Border.GestureRecognizers>
                         <TapGestureRecognizer Tapped="OnChurchAnnouncementsClicked" />
                     </Border.GestureRecognizers>
@@ -123,8 +123,8 @@
                                    HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                            <Label Text="Church Announcements" FontSize="17" FontAttributes="Bold" TextColor="#38216B" />
-                            <Label Text="Stay updated with church news and events." FontSize="12" TextColor="#75658F" />
+                            <Label Text="{DynamicResource AppText_Community_Announcements}" FontSize="17" FontAttributes="Bold" TextColor="#38216B" />
+                            <Label Text="{DynamicResource AppText_Community_AnnouncementsDescription}" FontSize="12" TextColor="#75658F" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="29" TextColor="#6B46C1"
                                VerticalOptions="Center" />
@@ -133,7 +133,7 @@
 
                 <Border Padding="16" BackgroundColor="#FFF8E7" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20"
-                        SemanticProperties.Description="Open Church Groups">
+                        SemanticProperties.Description="{DynamicResource AppText_Community_OpenGroups}">
                     <Border.GestureRecognizers>
                         <TapGestureRecognizer Tapped="OnChurchGroupsClicked" />
                     </Border.GestureRecognizers>
@@ -144,8 +144,8 @@
                                    HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                            <Label Text="Church Groups" FontSize="17" FontAttributes="Bold" TextColor="#684400" />
-                            <Label Text="Connect and grow in faith together." FontSize="12" TextColor="#8A7045" />
+                            <Label Text="{DynamicResource AppText_Community_Groups}" FontSize="17" FontAttributes="Bold" TextColor="#684400" />
+                            <Label Text="{DynamicResource AppText_Community_GroupsDescription}" FontSize="12" TextColor="#8A7045" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="29" TextColor="#A66A00"
                                VerticalOptions="Center" />

@@ -4,8 +4,8 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.ProfilePage"
-    Title="Profile"
-    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    Title="{DynamicResource AppText_Profile_Title}"
+    BackgroundColor="{DynamicResource AppPageBackground}">
 
     <ScrollView VerticalScrollBarVisibility="Never">
         <VerticalStackLayout Spacing="0">
@@ -25,13 +25,13 @@
                         TranslationY="34" />
                     <VerticalStackLayout Spacing="5">
                         <Label
-                            Text="ACCOUNT"
+                            Text="{DynamicResource AppText_Profile_Account}"
                             FontSize="11"
                             FontAttributes="Bold"
                             CharacterSpacing="2"
                             TextColor="#D9C39E" />
                         <Label
-                            Text="My Profile"
+                            Text="{DynamicResource AppText_Profile_MyProfile}"
                             FontSize="30"
                             FontAttributes="Bold"
                             TextColor="White" />
@@ -103,13 +103,13 @@
                         <VerticalStackLayout Spacing="4" HorizontalOptions="Center">
                             <Label
                                 x:Name="FullNameLabel"
-                                Text="Full Name"
+                                Text="{DynamicResource AppText_Profile_FullName}"
                                 FontSize="22"
                                 FontAttributes="Bold"
                                 TextColor="{StaticResource TextPrimary}"
                                 HorizontalTextAlignment="Center" />
                             <Label
-                                Text="CCT-USCF member"
+                                Text="{DynamicResource AppText_Profile_Member}"
                                 FontSize="12"
                                 CharacterSpacing="1"
                                 TextColor="#8B7658"
@@ -120,26 +120,26 @@
 
                         <VerticalStackLayout Spacing="11">
                             <Label
-                                Text="CONTACT INFORMATION"
+                                Text="{DynamicResource AppText_Profile_Contact}"
                                 FontSize="11"
                                 FontAttributes="Bold"
                                 CharacterSpacing="1.4"
                                 TextColor="#1A4D3A" />
                             <Label
                                 x:Name="UsernameLabel"
-                                Text="Username"
+                                Text="{DynamicResource AppText_Profile_Username}"
                                 FontSize="14"
                                 TextColor="{StaticResource TextSecondary}"
                                 LineBreakMode="WordWrap" />
                             <Label
                                 x:Name="EmailLabel"
-                                Text="Email"
+                                Text="{DynamicResource AppText_Profile_Email}"
                                 FontSize="14"
                                 TextColor="{StaticResource TextSecondary}"
                                 LineBreakMode="CharacterWrap" />
                             <Label
                                 x:Name="PhoneNumberLabel"
-                                Text="Phone Number"
+                                Text="{DynamicResource AppText_Profile_Phone}"
                                 FontSize="14"
                                 TextColor="{StaticResource TextSecondary}"
                                 LineBreakMode="WordWrap" />
@@ -149,7 +149,7 @@
 
                         <VerticalStackLayout Spacing="11">
                             <Label
-                                Text="MEMBERSHIP DETAILS"
+                                Text="{DynamicResource AppText_Profile_Membership}"
                                 FontSize="11"
                                 FontAttributes="Bold"
                                 CharacterSpacing="1.4"
@@ -159,16 +159,16 @@
                                 RowDefinitions="Auto,Auto,Auto,Auto"
                                 ColumnSpacing="12"
                                 RowSpacing="10">
-                                <Label x:Name="RoleLabel" Text="Role" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
-                                <Label x:Name="BranchLabel" Grid.Column="1" Text="USCF Branch" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
-                                <Label x:Name="RegionLabel" Grid.Row="1" Text="Region" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
-                                <Label x:Name="DistrictLabel" Grid.Row="1" Grid.Column="1" Text="District" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                                <Label x:Name="RoleLabel" Text="{DynamicResource AppText_Profile_Role}" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                                <Label x:Name="BranchLabel" Grid.Column="1" Text="{DynamicResource AppText_Profile_Branch}" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                                <Label x:Name="RegionLabel" Grid.Row="1" Text="{DynamicResource AppText_Profile_Region}" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                                <Label x:Name="DistrictLabel" Grid.Row="1" Grid.Column="1" Text="{DynamicResource AppText_Profile_District}" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
                             </Grid>
                         </VerticalStackLayout>
 
                         <Button
                             x:Name="LogoutButton"
-                            Text="Sign out"
+                            Text="{DynamicResource AppText_Profile_SignOut}"
                             FontSize="13"
                             TextColor="#8D4B4B"
                             BackgroundColor="{AppThemeBinding Light=#FFF8F6, Dark={StaticResource SurfaceDark}}"
@@ -182,14 +182,14 @@
                 </Border>
 
                 <Label
-                    Text="YOUR CCT-USCF"
+                    Text="{DynamicResource AppText_Profile_YourUscf}"
                     FontSize="11"
                     FontAttributes="Bold"
                     CharacterSpacing="1.5"
                     TextColor="#8B7658"
                     Margin="2,4,0,0" />
 
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
                     <Grid x:Name="SavedVersesCard" Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
                         <Border Grid.ColumnSpan="3" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 16">
                             <Border.Shadow><Shadow Brush="#173B28" Offset="0,2" Radius="8" Opacity="0.06" /></Border.Shadow>
@@ -197,7 +197,7 @@
                         <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light=#F6F0E7, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 16">
                             <Label Text="▤" FontSize="24" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
-                        <Label Grid.Column="1" Text="Saved Bible Verses" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{DynamicResource AppText_Profile_SavedVerses}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="SavedVersesButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnSavedVersesClicked" />
                     </Grid>
@@ -208,7 +208,7 @@
                         <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light=#F6F0E7, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 16">
                             <Label Text="♡" FontSize="28" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
-                        <Label Grid.Column="1" Text="My Prayer Requests" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{DynamicResource AppText_Profile_MyPrayerRequests}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="PrayerRequestsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnPrayerRequestsClicked" />
                     </Grid>
@@ -219,7 +219,7 @@
                         <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light=#F6F0E7, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 16">
                             <Label Text="▥" FontSize="24" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
-                        <Label Grid.Column="1" Text="Saved Sermons" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{DynamicResource AppText_Profile_SavedSermons}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="SavedSermonsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnSavedSermonsClicked" />
                     </Grid>
@@ -230,7 +230,7 @@
                         <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light=#F6F0E7, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 16">
                             <Label Text="□" FontSize="27" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
-                        <Label Grid.Column="1" Text="My Events" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{DynamicResource AppText_Profile_MyEvents}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="EventsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnEventsClicked" />
                     </Grid>
@@ -242,8 +242,8 @@
                             <Label Text="⭐" FontSize="24" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="Rate USCF" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                            <Label Text="Enjoying CCT-USCF? Share your experience." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                            <Label Text="{DynamicResource AppText_Profile_RateUscf}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                            <Label Text="{DynamicResource AppText_Profile_RatePrompt}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="RateUsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnRateUsClicked" />
@@ -256,8 +256,8 @@
                             <Label Text="💬" FontSize="24" TextColor="#1A4D3A" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="Help &amp; Support" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                            <Label Text="Get help, ask a question, or share feedback." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                            <Label Text="{DynamicResource AppText_Profile_HelpSupport}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                            <Label Text="{DynamicResource AppText_Profile_HelpPrompt}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="HelpSupportButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnHelpSupportClicked" />
@@ -269,15 +269,29 @@
                         <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light=#F6F0E7, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 16">
                             <Label Text="⚙" FontSize="24" TextColor="#8B7658" HorizontalOptions="Center" VerticalOptions="Center" />
                         </Border>
-                        <Label Grid.Column="1" Text="Settings" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{DynamicResource AppText_Profile_Settings}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
                         <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
                         <Button x:Name="SettingsButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnSettingsClicked" />
+                    </Grid>
+                    <Grid x:Name="AboutCctUsfcCard" Row="7" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border Grid.ColumnSpan="3" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 16">
+                            <Border.Shadow><Shadow Brush="#173B28" Offset="0,2" Radius="8" Opacity="0.06" /></Border.Shadow>
+                        </Border>
+                        <Border Padding="12" WidthRequest="48" HeightRequest="48" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 16">
+                            <Label Text="ℹ" FontSize="25" TextColor="#1A4D3A" HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="ABOUT CCT-USCF" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                            <Label Text="Learn about the history, mission, leadership and official information of CCT-USCF." FontSize="12" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                        <Button x:Name="AboutCctUsfcButton" Grid.ColumnSpan="3" Text="" BackgroundColor="Transparent" Clicked="OnAboutCctUsfcClicked" />
                     </Grid>
                 </Grid>
 
                 <Button
                     x:Name="LogoutButtonBottom"
-                    Text="⇥   Logout"
+                    Text="{DynamicResource AppText_Profile_Logout}"
                     FontSize="15"
                     FontAttributes="Bold"
                     TextColor="#8D4B4B"

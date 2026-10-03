@@ -14,7 +14,7 @@ public partial class App : Application
         InitializeComponent();
         MauiProgram.Services
             .GetRequiredService<AppAppearanceService>()
-            .ApplyTypography();
+            .Initialize();
         RequestedThemeChanged += OnRequestedThemeChanged;
         Debug.WriteLine($"[STARTUP] App created at {DateTimeOffset.UtcNow:O}");
 

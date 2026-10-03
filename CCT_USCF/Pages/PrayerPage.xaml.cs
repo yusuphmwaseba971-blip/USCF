@@ -15,6 +15,7 @@ namespace CCT_USCF.Pages;
 public partial class PrayerPage : ContentPage
 {
     private readonly PrayerService _prayerService;
+    private readonly AppAppearanceService _appearance;
     private readonly ObservableCollection<PrayerRequest> _items = new();
     private bool _isLoadingMore = false;
     private bool _initialLoadCompleted;
@@ -25,6 +26,7 @@ public partial class PrayerPage : ContentPage
     {
         InitializeComponent();
         _prayerService = MauiProgram.Services.GetRequiredService<PrayerService>();
+        _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
         PrayerRefreshView.Refreshing += OnRefreshRequested;
         _prayerService.PrayersSynchronized += OnPrayersSynchronized;
     }
@@ -32,8 +34,24 @@ public partial class PrayerPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _appearance.AppearanceChanged += OnAppearanceChanged;
         await LoadPrayerWallAsync();
         ShowIntroIfNeeded();
+    }
+
+    protected override void OnDisappearing()
+    {
+        _appearance.AppearanceChanged -= OnAppearanceChanged;
+        base.OnDisappearing();
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (PrayerErrorState.IsVisible)
+                PrayerErrorMessage.SetDynamicResource(Label.TextProperty, "AppText_Prayer_LoadError");
+        });
     }
 
     private async Task LoadPrayerWallAsync()
@@ -58,7 +76,7 @@ public partial class PrayerPage : ContentPage
         {
             System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message}");
             PrayerCollectionView.ItemsSource = null;
-            PrayerErrorMessage.Text = "Unable to load prayer requests.";
+            PrayerErrorMessage.SetDynamicResource(Label.TextProperty, "AppText_Prayer_LoadError");
             PrayerErrorState.IsVisible = true;
         }
         finally
@@ -93,7 +111,10 @@ public partial class PrayerPage : ContentPage
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[PRAYER_NAVIGATION_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message}");
-            await DisplayAlert("Prayer request", "We couldn't open the prayer form. Please try again.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Prayer.RequestValidationTitle"),
+                _appearance.GetText("Prayer.NavigationError"),
+                _appearance.GetText("Common.Ok"));
         }
         finally
         {
@@ -111,7 +132,7 @@ public partial class PrayerPage : ContentPage
         try
         {
             button.IsEnabled = false;
-            button.Text = "Saving...";
+            button.Text = _appearance.GetText("Prayer.SaveAction");
             var result = await _prayerService.PrayForRequestAsync(prayerId);
             if (button.BindingContext is PrayerRequest prayer)
             {
@@ -119,13 +140,16 @@ public partial class PrayerPage : ContentPage
                 prayer.PrayerCount = result.Count;
             }
 
-            button.Text = "🙏  I PRAYED";
+            button.Text = _appearance.GetText("Prayer.IPrayed");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[PRAYER] Prayer action failed: {ex}");
-            await DisplayAlert("Prayer", "We couldn't record your prayer action right now.", "OK");
-            button.Text = "🙏  I PRAY";
+            await DisplayAlert(
+                _appearance.GetText("Prayer.Title"),
+                _appearance.GetText("Prayer.ActionError"),
+                _appearance.GetText("Common.Ok"));
+            button.Text = _appearance.GetText("Prayer.IPray");
             button.IsEnabled = true;
         }
     }

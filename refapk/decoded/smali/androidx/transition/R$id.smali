@@ -1,0 +1,101 @@
+.class public final Landroidx/transition/R$id;
+.super Ljava/lang/Object;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Landroidx/transition/R;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x19
+    name = "id"
+.end annotation
+
+
+# static fields
+.field public static final action_container:I = 0x7f080039
+
+.field public static final action_divider:I = 0x7f08003c
+
+.field public static final action_image:I = 0x7f08003d
+
+.field public static final action_text:I = 0x7f080048
+
+.field public static final actions:I = 0x7f080049
+
+.field public static final async:I = 0x7f08017e
+
+.field public static final blocking:I = 0x7f080188
+
+.field public static final chronometer:I = 0x7f0801ad
+
+.field public static final forever:I = 0x7f0801f0
+
+.field public static final ghost_view:I = 0x7f0801f2
+
+.field public static final ghost_view_holder:I = 0x7f0801f3
+
+.field public static final icon:I = 0x7f080200
+
+.field public static final icon_group:I = 0x7f080201
+
+.field public static final info:I = 0x7f080206
+
+.field public static final italic:I = 0x7f08020b
+
+.field public static final line1:I = 0x7f080214
+
+.field public static final line3:I = 0x7f080215
+
+.field public static final normal:I = 0x7f08025a
+
+.field public static final notification_background:I = 0x7f08025b
+
+.field public static final notification_main_column:I = 0x7f08025c
+
+.field public static final notification_main_column_container:I = 0x7f08025d
+
+.field public static final parent_matrix:I = 0x7f080267
+
+.field public static final right_icon:I = 0x7f08027d
+
+.field public static final right_side:I = 0x7f08027e
+
+.field public static final save_non_transition_alpha:I = 0x7f080281
+
+.field public static final save_overlay_view:I = 0x7f080282
+
+.field public static final tag_transition_group:I = 0x7f0802c9
+
+.field public static final tag_unhandled_key_event_manager:I = 0x7f0802ca
+
+.field public static final tag_unhandled_key_listeners:I = 0x7f0802cb
+
+.field public static final text:I = 0x7f0802d1
+
+.field public static final text2:I = 0x7f0802d2
+
+.field public static final time:I = 0x7f0802e1
+
+.field public static final title:I = 0x7f0802e2
+
+.field public static final transition_current_scene:I = 0x7f0802ee
+
+.field public static final transition_layout_save:I = 0x7f0802ef
+
+.field public static final transition_position:I = 0x7f0802f0
+
+.field public static final transition_scene_layoutid_cache:I = 0x7f0802f1
+
+.field public static final transition_transform:I = 0x7f0802f2
+
+
+# direct methods
+.method private constructor <init>()V
+    .locals 0
+
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    return-void
+.end method

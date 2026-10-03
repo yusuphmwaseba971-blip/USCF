@@ -15,26 +15,26 @@
     TabBarUnselectedColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}">
 
     <TabBar>
-        <ShellContent Title="Home" Icon="home_tab.svg" Route="home" ContentTemplate="{DataTemplate pages:HomePage}" />
+        <ShellContent Title="{DynamicResource AppText_Shell_Home}" Icon="home_tab.svg" Route="home" ContentTemplate="{DataTemplate pages:HomePage}" />
         <ShellContent Title="Bible" Icon="bible_tab.svg" Route="bible" ContentTemplate="{DataTemplate pages:BiblePage}" />
-        <ShellContent Title="Prayer" Icon="prayer_tab.svg" Route="prayer" ContentTemplate="{DataTemplate pages:PrayerPage}" />
-        <ShellContent Title="Community" Icon="community_tab.svg" Route="community" ContentTemplate="{DataTemplate pages:CommunityPage}" />
-        <ShellContent Title="Profile" Icon="profile_tab.svg" Route="profile" ContentTemplate="{DataTemplate pages:ProfilePage}" />
+        <ShellContent Title="{DynamicResource AppText_Shell_Prayer}" Icon="prayer_tab.svg" Route="prayer" ContentTemplate="{DataTemplate pages:PrayerPage}" />
+        <ShellContent Title="{DynamicResource AppText_Shell_Community}" Icon="community_tab.svg" Route="community" ContentTemplate="{DataTemplate pages:CommunityPage}" />
+        <ShellContent Title="{DynamicResource AppText_Shell_Profile}" Icon="profile_tab.svg" Route="profile" ContentTemplate="{DataTemplate pages:ProfilePage}" />
     </TabBar>
 
     <Shell.TitleView>
         <Grid Padding="8,0,8,0" ColumnDefinitions="*,Auto,Auto">
             <Button Grid.Column="1" x:Name="AssistantButton"
                     Text="✦" FontSize="20"
-                    SemanticProperties.Description="Open USCF Assistance"
+                    SemanticProperties.Description="{DynamicResource AppText_Shell_Assistance}"
                     BackgroundColor="{StaticResource SoftMint}"
                     TextColor="{StaticResource BrandDeepGreen}"
                     CornerRadius="22" MinimumWidthRequest="44" MinimumHeightRequest="44"
                     Padding="0" Clicked="OnAssistantClicked" />
             <Button x:Name="SignUpLoginButton"
                     Grid.Column="2"
-                    Text="Sign Up / Login"
-                    SemanticProperties.Hint="Open authentication actions"
+                    Text="{DynamicResource AppText_Shell_SignUpLogin}"
+                    SemanticProperties.Hint="{DynamicResource AppText_Shell_OpenAuth}"
                     HorizontalOptions="End"
                     VerticalOptions="Center"
                     Clicked="OnSignUpLoginClicked"
@@ -42,7 +42,7 @@
 
             <Button x:Name="AuthProfileButton"
                     Grid.Column="2"
-                    Text="Profile"
+                    Text="{DynamicResource AppText_Shell_Profile}"
                     HorizontalOptions="End"
                     VerticalOptions="Center"
                     Clicked="OnAuthProfileClicked"

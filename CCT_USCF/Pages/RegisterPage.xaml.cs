@@ -41,7 +41,7 @@ public partial class RegisterPage : ContentPage
         // DEFAULT ROLE
         // =====================================================
 
-        RolePicker.SelectedIndex = 0;
+        RolePicker.SelectedIndex = 5;
 
         // =====================================================
         // LOCATION EVENTS
@@ -85,6 +85,7 @@ public partial class RegisterPage : ContentPage
             return;
 
         AuthenticationCredentialsSection.IsVisible = !_googleOnboarding;
+        GoogleCreateAccountButton.IsVisible = !_googleOnboarding;
         Title = _googleOnboarding ? "Complete your USCF profile" : "Create USCF Account";
         CreateAccountButton.Text = _googleOnboarding ? "CONTINUE" : "CREATE ACCOUNT";
 
@@ -157,23 +158,21 @@ public partial class RegisterPage : ContentPage
         await Shell.Current.GoToAsync(nameof(TermsOfUsePage));
     }
 
-    private bool RequiresLocationSelection()
+    private string GetSelectedAccountType()
     {
-        if (RolePicker.SelectedIndex == 0)
-            return true;
+        return RolePicker.SelectedItem as string ?? string.Empty;
+    }
 
-        if (LevelPicker.SelectedIndex < 0)
-            return true;
-
-        return LevelPicker.SelectedIndex != 0;
+    private bool IsLeadershipAccountType()
+    {
+        var accountType = GetSelectedAccountType();
+        return accountType is "USCF_LEADER" or "PASTOR";
     }
 
     private void UpdateRoleUI()
     {
-        var roleIndex =
-            RolePicker.SelectedIndex;
-
-        var roleName = RolePicker.SelectedItem as string ?? "Unknown";
+        var roleIndex = RolePicker.SelectedIndex;
+        var roleName = GetSelectedAccountType();
 
         System.Diagnostics.Debug.WriteLine(
             $"[REGISTER] UpdateRoleUI: roleIndex={roleIndex}, role={roleName}");
@@ -182,7 +181,7 @@ public partial class RegisterPage : ContentPage
         // MEMBER
         // -----------------------------------------------------
 
-        if (roleIndex == 0)
+        if (!IsLeadershipAccountType())
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[REGISTER] Member selected - setting LocationSection.IsVisible=true");
@@ -226,6 +225,11 @@ public partial class RegisterPage : ContentPage
         object sender,
         EventArgs e)
     {
+        DutyPicker.Items[0] =
+            string.Equals(LevelPicker.SelectedItem as string, "National", StringComparison.Ordinal)
+                ? "President"
+                : "Chairman";
+
         UpdateLocationFields();
     }
 
@@ -239,24 +243,11 @@ public partial class RegisterPage : ContentPage
         System.Diagnostics.Debug.WriteLine(
             $"[REGISTER] UpdateLocationFields: roleIndex={roleIndex}, role={roleName}, levelIndex={levelIndex}, level={levelName}");
 
-        if (RolePicker.SelectedIndex == 0)
+        if (!IsLeadershipAccountType())
         {
             LocationSection.IsVisible = true;
             System.Diagnostics.Debug.WriteLine(
                 $"[REGISTER] Member role detected - keeping location section visible");
-            return;
-        }
-
-        var requiresLocation = RequiresLocationSelection();
-        if (!requiresLocation)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[REGISTER] National leadership level selected - hiding the complete location section");
-
-            LocationSection.IsVisible = false;
-            RegionPicker.IsVisible = false;
-            DistrictPicker.IsVisible = false;
-            BranchPicker.IsVisible = false;
             return;
         }
 
@@ -286,7 +277,7 @@ public partial class RegisterPage : ContentPage
         object sender,
         EventArgs e)
     {
-        if (RolePicker.SelectedIndex == 0)
+        if (!IsLeadershipAccountType())
             return;
 
         if (DutyPicker.SelectedItem is not string duty)
@@ -452,19 +443,6 @@ public partial class RegisterPage : ContentPage
 
         BranchPicker.IsVisible = false;
 
-        // -----------------------------------------------------
-        // NATIONAL LEVEL DOES NOT NEED LOCATION
-        // -----------------------------------------------------
-
-        if (RolePicker.SelectedIndex != 0 &&
-            LevelPicker.SelectedIndex == 0)
-        {
-            DistrictPicker.IsVisible = false;
-            BranchPicker.IsVisible = false;
-
-            return;
-        }
-
         await LoadDistrictsAsync(
             selectedRegion.Id);
     }
@@ -515,11 +493,12 @@ public partial class RegisterPage : ContentPage
             // DISTRICT LEVEL OR BRANCH LEVEL
             // -------------------------------------------------
 
-            if (RolePicker.SelectedIndex == 0)
+            if (!IsLeadershipAccountType())
             {
                 DistrictPicker.IsVisible = true;
             }
-            else if (LevelPicker.SelectedIndex >= 2)
+            else if (LevelPicker.SelectedIndex == 0 ||
+                     LevelPicker.SelectedIndex >= 2)
             {
                 DistrictPicker.IsVisible = true;
             }
@@ -646,6 +625,71 @@ public partial class RegisterPage : ContentPage
     // CREATE ACCOUNT
     // =========================================================
 
+    private async void OnGoogleCreateAccountClicked(
+        object sender,
+        EventArgs e)
+    {
+        if (LoadingIndicator.IsRunning)
+            return;
+
+        if (!_consentAccepted)
+        {
+            ShowError("Please accept the Terms of Use and acknowledge the Privacy Policy before creating your account.");
+            return;
+        }
+
+        MessageLabel.IsVisible = false;
+        GoogleCreateAccountButton.IsEnabled = false;
+        SetLoading(true);
+        MessageLabel.Text = "Connecting to Google...";
+        MessageLabel.IsVisible = true;
+
+        try
+        {
+            var result = await _authService.SignInWithGoogleAsync();
+            if (!result.Success)
+            {
+                ShowError(result.Error ?? "Google Sign-In could not be completed.");
+                return;
+            }
+
+            await TokenStorage.SaveSessionAsync(
+                result.Token,
+                result.RefreshToken,
+                result.ExpiresAtUtc ?? DateTime.UtcNow.AddDays(30));
+
+            var user = await _authService.GetCurrentUserAsync();
+            if (user == null)
+            {
+                if (!result.RequiresProfileSetup)
+                {
+                    ShowError("Google Sign-In succeeded, but your CCT-USCF profile could not be loaded.");
+                    return;
+                }
+
+                _googleOnboarding = true;
+                ApplyGoogleOnboardingMode();
+                MessageLabel.IsVisible = false;
+                return;
+            }
+
+            await TokenStorage.SaveCachedUserAsync(user);
+            MauiProgram.SetCurrentUser(user);
+            MauiProgram.NotifyAuthChanged();
+            await Shell.Current.GoToAsync("//home");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[REGISTER] Google account creation failed: {ex}");
+            ShowError("Google Sign-In could not be completed. Please try again.");
+        }
+        finally
+        {
+            SetLoading(false);
+            GoogleCreateAccountButton.IsEnabled = !_googleOnboarding;
+        }
+    }
+
     private async void OnCreateAccountClicked(
         object sender,
         EventArgs e)
@@ -714,16 +758,16 @@ public partial class RegisterPage : ContentPage
         // ROLE
         // =====================================================
 
-        var role =
-            RolePicker.SelectedIndex switch
-            {
-                1 => "Leader",
-                2 => "Pastor",
-                _ => "Member"
-            };
+        var selectedAccountType = GetSelectedAccountType();
+        var role = selectedAccountType switch
+        {
+            "USCF_LEADER" => "Leader",
+            "PASTOR" => "Pastor",
+            _ => "Member"
+        };
 
         var leadershipLevel =
-            RolePicker.SelectedIndex == 0
+            !IsLeadershipAccountType()
                 ? string.Empty
                 : (LevelPicker.SelectedItem as string ?? string.Empty);
 
@@ -787,7 +831,7 @@ public partial class RegisterPage : ContentPage
         // LEADERSHIP LEVEL
         // =====================================================
 
-        if (RolePicker.SelectedIndex != 0 &&
+        if (IsLeadershipAccountType() &&
             LevelPicker.SelectedIndex < 0)
         {
             ShowError(
@@ -796,7 +840,7 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
-        if (RolePicker.SelectedIndex != 0 &&
+        if (IsLeadershipAccountType() &&
             string.IsNullOrWhiteSpace(leadershipLevel))
         {
             ShowError(
@@ -805,7 +849,7 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
-        if (RolePicker.SelectedIndex != 0 &&
+        if (IsLeadershipAccountType() &&
             string.IsNullOrWhiteSpace(leadershipDuty))
         {
             ShowError(
@@ -814,8 +858,8 @@ public partial class RegisterPage : ContentPage
             return;
         }
 
-        if (RolePicker.SelectedIndex != 0 &&
-            LevelPicker.SelectedIndex > 0)
+        if (IsLeadershipAccountType() &&
+            LevelPicker.SelectedIndex >= 0)
         {
             if (RegionPicker.SelectedItem is not AuthLocation selectedRegion)
             {
@@ -842,7 +886,7 @@ public partial class RegisterPage : ContentPage
             }
         }
 
-        if (RolePicker.SelectedIndex != 0)
+        if (IsLeadershipAccountType())
         {
             await ShowLeadershipDutyPopupAsync(leadershipDuty);
         }
@@ -868,7 +912,8 @@ public partial class RegisterPage : ContentPage
                     districtId,
                     branchId,
                     leadershipLevel,
-                    leadershipDuty);
+                    leadershipDuty,
+                    selectedAccountType);
                 await TokenStorage.SaveCachedUserAsync(completedUser);
                 MauiProgram.SetCurrentUser(completedUser, notify: true);
                 await Shell.Current.GoToAsync("//home");
@@ -876,7 +921,8 @@ public partial class RegisterPage : ContentPage
             }
 
             await _authService.RegisterAsync(fullName, username, email, password, confirm,
-                role, regionId, districtId, branchId, leadershipLevel, leadershipDuty);
+                role, regionId, districtId, branchId, leadershipLevel, leadershipDuty,
+                selectedAccountType);
 
             // =================================================
             // SUCCESS

@@ -16,6 +16,9 @@ public partial class SettingsPage : ContentPage
     private string _groupId = string.Empty;
     private string _groupName = string.Empty;
     private bool _canDeleteGroup;
+    private bool _refreshingOptions;
+    private readonly IReadOnlyList<string> _backgroundKeys =
+        AppAppearanceService.Backgrounds.Keys.Concat(["Custom"]).ToList();
 
     public SettingsPage()
     {
@@ -26,10 +29,7 @@ public partial class SettingsPage : ContentPage
         _groupService = MauiProgram.Services.GetRequiredService<ChurchGroupService>();
         _communityService = MauiProgram.Services.GetRequiredService<CommunityService>();
         _groupCache = MauiProgram.Services.GetRequiredService<ChurchGroupCacheService>();
-        LanguagePicker.ItemsSource = AppAppearanceService.Languages.Keys.ToList();
-        BackgroundPicker.ItemsSource = AppAppearanceService.Backgrounds.Keys.Concat(["Custom"]).ToList();
-        FontPreferencePicker.ItemsSource = AppAppearanceService.FontPreferences.ToList();
-        FontSizePreferencePicker.ItemsSource = AppAppearanceService.FontSizePreferences.ToList();
+        RefreshOptions();
     }
 
     public string GroupId
@@ -69,10 +69,53 @@ public partial class SettingsPage : ContentPage
 
         GroupSettingsSection.IsVisible = !string.IsNullOrWhiteSpace(_groupId);
         GroupSettingsTitle.Text = string.IsNullOrWhiteSpace(_groupName)
-            ? "Group Settings"
-            : $"Group Settings · {_groupName}";
+            ? _appearance.GetText("Settings.GroupSettings")
+            : $"{_appearance.GetText("Settings.GroupSettings")} · {_groupName}";
         DeleteGroupFromSettingsButton.IsVisible = _canDeleteGroup;
     }
+
+    private void RefreshOptions()
+    {
+        _refreshingOptions = true;
+        try
+        {
+            LanguagePicker.ItemsSource = AppAppearanceService.Languages.Keys.ToList();
+            LanguagePicker.SelectedItem = AppAppearanceService.Languages
+                .FirstOrDefault(option => option.Value == _appearance.Language).Key;
+
+            BackgroundPicker.ItemsSource = _backgroundKeys
+                .Select(key => _appearance.GetText(BackgroundTextKey(key)))
+                .ToList();
+            BackgroundPicker.SelectedIndex = _backgroundKeys
+                .ToList()
+                .FindIndex(key => string.Equals(key, _appearance.BackgroundName, StringComparison.OrdinalIgnoreCase));
+
+            FontPreferencePicker.ItemsSource = AppAppearanceService.FontPreferences
+                .Select(key => _appearance.GetText($"Settings.Font.{key}"))
+                .ToList();
+            FontPreferencePicker.SelectedIndex = AppAppearanceService.FontPreferences
+                .ToList()
+                .FindIndex(key => string.Equals(key, _appearance.FontPreference, StringComparison.OrdinalIgnoreCase));
+
+            FontSizePreferencePicker.ItemsSource = AppAppearanceService.FontSizePreferences
+                .Select(key => _appearance.GetText($"Settings.Font.{key}"))
+                .ToList();
+            FontSizePreferencePicker.SelectedIndex = AppAppearanceService.FontSizePreferences
+                .ToList()
+                .FindIndex(key => string.Equals(key, _appearance.FontSizePreference, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _refreshingOptions = false;
+        }
+    }
+
+    private static string BackgroundTextKey(string background) =>
+        background switch
+        {
+            "Soft gradient" => "Settings.Background.SoftGradient",
+            _ => $"Settings.Background.{background}"
+        };
 
     private async void OnDeleteGroupFromSettingsClicked(object? sender, EventArgs e)
     {
@@ -80,10 +123,10 @@ public partial class SettingsPage : ContentPage
             return;
 
         if (!await DisplayAlert(
-                "Delete group?",
-                "This will deactivate this group for all members.",
-                "Delete",
-                "Cancel"))
+                _appearance.GetText("Settings.DeleteGroupConfirmTitle"),
+                _appearance.GetText("Settings.DeleteGroupConfirmMessage"),
+                _appearance.GetText("Common.Delete"),
+                _appearance.GetText("Common.Cancel")))
             return;
 
         DeleteGroupFromSettingsButton.IsEnabled = false;
@@ -92,12 +135,18 @@ public partial class SettingsPage : ContentPage
             await _groupService.DeleteGroupAsync(_groupId);
             await _communityService.RemoveLocalGroupCacheAsync(_groupId);
             await _groupCache.RemoveGroupAsync(_groupId);
-            await DisplayAlert("Group deleted", "The group is no longer available.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Settings.GroupDeletedTitle"),
+                _appearance.GetText("Settings.GroupUnavailable"),
+                _appearance.GetText("Common.Ok"));
             await Shell.Current.GoToAsync("../..", true);
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Unable to delete group", ex.Message, "OK");
+            await DisplayAlert(
+                _appearance.GetText("Settings.DeleteGroupError"),
+                ex.Message,
+                _appearance.GetText("Common.Ok"));
             DeleteGroupFromSettingsButton.IsEnabled = true;
         }
     }
@@ -106,6 +155,9 @@ public partial class SettingsPage : ContentPage
     {
         base.OnAppearing();
         _appearance.AppearanceChanged += OnAppearanceChanged;
+        BackgroundColor = _appearance.BackgroundColor;
+        BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+        RefreshOptions();
         _ = LoadCurrentAsync();
     }
 
@@ -116,6 +168,8 @@ public partial class SettingsPage : ContentPage
             BackgroundColor = _appearance.BackgroundColor;
             BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
             AssistantSwitch.IsToggled = _assistant.IsEnabled;
+            RefreshOptions();
+            UpdateGroupSettingsVisibility();
         });
     }
 
@@ -135,7 +189,10 @@ public partial class SettingsPage : ContentPage
             var user = MauiProgram.CurrentUser ?? await _auth.GetCurrentUserAsync();
             if (user == null)
             {
-                await DisplayAlert("Not authenticated", "Please sign in.", "OK");
+                await DisplayAlert(
+                    _appearance.GetText("Settings.NotAuthenticated"),
+                    _appearance.GetText("Settings.SignIn"),
+                    _appearance.GetText("Common.Ok"));
                 await Shell.Current.GoToAsync("//home");
                 return;
             }
@@ -144,41 +201,107 @@ public partial class SettingsPage : ContentPage
             UsernameEntry.Text = user.Username;
             EmailEntry.Text = user.Email;
             PhoneNumberEntry.Text = user.PhoneNumber;
-            LanguagePicker.SelectedItem = AppAppearanceService.Languages.FirstOrDefault(x => x.Value == _appearance.Language).Key;
-            BackgroundPicker.SelectedItem = _appearance.BackgroundName;
             CustomColorEntry.Text = _appearance.CustomColor;
             BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
-            FontPreferencePicker.SelectedItem = _appearance.FontPreference;
-            FontSizePreferencePicker.SelectedItem = _appearance.FontSizePreference;
+            RefreshOptions();
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlert(
+                _appearance.GetText("Settings.Error"),
+                ex.Message,
+                _appearance.GetText("Common.Ok"));
         }
+    }
+
+    private async void OnLanguagePickerChanged(object? sender, EventArgs e)
+    {
+        if (_refreshingOptions || LanguagePicker.SelectedItem is not string language ||
+            !AppAppearanceService.Languages.TryGetValue(language, out var code))
+            return;
+
+        try
+        {
+            _appearance.SetLanguage(code);
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert(_appearance.GetText("Settings.Error"), ex.Message, _appearance.GetText("Common.Ok"));
+            RefreshOptions();
+        }
+    }
+
+    private async void OnBackgroundPickerChanged(object? sender, EventArgs e)
+    {
+        if (_refreshingOptions || BackgroundPicker.SelectedIndex < 0 ||
+            BackgroundPicker.SelectedIndex >= _backgroundKeys.Count)
+            return;
+
+        try
+        {
+            _appearance.SetBackground(_backgroundKeys[BackgroundPicker.SelectedIndex]);
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert(_appearance.GetText("Settings.Error"), ex.Message, _appearance.GetText("Common.Ok"));
+            RefreshOptions();
+        }
+    }
+
+    private void OnFontSizePickerChanged(object? sender, EventArgs e)
+    {
+        if (_refreshingOptions || FontSizePreferencePicker.SelectedIndex < 0 ||
+            FontSizePreferencePicker.SelectedIndex >= AppAppearanceService.FontSizePreferences.Count)
+            return;
+
+        _appearance.SetFontSizePreference(
+            AppAppearanceService.FontSizePreferences[FontSizePreferencePicker.SelectedIndex]);
     }
 
     private async void OnAppearanceClicked(object sender, EventArgs e)
     {
-        if (LanguagePicker.SelectedItem is string language &&
-            AppAppearanceService.Languages.TryGetValue(language, out var code))
-            _appearance.SetLanguage(code);
-        if (BackgroundPicker.SelectedItem is string background)
-            _appearance.SetBackground(background);
-        if (!string.IsNullOrWhiteSpace(CustomColorEntry.Text) &&
-            !Color.TryParse(CustomColorEntry.Text.Trim(), out _))
+        var customColor = CustomColorEntry.Text?.Trim();
+        var selectedCustomBackground = BackgroundPicker.SelectedIndex == _backgroundKeys.Count - 1;
+        var customColorChanged = !string.IsNullOrWhiteSpace(customColor) &&
+            !string.Equals(customColor, _appearance.CustomColor, StringComparison.OrdinalIgnoreCase);
+        if ((selectedCustomBackground || customColorChanged) &&
+            !string.IsNullOrWhiteSpace(customColor) &&
+            !Color.TryParse(customColor, out _))
         {
-            await DisplayAlert("Appearance", "Use a valid color such as #336699.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Settings.LanguageAppearance"),
+                _appearance.GetText("Settings.AppearanceInvalidColor"),
+                _appearance.GetText("Common.Ok"));
             return;
         }
-        if (!string.IsNullOrWhiteSpace(CustomColorEntry.Text))
-            _appearance.SetCustomColor(CustomColorEntry.Text.Trim());
-        if (FontPreferencePicker.SelectedItem is string fontPreference)
-            _appearance.SetFontPreference(fontPreference);
-        if (FontSizePreferencePicker.SelectedItem is string fontSizePreference)
-            _appearance.SetFontSizePreference(fontSizePreference);
-        BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
-        BackgroundColor = _appearance.BackgroundColor;
-        await DisplayAlert("Appearance", "Appearance settings saved.", "OK");
+
+        try
+        {
+            if (customColorChanged && !string.IsNullOrWhiteSpace(customColor))
+                _appearance.SetCustomColor(customColor);
+            else if (selectedCustomBackground)
+                _appearance.SetBackground("Custom");
+
+            _appearance.SetFontPreference("System");
+            if (FontSizePreferencePicker.SelectedIndex >= 0 &&
+                FontSizePreferencePicker.SelectedIndex < AppAppearanceService.FontSizePreferences.Count)
+                _appearance.SetFontSizePreference(
+                    AppAppearanceService.FontSizePreferences[FontSizePreferencePicker.SelectedIndex]);
+
+            BackgroundPreview.BackgroundColor = _appearance.BackgroundColor;
+            BackgroundColor = _appearance.BackgroundColor;
+            await DisplayAlert(
+                _appearance.GetText("Settings.LanguageAppearance"),
+                _appearance.GetText("Settings.AppearanceApplied"),
+                _appearance.GetText("Common.Ok"));
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert(
+                _appearance.GetText("Settings.Error"),
+                ex.Message,
+                _appearance.GetText("Common.Ok"));
+        }
     }
 
     private async void OnSaveClicked(object sender, EventArgs e)
@@ -194,19 +317,19 @@ public partial class SettingsPage : ContentPage
             // Validate basic fields
             if (string.IsNullOrWhiteSpace(fullName))
             {
-                await DisplayAlert("Validation", "Full name is required.", "OK");
+                await DisplayAlert(_appearance.GetText("Settings.Validation"), _appearance.GetText("Settings.FullNameRequired"), _appearance.GetText("Common.Ok"));
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(username))
             {
-                await DisplayAlert("Validation", "Username is required.", "OK");
+                await DisplayAlert(_appearance.GetText("Settings.Validation"), _appearance.GetText("Settings.UsernameRequired"), _appearance.GetText("Common.Ok"));
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(email))
             {
-                await DisplayAlert("Validation", "Email is required.", "OK");
+                await DisplayAlert(_appearance.GetText("Settings.Validation"), _appearance.GetText("Settings.EmailRequired"), _appearance.GetText("Common.Ok"));
                 return;
             }
 
@@ -219,13 +342,13 @@ public partial class SettingsPage : ContentPage
             {
                 if (string.IsNullOrEmpty(currentPwd))
                 {
-                    await DisplayAlert("Validation", "Current password is required to change password.", "OK");
+                    await DisplayAlert(_appearance.GetText("Settings.Validation"), _appearance.GetText("Settings.CurrentPasswordRequired"), _appearance.GetText("Common.Ok"));
                     return;
                 }
 
                 if (newPwd != confirmPwd)
                 {
-                    await DisplayAlert("Validation", "New password and confirmation do not match.", "OK");
+                    await DisplayAlert(_appearance.GetText("Settings.Validation"), _appearance.GetText("Settings.PasswordMismatch"), _appearance.GetText("Common.Ok"));
                     return;
                 }
             }
@@ -233,17 +356,17 @@ public partial class SettingsPage : ContentPage
             var updated = await _auth.UpdateProfileAsync(fullName, username, email, phoneNumber, currentPwd, newPwd, confirmPwd);
             if (updated == null)
             {
-                await DisplayAlert("Error", "Unable to update profile.", "OK");
+                await DisplayAlert(_appearance.GetText("Settings.Error"), _appearance.GetText("Settings.UpdateProfileError"), _appearance.GetText("Common.Ok"));
                 return;
             }
 
             MauiProgram.SetCurrentUser(updated);
-            await DisplayAlert("Success", "Profile updated.", "OK");
+            await DisplayAlert(_appearance.GetText("Settings.Success"), _appearance.GetText("Settings.ProfileUpdated"), _appearance.GetText("Common.Ok"));
             await Shell.Current.GoToAsync("..", true);
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlert(_appearance.GetText("Settings.Error"), ex.Message, _appearance.GetText("Common.Ok"));
         }
         finally
         {
@@ -254,10 +377,10 @@ public partial class SettingsPage : ContentPage
     private async void OnDeleteAccountClicked(object sender, EventArgs e)
     {
         var confirmed = await DisplayAlert(
-            "Delete account?",
-            "This permanently deletes your Firebase account and CCT-USCF Firestore profile. This action cannot be undone.",
-            "Delete account",
-            "Cancel");
+            _appearance.GetText("Settings.DeleteAccountConfirmTitle"),
+            _appearance.GetText("Settings.DeleteAccountConfirmMessage"),
+            _appearance.GetText("Settings.DeleteAccountConfirm"),
+            _appearance.GetText("Common.Cancel"));
 
         if (!confirmed)
             return;
@@ -266,15 +389,18 @@ public partial class SettingsPage : ContentPage
         try
         {
             await _auth.DeleteAccountAsync();
-            await DisplayAlert("Account deleted", "Your account and profile have been deleted.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Settings.AccountDeletedTitle"),
+                _appearance.GetText("Settings.AccountDeletedMessage"),
+                _appearance.GetText("Common.Ok"));
             await Shell.Current.GoToAsync("//home");
         }
         catch (Exception ex)
         {
             await DisplayAlert(
-                "Account deletion",
+                _appearance.GetText("Settings.AccountDeletion"),
                 ex.Message,
-                "OK");
+                _appearance.GetText("Common.Ok"));
         }
         finally
         {

@@ -383,7 +383,8 @@ public class AuthService
         int? districtId,
         int? branchId,
         string? leadershipLevel = null,
-        string? leadershipDuty = null)
+        string? leadershipDuty = null,
+        string? accountType = null)
     {
         var firebaseUser = _auth.CurrentUser
             ?? throw new InvalidOperationException("No signed-in Google user was found.");
@@ -407,6 +408,7 @@ public class AuthService
         }
 
         var normalizedRole = string.IsNullOrWhiteSpace(role) ? "Member" : role.Trim();
+        var normalizedAccountType = string.IsNullOrWhiteSpace(accountType) ? string.Empty : accountType.Trim();
         var profile = new FirestoreUserProfileDocument
         {
             DocumentId = firebaseUser.Uid,
@@ -417,7 +419,9 @@ public class AuthService
             Role = normalizedRole,
             LeadershipLevel = leadershipLevel?.Trim() ?? string.Empty,
             LeadershipDuty = leadershipDuty?.Trim() ?? string.Empty,
-            ExistingRole = string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole,
+            ExistingRole = normalizedAccountType.Length > 0
+                ? normalizedAccountType
+                : string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole,
             Organization = BuildOrganizationValue(regionId, districtId, branchId, leadershipLevel?.Trim() ?? string.Empty),
             RegionId = regionId ?? 0,
             DistrictId = districtId ?? 0,
@@ -546,7 +550,8 @@ public class AuthService
         int? districtId,
         int? branchId,
         string? leadershipLevel = null,
-        string? leadershipDuty = null)
+        string? leadershipDuty = null,
+        string? accountType = null)
     {
         if (string.IsNullOrWhiteSpace(fullName))
             throw new Exception("Full name is required.");
@@ -574,7 +579,10 @@ public class AuthService
         var normalizedRole = string.IsNullOrWhiteSpace(role) ? "Member" : role.Trim();
         var normalizedLeadershipLevel = string.IsNullOrWhiteSpace(leadershipLevel) ? string.Empty : leadershipLevel.Trim();
         var normalizedLeadershipDuty = string.IsNullOrWhiteSpace(leadershipDuty) ? string.Empty : leadershipDuty.Trim();
-        var normalizedExistingRole = string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole;
+        var normalizedAccountType = string.IsNullOrWhiteSpace(accountType) ? string.Empty : accountType.Trim();
+        var normalizedExistingRole = normalizedAccountType.Length > 0
+            ? normalizedAccountType
+            : string.Equals(normalizedRole, "Member", StringComparison.OrdinalIgnoreCase) ? string.Empty : normalizedRole;
 
         System.Diagnostics.Debug.WriteLine(
             $"[FIREBASE AUTH] RegisterAsync inputs: role={normalizedRole}, leadershipLevel={normalizedLeadershipLevel}, leadershipDuty={normalizedLeadershipDuty}, regionId={regionId}, districtId={districtId}, branchId={branchId}");

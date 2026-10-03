@@ -19,36 +19,54 @@ public sealed class ChurchAnnouncementService
 
     public async Task<ChurchAnnouncementOptions> GetOptionsAsync(CancellationToken ct = default)
     {
+        await EnsureCurrentUserAsync();
+        var user = MauiProgram.CurrentUser
+            ?? throw new InvalidOperationException("Please sign in and complete your church profile first.");
+
         try
         {
             var options = await SendAsync<ChurchAnnouncementOptions>(
                 HttpMethod.Get, "api/church-announcements/options", null, ct);
             if (options?.Targets is { Count: > 0 })
-                return options;
+                return RestrictTargetsForUser(options, user);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             System.Diagnostics.Debug.WriteLine($"Announcement audience sync unavailable; using profile: {ex.Message}");
         }
 
-        return BuildProfileOptions();
+        return BuildProfileOptions(user);
     }
 
-    private static ChurchAnnouncementOptions BuildProfileOptions()
+    private static ChurchAnnouncementOptions RestrictTargetsForUser(
+        ChurchAnnouncementOptions options, CurrentUser user)
     {
-        var user = MauiProgram.CurrentUser
-            ?? throw new InvalidOperationException("Please sign in and complete your church profile first.");
+        if (IsLeader(user))
+            return options;
+
+        return options with
+        {
+            Targets = options.Targets
+                .Where(target =>
+                    target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase) &&
+                    user.BranchId == target.Id)
+                .ToArray()
+        };
+    }
+
+    private static ChurchAnnouncementOptions BuildProfileOptions(CurrentUser user)
+    {
         var targets = new List<ChurchAnnouncementTarget>();
         var leader = IsLeader(user);
 
-        if (leader)
-            targets.Add(new("National", 0, "All church members", null, null));
-        if (user.RegionId is int regionId)
-            targets.Add(new("Region", regionId, user.Region ?? $"Region {regionId}", regionId, null));
-        if (user.DistrictId is int districtId)
-            targets.Add(new("District", districtId, user.District ?? $"District {districtId}", user.RegionId, districtId));
         if (user.BranchId is int branchId)
             targets.Add(new("Branch", branchId, user.Branch ?? $"My branch ({branchId})", user.RegionId, user.DistrictId));
+        if (leader && user.DistrictId is int districtId)
+            targets.Add(new("District", districtId, user.District ?? $"District {districtId}", user.RegionId, districtId));
+        if (leader && user.RegionId is int regionId)
+            targets.Add(new("Region", regionId, user.Region ?? $"Region {regionId}", regionId, null));
+        if (leader)
+            targets.Add(new("National", null, "National", null, null));
 
         return new ChurchAnnouncementOptions(
             user.LeadershipLevel,
@@ -62,11 +80,16 @@ public sealed class ChurchAnnouncementService
             .Where(value => !string.IsNullOrWhiteSpace(value));
         return values.Any(value =>
         {
-            var normalized = value.Trim().Replace(" ", string.Empty).Replace("-", string.Empty);
+            var normalized = value.Trim().Replace(" ", string.Empty)
+                .Replace("-", string.Empty).Replace("_", string.Empty);
             return normalized.Equals("Leader", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Pastor", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Priest", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Chairman", StringComparison.OrdinalIgnoreCase);
+                   normalized.Equals("Chairman", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("National", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("Regional", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("District", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("Branch", StringComparison.OrdinalIgnoreCase);
         });
     }
 

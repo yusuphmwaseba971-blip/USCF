@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.GeneralFeedbackPage"
+    Title="General Feedback"
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20,24,20,32" Spacing="14">
+            <Label Text="General Feedback" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+            <Label Text="How was your experience?" FontSize="15" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <HorizontalStackLayout x:Name="RatingButtons" HorizontalOptions="Center" Spacing="8">
+                <Button Text="☆" FontSize="32" TextColor="#B8986B" BackgroundColor="Transparent" Padding="4" Clicked="OnRatingClicked" CommandParameter="1" SemanticProperties.Description="1 star" />
+                <Button Text="☆" FontSize="32" TextColor="#B8986B" BackgroundColor="Transparent" Padding="4" Clicked="OnRatingClicked" CommandParameter="2" SemanticProperties.Description="2 stars" />
+                <Button Text="☆" FontSize="32" TextColor="#B8986B" BackgroundColor="Transparent" Padding="4" Clicked="OnRatingClicked" CommandParameter="3" SemanticProperties.Description="3 stars" />
+                <Button Text="☆" FontSize="32" TextColor="#B8986B" BackgroundColor="Transparent" Padding="4" Clicked="OnRatingClicked" CommandParameter="4" SemanticProperties.Description="4 stars" />
+                <Button Text="☆" FontSize="32" TextColor="#B8986B" BackgroundColor="Transparent" Padding="4" Clicked="OnRatingClicked" CommandParameter="5" SemanticProperties.Description="5 stars" />
+            </HorizontalStackLayout>
+            <Label Text="What did you like?" FontSize="15" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <Editor
+                x:Name="LikedEditor"
+                HeightRequest="110"
+                AutoSize="TextChanges"
+                Placeholder="Optional"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                TextColor="{StaticResource TextPrimary}"
+                SemanticProperties.Description="What did you like?" />
+            <Label Text="What should we improve?" FontSize="15" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <Editor
+                x:Name="ImprovementEditor"
+                HeightRequest="110"
+                AutoSize="TextChanges"
+                Placeholder="Optional"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                TextColor="{StaticResource TextPrimary}"
+                SemanticProperties.Description="What should we improve?" />
+            <Label
+                x:Name="StatusLabel"
+                IsVisible="False"
+                FontSize="14"
+                TextColor="#B42318"
+                LineBreakMode="WordWrap" />
+            <ActivityIndicator x:Name="SubmitActivity" IsVisible="False" IsRunning="False" Color="{StaticResource BrandGreen}" />
+            <Button
+                x:Name="SubmitButton"
+                Text="Submit Feedback"
+                Clicked="OnSubmitClicked"
+                BackgroundColor="{StaticResource BrandDeepGreen}"
+                TextColor="White"
+                FontAttributes="Bold"
+                CornerRadius="16"
+                HeightRequest="54"
+                SemanticProperties.Description="Submit general feedback" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

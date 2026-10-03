@@ -142,7 +142,9 @@ public partial class ChurchAnnouncementPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[AnnouncementMedia] publish failed type={ex.GetType().Name} message={ex.Message}");
-            StatusLabel.Text = _attachment is not null && imageUrl is null && attachmentUrl is null
+            StatusLabel.Text = ex.Message.Contains("assigned branch", StringComparison.OrdinalIgnoreCase)
+                ? "Choose your assigned branch as the audience, then try again."
+                : _attachment is not null && imageUrl is null && attachmentUrl is null
                 ? "Unable to upload the attachment. Please try again."
                 : ex.Message.Contains("authorized", StringComparison.OrdinalIgnoreCase)
                     ? "You are not authorized to publish to this audience."

@@ -2,9 +2,16 @@
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:services="clr-namespace:CCT_USCF.Services"
     x:Class="CCT_USCF.Pages.PrayerPage"
-    Title="Prayer"
-    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    Title="{DynamicResource AppText_Prayer_Title}"
+    BackgroundColor="{DynamicResource AppPageBackground}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <services:LocalizedPrayerEnumConverter x:Key="LocalizedPrayerEnumConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto,*">
         <Border Grid.Row="0" StrokeThickness="0" Padding="24,26,24,28">
@@ -20,9 +27,9 @@
                        HorizontalOptions="End" VerticalOptions="End" TranslationY="24" />
                 <VerticalStackLayout Spacing="8">
                     <Label Text="🙏" FontSize="28" />
-                    <Label Text="Prayer Community" FontSize="30" FontAttributes="Bold"
+                    <Label Text="{DynamicResource AppText_Prayer_Community}" FontSize="30" FontAttributes="Bold"
                            TextColor="White" />
-                    <Label Text="Let us pray for one another." FontSize="16"
+                    <Label Text="{DynamicResource AppText_Prayer_LetUsPray}" FontSize="16"
                            TextColor="#E6F7EC" />
                     <Label Text="&quot;Therefore confess your sins to one another and pray for one another, that you may be healed.&quot;&#10;— James 5:16"
                            FontSize="13" FontAttributes="Italic" TextColor="#D4F1DE"
@@ -44,23 +51,23 @@
                                         StrokeThickness="0" StrokeShape="RoundRectangle 16">
                                     <HorizontalStackLayout Spacing="8">
                                         <Label Text="🙏" FontSize="18" TextColor="{StaticResource BrandGreen}" />
-                                        <Label Text="Prayer Wall" FontSize="14" FontAttributes="Bold"
+                                        <Label Text="{DynamicResource AppText_Prayer_Wall}" FontSize="14" FontAttributes="Bold"
                                                TextColor="{StaticResource BrandGreen}" VerticalOptions="Center" />
                                     </HorizontalStackLayout>
                                 </Border>
-                                <Button Grid.Column="1" Text="My Requests" Clicked="OnMyRequestsClicked"
+                                <Button Grid.Column="1" Text="{DynamicResource AppText_Prayer_MyRequests}" Clicked="OnMyRequestsClicked"
                                         BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}"
                                         FontSize="13" Padding="8,0" />
-                                <Button Grid.Column="2" Text="Community" Clicked="OnCommunityClicked"
+                                <Button Grid.Column="2" Text="{DynamicResource AppText_Prayer_CommunityTab}" Clicked="OnCommunityClicked"
                                         BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}"
                                         FontSize="13" Padding="8,0" />
                             </Grid>
 
-                            <Button x:Name="AddPrayerButton" Text="＋  Add Prayer Request"
+                            <Button x:Name="AddPrayerButton" Text="{DynamicResource AppText_Prayer_AddRequest}"
                                     BackgroundColor="{StaticResource BrandGreen}" TextColor="White"
                                     CornerRadius="18" MinimumHeightRequest="54" FontSize="16"
                                     FontAttributes="Bold" Clicked="OnAddPrayerClicked"
-                                    SemanticProperties.Description="Open the prayer request form" />
+                                    SemanticProperties.Description="{DynamicResource AppText_Prayer_OpenForm}" />
                         </VerticalStackLayout>
                     </CollectionView.Header>
 
@@ -68,13 +75,13 @@
                         <VerticalStackLayout Padding="32,42" Spacing="12"
                                              HorizontalOptions="Center" VerticalOptions="Center">
                             <Label Text="🙏" FontSize="42" HorizontalOptions="Center" />
-                            <Label Text="No prayer requests yet" FontSize="22"
+                            <Label Text="{DynamicResource AppText_Prayer_EmptyTitle}" FontSize="22"
                                    FontAttributes="Bold" TextColor="{StaticResource TextPrimary}"
                                    HorizontalOptions="Center" />
-                            <Label Text="Be the first to share a prayer request with the community."
+                            <Label Text="{DynamicResource AppText_Prayer_EmptyDescription}"
                                    FontSize="15" TextColor="{StaticResource TextSecondary}"
                                    HorizontalTextAlignment="Center" />
-                            <Button Text="＋  Add Prayer Request"                             BackgroundColor="{StaticResource BrandGreen}"
+                            <Button Text="{DynamicResource AppText_Prayer_AddRequest}" BackgroundColor="{StaticResource BrandGreen}"
                                     TextColor="White" CornerRadius="16"
                                     Clicked="OnAddPrayerClicked" />
                         </VerticalStackLayout>
@@ -101,7 +108,7 @@
                                             <Label Text="{Binding AuthorDisplayName}"
                                                    FontAttributes="Bold" FontSize="15"
                                                    TextColor="{StaticResource TextPrimary}" />
-                                            <Label Text="(Anonymous)" IsVisible="{Binding IsAnonymous}"
+                                            <Label Text="{DynamicResource AppText_Prayer_Anonymous}" IsVisible="{Binding IsAnonymous}"
                                                    FontSize="12" TextColor="#718096" />
                                         </VerticalStackLayout>
                                         <Label Grid.Column="2" Text="⋮" FontSize="24"
@@ -111,7 +118,7 @@
                                     <Border Padding="9,6" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}"
                                             StrokeThickness="0" StrokeShape="RoundRectangle 12"
                                             HorizontalOptions="Start">
-                                        <Label Text="{Binding ReachLabel}" FontAttributes="Bold"
+                                        <Label Text="{Binding Reach, Converter={StaticResource LocalizedPrayerEnumConverter}}" FontAttributes="Bold"
                                                FontSize="11" TextColor="#18723B" />
                                     </Border>
 
@@ -123,23 +130,27 @@
                                         <Label Grid.Column="0" Text="{Binding RelativeCreatedAt}"
                                                FontSize="12" TextColor="#718096"
                                                VerticalOptions="Center" />
-                                        <Button Grid.Column="1" Text="🙏  I PRAY"
+                                        <Button Grid.Column="1" Text="{DynamicResource AppText_Prayer_IPray}"
                                                 Padding="14,9" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                                                 TextColor="{StaticResource BrandGreen}" CornerRadius="16"
                                                 FontAttributes="Bold" FontSize="13"
                                                 CommandParameter="{Binding PrayerId}"
                                                 Clicked="OnPrayClicked"
-                                                SemanticProperties.Description="Pray for this request">
+                                                SemanticProperties.Description="{DynamicResource AppText_Prayer_PrayForRequest}">
                                             <Button.Triggers>
                                                 <DataTrigger TargetType="Button" Binding="{Binding IsPrayed}" Value="True">
-                                                    <Setter Property="Text" Value="🙏  I PRAYED" />
+                                                    <Setter Property="Text" Value="{DynamicResource AppText_Prayer_IPrayed}" />
                                                     <Setter Property="IsEnabled" Value="False" />
                                                 </DataTrigger>
                                             </Button.Triggers>
                                         </Button>
                                     </Grid>
-                                    <Label Text="{Binding PrayerCount, StringFormat='🙏  {0} people prayed'}"
-                                           FontSize="12" TextColor="#718096" />
+                                    <HorizontalStackLayout Spacing="4">
+                                        <Label Text="{Binding PrayerCount, StringFormat='🙏  {0}'}"
+                                               FontSize="12" TextColor="#718096" />
+                                        <Label Text="{DynamicResource AppText_Prayer_PeoplePrayed}"
+                                               FontSize="12" TextColor="#718096" />
+                                    </HorizontalStackLayout>
                                 </VerticalStackLayout>
                             </Border>
                         </DataTemplate>
@@ -147,17 +158,17 @@
                 </CollectionView>
 
                 <VerticalStackLayout x:Name="PrayerLoadingIndicator" IsVisible="False"
-                                     BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}" HorizontalOptions="Center"
+                                     BackgroundColor="{DynamicResource AppPageBackground}" HorizontalOptions="Center"
                                      VerticalOptions="Center" Spacing="8">
                     <ActivityIndicator IsRunning="True" Color="{StaticResource BrandGreen}" />
-                    <Label Text="Loading prayer requests..." TextColor="#475569" />
+                    <Label Text="{DynamicResource AppText_Prayer_Loading}" TextColor="#475569" />
                 </VerticalStackLayout>
                 <VerticalStackLayout x:Name="PrayerErrorState" IsVisible="False"
-                                     BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}" HorizontalOptions="Center"
+                                     BackgroundColor="{DynamicResource AppPageBackground}" HorizontalOptions="Center"
                                      VerticalOptions="Center" Spacing="10" Padding="28">
-                    <Label x:Name="PrayerErrorMessage" Text="Couldn't load prayer requests."
+                    <Label x:Name="PrayerErrorMessage" Text="{DynamicResource AppText_Prayer_LoadError}"
                            TextColor="#991B1B" HorizontalTextAlignment="Center" />
-                    <Button Text="Try Again" Clicked="OnRetryFetchClicked"
+                    <Button Text="{DynamicResource AppText_Prayer_TryAgain}" Clicked="OnRetryFetchClicked"
                             BackgroundColor="{StaticResource BrandGreen}" TextColor="White" CornerRadius="16" />
                 </VerticalStackLayout>
             </Grid>
@@ -169,11 +180,11 @@
                     StrokeShape="RoundRectangle 28" Padding="24" VerticalOptions="Center">
                 <VerticalStackLayout Spacing="14">
                     <Label Text="🙏" FontSize="42" HorizontalOptions="Center" />
-                    <Label Text="WELCOME TO THE PRAYER COMMUNITY" FontAttributes="Bold"
+                    <Label Text="{DynamicResource AppText_Prayer_Welcome}" FontAttributes="Bold"
                            FontSize="24" TextColor="{StaticResource TextPrimary}" HorizontalTextAlignment="Center" />
-                    <Label Text="You don't have to pray alone. Share a prayer request and let members of the USCF family stand with you."
+                    <Label Text="{DynamicResource AppText_Prayer_WelcomeDescription}"
                            FontSize="15" TextColor="#475569" HorizontalTextAlignment="Center" />
-                    <Button Text="GOT IT" BackgroundColor="#009E2C" TextColor="White"
+                    <Button Text="{DynamicResource AppText_Prayer_GotIt}" BackgroundColor="#009E2C" TextColor="White"
                             CornerRadius="16" Clicked="OnIntroDismissed" />
                 </VerticalStackLayout>
             </Border>

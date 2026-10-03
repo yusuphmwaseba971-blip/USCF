@@ -84,6 +84,20 @@ public partial class AppShell : Shell
             nameof(HelpSupportPage),
             typeof(HelpSupportPage));
 
+        Routing.RegisterRoute(nameof(HelpFeedbackPage), typeof(HelpFeedbackPage));
+        Routing.RegisterRoute(nameof(ReportBugPage), typeof(ReportBugPage));
+        Routing.RegisterRoute(nameof(SuggestionPage), typeof(SuggestionPage));
+        Routing.RegisterRoute(nameof(GeneralFeedbackPage), typeof(GeneralFeedbackPage));
+        Routing.RegisterRoute(nameof(MyFeedbackReportsPage), typeof(MyFeedbackReportsPage));
+        Routing.RegisterRoute(nameof(AdminFeedbackPage), typeof(AdminFeedbackPage));
+        Routing.RegisterRoute(nameof(AdminFeedbackDetailsPage), typeof(AdminFeedbackDetailsPage));
+        Routing.RegisterRoute(nameof(AboutCctUsfcPage), typeof(AboutCctUsfcPage));
+        Routing.RegisterRoute(nameof(HistoryPage), typeof(HistoryPage));
+        Routing.RegisterRoute(nameof(MissionVisionPage), typeof(MissionVisionPage));
+        Routing.RegisterRoute(nameof(LeadershipPage), typeof(LeadershipPage));
+        Routing.RegisterRoute(nameof(ConstitutionPage), typeof(ConstitutionPage));
+        Routing.RegisterRoute(nameof(ContactInformationPage), typeof(ContactInformationPage));
+
         Routing.RegisterRoute(
             nameof(PrivacyPolicyPage),
             typeof(PrivacyPolicyPage));
@@ -417,4 +431,3 @@ public partial class AppShell : Shell
         }
     }
 }
-

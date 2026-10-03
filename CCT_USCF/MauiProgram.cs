@@ -149,6 +149,7 @@ public static class MauiProgram
         // =====================================================
 
         builder.Services.AddSingleton<AppwriteService>();
+        builder.Services.AddSingleton<AboutCctUsfcService>();
 
         // =====================================================
         // CCT APPLICATION SERVICES
@@ -160,6 +161,10 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<
             CCT_USCF.Services.SupportService>();
+
+        builder.Services.AddSingleton<
+            CCT_USCF.Services.IFeedbackService,
+            CCT_USCF.Services.FeedbackService>();
 
         builder.Services.AddSingleton<
             CCT_USCF.Services.StoreReviewService>();

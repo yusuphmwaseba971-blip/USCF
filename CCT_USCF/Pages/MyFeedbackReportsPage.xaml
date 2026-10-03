@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.MyFeedbackReportsPage"
+    Title="My Reports"
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    <Grid RowDefinitions="*,Auto">
+        <ScrollView>
+            <VerticalStackLayout Padding="16,20,16,12" Spacing="14">
+                <Label Text="My Reports" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Label Text="Feedback reports submitted from this account." FontSize="14" TextColor="{StaticResource TextSecondary}" />
+                <Label x:Name="MessageLabel" IsVisible="False" TextColor="#B42318" LineBreakMode="WordWrap" />
+                <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" IsRunning="False" Color="{StaticResource BrandGreen}" />
+                <Label x:Name="EmptyLabel" IsVisible="False" Text="You have not submitted any feedback reports yet." FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" Padding="12" />
+                <CollectionView
+                    x:Name="ReportsCollection"
+                    SelectionMode="Single"
+                    SelectionChanged="OnReportSelected">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,8" Padding="12" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 14" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
+                                    <Label Text="{Binding Reference}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                                    <Label Grid.Column="1" Text="{Binding Status}" FontSize="13" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                    <Label Grid.Row="1" Text="{Binding Type}" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                                    <Label Grid.Row="1" Grid.Column="1" Text="{Binding CreatedDisplay}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                    <Label Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Title}" FontSize="15" TextColor="{StaticResource TextPrimary}" LineBreakMode="TailTruncation" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </ScrollView>
+        <Grid Grid.Row="1" Padding="16,8" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+            <Button x:Name="PreviousButton" Text="Previous" Clicked="OnPreviousClicked" />
+            <Label x:Name="PageLabel" Grid.Column="1" Text="Page 0 of 0" HorizontalOptions="Center" VerticalOptions="Center" TextColor="{StaticResource TextSecondary}" />
+            <Button x:Name="NextButton" Grid.Column="2" Text="Next" Clicked="OnNextClicked" />
+        </Grid>
+    </Grid>
+</ContentPage>

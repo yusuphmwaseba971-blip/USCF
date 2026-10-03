@@ -1,10 +1,15 @@
+using CCT_USCF.Services;
+
 namespace CCT_USCF.Pages;
 
 public partial class CommunityPage : ContentPage
 {
+    private readonly AppAppearanceService _appearance;
+
     public CommunityPage()
     {
         InitializeComponent();
+        _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
     }
 
     private async void OnCreatePostClicked(object sender, EventArgs e)
@@ -14,20 +19,34 @@ public partial class CommunityPage : ContentPage
         var user = MauiProgram.CurrentUser ?? await auth.GetCurrentUserAsync();
         if (user == null)
         {
-            await DisplayAlert("Not authenticated", "Please sign in to create posts.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Community.NotAuthenticated"),
+                _appearance.GetText("Community.SignInToPost"),
+                _appearance.GetText("Common.Ok"));
             await Shell.Current.GoToAsync(nameof(Pages.LoginPage));
             return;
         }
 
         var destinations = GetPostingDestinations(user.Role, user.LeadershipLevel, user.LeadershipDuty);
-        var destination = await DisplayActionSheet(
-            "Where do you want to post?",
-            "Cancel",
+        var displayDestinations = destinations
+            .Select(destination => (Display: GetDestinationLabel(destination), Canonical: destination))
+            .ToList();
+        var selectedDisplayDestination = await DisplayActionSheet(
+            _appearance.GetText("Community.PostDestination"),
+            _appearance.GetText("Community.Cancel"),
             null,
-            destinations);
+            displayDestinations.Select(destination => destination.Display).ToArray());
 
-        if (string.IsNullOrWhiteSpace(destination) ||
-            destination.Equals("Cancel", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(selectedDisplayDestination) ||
+            selectedDisplayDestination.Equals(
+                _appearance.GetText("Community.Cancel"),
+                StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var destination = displayDestinations
+            .FirstOrDefault(option => option.Display == selectedDisplayDestination)
+            .Canonical;
+        if (string.IsNullOrEmpty(destination))
             return;
 
         if (destination.Equals("Full Community", StringComparison.OrdinalIgnoreCase))
@@ -91,4 +110,15 @@ public partial class CommunityPage : ContentPage
 
         return new[] { "Branch Group", "Full Community" };
     }
+
+    private string GetDestinationLabel(string destination) =>
+        destination switch
+        {
+            "National Group" => _appearance.GetText("Community.NationalGroup"),
+            "Regional Group" => _appearance.GetText("Community.RegionalGroup"),
+            "District Group" => _appearance.GetText("Community.DistrictGroup"),
+            "Branch Group" => _appearance.GetText("Community.BranchGroup"),
+            "Full Community" => _appearance.GetText("Community.FullCommunity"),
+            _ => destination
+        };
 }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.AdminFeedbackDetailsPage"
+    Title="Feedback Details"
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20,20,20,32" Spacing="16">
+            <Label x:Name="ReferenceLabel" Text="Feedback report" FontSize="25" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <VerticalStackLayout x:Name="DetailsLayout" Spacing="10" />
+
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Workflow status" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Picker x:Name="StatusPicker" Title="Select status" />
+                <Button x:Name="SaveStatusButton" Text="Save Status" Clicked="OnSaveStatusClicked" BackgroundColor="{StaticResource BrandDeepGreen}" TextColor="White" />
+                <Label x:Name="StatusMessageLabel" IsVisible="False" LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Screenshot" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                <Label x:Name="NoScreenshotLabel" Text="No screenshot attached." IsVisible="False" TextColor="{StaticResource TextSecondary}" />
+                <Button x:Name="ViewScreenshotButton" Text="View Screenshot" IsVisible="False" Clicked="OnViewScreenshotClicked" />
+                <ActivityIndicator x:Name="ScreenshotActivity" IsVisible="False" IsRunning="False" Color="{StaticResource BrandGreen}" />
+                <Image x:Name="ScreenshotImage" IsVisible="False" HeightRequest="300" Aspect="AspectFit" />
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

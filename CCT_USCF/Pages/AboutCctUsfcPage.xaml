@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="CCT_USCF.Pages.AboutCctUsfcPage"
+             Title="About CCT-USCF"
+             BackgroundColor="{DynamicResource AppPageBackground}">
+    <ScrollView>
+        <VerticalStackLayout Padding="18,16,18,28" Spacing="18">
+            <Border Padding="20,22" BackgroundColor="{StaticResource SoftMint}" StrokeThickness="0" StrokeShape="RoundRectangle 24">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="CCT-USCF" FontSize="26" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                    <Label Text="Learn about the history, mission, leadership and official information of CCT-USCF." FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Button Text="History of CCT-USCF" HeightRequest="58" CornerRadius="18" BackgroundColor="{StaticResource SurfaceWhite}" TextColor="{StaticResource TextPrimary}" BorderColor="#E8E0D2" BorderWidth="1" Clicked="OnHistoryClicked" />
+            <Button Text="Mission &amp; Vision" HeightRequest="58" CornerRadius="18" BackgroundColor="{StaticResource SurfaceWhite}" TextColor="{StaticResource TextPrimary}" BorderColor="#E8E0D2" BorderWidth="1" Clicked="OnMissionVisionClicked" />
+            <Button Text="Leadership" HeightRequest="58" CornerRadius="18" BackgroundColor="{StaticResource SurfaceWhite}" TextColor="{StaticResource TextPrimary}" BorderColor="#E8E0D2" BorderWidth="1" Clicked="OnLeadershipClicked" />
+            <Button Text="Constitution / Documents" HeightRequest="58" CornerRadius="18" BackgroundColor="{StaticResource SurfaceWhite}" TextColor="{StaticResource TextPrimary}" BorderColor="#E8E0D2" BorderWidth="1" Clicked="OnConstitutionClicked" />
+            <Button Text="Contact / Official Information" HeightRequest="58" CornerRadius="18" BackgroundColor="{StaticResource SurfaceWhite}" TextColor="{StaticResource TextPrimary}" BorderColor="#E8E0D2" BorderWidth="1" Clicked="OnContactClicked" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

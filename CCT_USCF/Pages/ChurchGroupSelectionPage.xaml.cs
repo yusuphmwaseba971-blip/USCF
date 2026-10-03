@@ -85,12 +85,19 @@ public partial class ChurchGroupSelectionPage : ContentPage
             var firebaseUid = GetFirebaseUid();
             if (string.IsNullOrWhiteSpace(firebaseUid))
                 firebaseUid = user.Id.ToString("N");
+            var uidSuffix = firebaseUid.Length > 6
+                ? firebaseUid[^6..]
+                : firebaseUid;
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] screen=ChurchGroupSelectionPage category={level} uidSuffix={uidSuffix} branchId={user.BranchId?.ToString() ?? "none"} districtId={user.DistrictId?.ToString() ?? "none"} regionId={user.RegionId?.ToString() ?? "none"} groupId=none");
 
             var cacheKey = ChurchGroupCacheService.BuildCacheKey(
                 firebaseUid,
                 level,
                 user);
             var cachedGroups = await _groupCache.GetAsync(cacheKey);
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] cache category={level} count={cachedGroups?.Count.ToString() ?? "miss"}");
             if (cachedGroups != null)
             {
                 await RenderGroupsAsync(
@@ -116,6 +123,9 @@ public partial class ChurchGroupSelectionPage : ContentPage
             var groups = await GetGroupsForLevelAsync(level, user);
             await _groupCache.ReplaceAsync(cacheKey, groups);
             await RenderGroupsAsync(level, user, ToFirestoreGroups(groups));
+            StatusLabel.Text = groups.Count == 0
+                ? $"No {level.ToLowerInvariant()} groups found for your assigned scope."
+                : $"{level} groups";
         }
 
         catch (Exception ex)
@@ -133,13 +143,19 @@ public partial class ChurchGroupSelectionPage : ContentPage
         CCT_USCF.Models.CurrentUser user,
         IReadOnlyList<FirestoreGroupDocument> groups)
     {
+        System.Diagnostics.Debug.WriteLine(
+            $"[GROUP-DIAGNOSTIC] viewModel category={level} count={groups.Count} itemsSource=not-used");
         GroupsLayout.Clear();
         AddGroupButton.IsVisible =
             CanCreateGroups(level, user) ||
             (level == "Branch" && user.BranchId.HasValue);
 
         if (groups.Count == 0)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] ui category={level} groupsLayoutChildren={GroupsLayout.Children.Count} isVisible={GroupsLayout.IsVisible}");
             return;
+        }
 
         foreach (var group in groups)
         {
@@ -158,6 +174,8 @@ public partial class ChurchGroupSelectionPage : ContentPage
             card.Clicked += async (_, _) => await SelectGroupAsync(group, user);
             GroupsLayout.Add(card);
         }
+        System.Diagnostics.Debug.WriteLine(
+            $"[GROUP-DIAGNOSTIC] ui category={level} groupsLayoutChildren={GroupsLayout.Children.Count} isVisible={GroupsLayout.IsVisible}");
     }
 
     private static List<FirestoreGroupDocument> ToFirestoreGroups(
@@ -313,16 +331,37 @@ public partial class ChurchGroupSelectionPage : ContentPage
         CCT_USCF.Models.CurrentUser user)
     {
         var registeredGroups = await _groupService.GetGroupsAsync(level.ToUpperInvariant());
+        LogGroupStage("service-returned", registeredGroups);
 
-        var groups = registeredGroups
+        var activeGroups = registeredGroups
             .Where(group => group.IsActive)
+            .ToList();
+        LogGroupStage("after-active-filter", activeGroups);
+
+        var scopeGroups = activeGroups
             .Where(group => GroupMatchesScope(level, group, user))
             .ToList();
+        LogGroupStage("after-scope-filter", scopeGroups);
+        System.Diagnostics.Debug.WriteLine(
+            $"[GROUP-DIAGNOSTIC] membership-filter category={level} applied=false count={scopeGroups.Count}");
 
-        return groups
+        return scopeGroups
             .OrderBy(group => !group.IsStandard)
             .ThenBy(group => group.GroupName)
             .ToList();
+    }
+
+    private static void LogGroupStage(
+        string stage,
+        IReadOnlyList<CCT_USCF.Models.ChurchGroup> groups)
+    {
+        System.Diagnostics.Debug.WriteLine(
+            $"[GROUP-DIAGNOSTIC] {stage} count={groups.Count}");
+        foreach (var group in groups)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[GROUP-DIAGNOSTIC] {stage} id={group.GroupId} name={group.GroupName} scope={group.ScopeType} branchId={group.BranchId?.ToString() ?? "none"} districtId={group.DistrictId?.ToString() ?? "none"} regionId={group.RegionId?.ToString() ?? "none"} active={group.IsActive}");
+        }
     }
 
     private static bool GroupMatchesScope(string level, CCT_USCF.Models.ChurchGroup group, CCT_USCF.Models.CurrentUser user)

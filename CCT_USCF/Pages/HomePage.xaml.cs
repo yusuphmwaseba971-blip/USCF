@@ -12,6 +12,14 @@ public partial class HomePage : ContentPage
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
     private readonly CCT_USCF.Services.ChurchAnnouncementService _announcements;
     private readonly SemaphoreSlim _cctPostsLoadGate = new(1, 1);
+    private bool _userContextLoaded;
+    private string? _homeDisplayName;
+    private string? _churchContext;
+    private DateTime? _latestAnnouncementDate;
+    private int? _eventsCount;
+    private bool _eventsUnavailable;
+    private string? _cctPostsStateKey;
+    private int? _publishedPostsCount;
 
     public HomePage()
     {
@@ -39,8 +47,80 @@ public partial class HomePage : ContentPage
         ApplyAppearance();
     }
 
-    private void OnAppearanceChanged(object? sender, EventArgs e) => MainThread.BeginInvokeOnMainThread(ApplyAppearance);
+    private void OnAppearanceChanged(object? sender, EventArgs e) =>
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            ApplyAppearance();
+            RefreshLocalizedState();
+        });
     private void ApplyAppearance() => BackgroundColor = _appearance.BackgroundColor;
+
+    private void RefreshLocalizedState()
+    {
+        if (_userContextLoaded)
+        {
+            if (string.IsNullOrWhiteSpace(_homeDisplayName))
+            {
+                GreetingLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_WelcomeBack");
+                UserNameLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_CommunityActive");
+                ChurchContextLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_SignInChurch");
+                MyChurchLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_ChurchUnavailable");
+            }
+            else
+            {
+                GreetingLabel.Text = GetGreeting(_homeDisplayName);
+                UserNameLabel.Text = _appearance.GetText("Home.GoodToSeeYou", _homeDisplayName);
+                ChurchContextLabel.Text = string.IsNullOrWhiteSpace(_churchContext)
+                    ? _appearance.GetText("Home.CommunityActive")
+                    : _churchContext;
+                MyChurchLabel.Text = string.IsNullOrWhiteSpace(_churchContext)
+                    ? _appearance.GetText("Home.UscfCommunity")
+                    : _churchContext;
+            }
+        }
+
+        if (_latestAnnouncementDate is DateTime announcementDate)
+            SetAnnouncementMeta(announcementDate);
+
+        if (_eventsUnavailable)
+            EventsPreviewLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_ActivityUnavailable");
+        else if (_eventsCount is int eventCount)
+            UpdateEventsPreview(eventCount);
+
+        UpdateCctPostsStatus();
+    }
+
+    private void UpdateEventsPreview(int count)
+    {
+        if (count == 0)
+        {
+            EventsPreviewLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_NoUpcomingChurchActivity");
+            return;
+        }
+
+        EventsPreviewLabel.Text = _appearance.GetText("Home.ActivitiesAvailable", count);
+    }
+
+    private void UpdateCctPostsStatus()
+    {
+        if (_cctPostsStateKey is string stateKey)
+        {
+            CctPostsStateLabel.SetDynamicResource(
+                Label.TextProperty,
+                $"AppText_{stateKey.Replace('.', '_')}");
+        }
+        else if (_publishedPostsCount is int postCount)
+        {
+            CctPostsStateLabel.Text = _appearance.GetText(
+                "Home.PublishedPosts",
+                postCount,
+                postCount == 1 ? string.Empty : "s");
+        }
+    }
+
+    private void SetAnnouncementMeta(DateTime createdAtUtc) =>
+        LatestAnnouncementMetaLabel.Text =
+            $"{createdAtUtc.ToLocalTime():g}  ·  {_appearance.GetText("Home.ViewAnnouncement")}";
     private async void OnCctPostCreated(object? sender, EventArgs e) => await LoadCctPostsAsync(true);
 
     protected override void OnDisappearing()
@@ -69,22 +149,19 @@ public partial class HomePage : ContentPage
 
             if (user is null)
             {
-                GreetingLabel.Text = GetGreeting("WELCOME BACK");
-                UserNameLabel.Text = "Your USCF community is active today.";
-                ChurchContextLabel.Text = "Sign in to see your church context.";
-                MyChurchLabel.Text = "Church context unavailable";
+                _userContextLoaded = true;
+                _homeDisplayName = null;
+                _churchContext = null;
+                RefreshLocalizedState();
                 return;
             }
 
             MauiProgram.SetCurrentUser(user);
             var displayName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName;
-            GreetingLabel.Text = GetGreeting(displayName);
-            UserNameLabel.Text = $"Good to see you, {displayName}.";
-            var context = FirstNonEmpty(user.Branch, user.District, user.Region, user.Organization);
-            ChurchContextLabel.Text = string.IsNullOrWhiteSpace(context)
-                ? "Your USCF community is active today."
-                : context;
-            MyChurchLabel.Text = string.IsNullOrWhiteSpace(context) ? "USCF community" : context;
+            _userContextLoaded = true;
+            _homeDisplayName = displayName;
+            _churchContext = FirstNonEmpty(user.Branch, user.District, user.Region, user.Organization);
+            RefreshLocalizedState();
         }
         catch (Exception ex)
         {
@@ -102,8 +179,9 @@ public partial class HomePage : ContentPage
         catch (Exception ex)
         {
             AnnouncementsCountLabel.Text = "—";
-            LatestAnnouncementTitleLabel.Text = "Announcements temporarily unavailable";
-            LatestAnnouncementMessageLabel.Text = "Please try again later.";
+            _latestAnnouncementDate = null;
+            LatestAnnouncementTitleLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_AnnouncementsUnavailable");
+            LatestAnnouncementMessageLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_TryAgainLater");
             System.Diagnostics.Debug.WriteLine($"[HOME_ANNOUNCEMENTS] {ex}");
         }
     }
@@ -133,10 +211,16 @@ public partial class HomePage : ContentPage
         var latest = notifications.OrderByDescending(notification => notification.CreatedAtUtc).FirstOrDefault();
         if (latest is not null)
         {
+            _latestAnnouncementDate = latest.CreatedAtUtc;
             LatestAnnouncementTitleLabel.Text = latest.Title;
             LatestAnnouncementMessageLabel.Text = latest.Message;
-            LatestAnnouncementMetaLabel.Text =
-                $"{latest.CreatedAtUtc.ToLocalTime():g}  ·  View announcement  ›";
+            SetAnnouncementMeta(latest.CreatedAtUtc);
+        }
+        else
+        {
+            _latestAnnouncementDate = null;
+            LatestAnnouncementTitleLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_NoAnnouncements");
+            LatestAnnouncementMessageLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_CaughtUp");
         }
     }
 
@@ -148,14 +232,15 @@ public partial class HomePage : ContentPage
             var prayers = await service.GetInitialPrayersAsync();
             PrayerCountLabel.Text = prayers.Count.ToString();
             var prayer = prayers.FirstOrDefault();
-            PrayerPreviewLabel.Text = prayer is null
-                ? "No prayer requests are available right now."
-                : $"“{TrimForPreview(prayer.Content)}”";
+            if (prayer is null)
+                PrayerPreviewLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_NoPrayerNow");
+            else
+                PrayerPreviewLabel.Text = $"“{TrimForPreview(prayer.Content)}”";
         }
         catch (Exception ex)
         {
             PrayerCountLabel.Text = "—";
-            PrayerPreviewLabel.Text = "Prayer requests temporarily unavailable.";
+            PrayerPreviewLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_PrayerUnavailable");
             System.Diagnostics.Debug.WriteLine($"[HOME_PRAYER] {ex}");
         }
     }
@@ -168,15 +253,17 @@ public partial class HomePage : ContentPage
             var events = await service.GetNationalEventsAsync();
             ActivityCountLabel.Text = events.Count.ToString();
             EventsCountLabel.Text = events.Count.ToString();
-            EventsPreviewLabel.Text = events.Count == 0
-                ? "No upcoming church activity available."
-                : $"{events.Count} community activities available. Open Events to view them.";
+            _eventsCount = events.Count;
+            _eventsUnavailable = false;
+            UpdateEventsPreview(events.Count);
         }
         catch (Exception ex)
         {
             ActivityCountLabel.Text = "—";
             EventsCountLabel.Text = "—";
-            EventsPreviewLabel.Text = "Church activity temporarily unavailable.";
+            _eventsCount = null;
+            _eventsUnavailable = true;
+            EventsPreviewLabel.SetDynamicResource(Label.TextProperty, "AppText_Home_ActivityUnavailable");
             System.Diagnostics.Debug.WriteLine($"[HOME_ACTIVITY] {ex}");
         }
     }
@@ -234,7 +321,7 @@ public partial class HomePage : ContentPage
             var service = MauiProgram.Services.GetRequiredService<CommunityService>();
             var cachedPosts = await service.GetCachedPublishedCctPostsAsync(8);
             System.Diagnostics.Debug.WriteLine($"[PLUS CACHE] loaded {cachedPosts.Count} posts from SQLite");
-            RenderCctPosts(cachedPosts, cachedPosts.Count == 0 ? "Loading posts..." : null);
+            RenderCctPosts(cachedPosts, cachedPosts.Count == 0 ? "Home.LoadingPosts" : null);
 
             var shouldSync = forceRefresh ||
                 await service.ShouldSyncCctPostsAsync(CctPostsFreshnessWindow);
@@ -247,12 +334,14 @@ public partial class HomePage : ContentPage
             var posts = await service.GetPublishedCctPostsAsync(8, forceRefresh);
             System.Diagnostics.Debug.WriteLine($"[PLUS UI] rendering {posts.Count} posts");
             RenderCctPosts(posts, posts.Count == 0
-                ? cachedPosts.Count == 0 ? "No posts available yet." : null
+                ? cachedPosts.Count == 0 ? "Home.NoPostsYet" : null
                 : null);
         }
         catch (Exception ex)
         {
-            CctPostsStateLabel.Text = "No posts available offline.";
+            _cctPostsStateKey = "Home.NoPostsOffline";
+            _publishedPostsCount = null;
+            UpdateCctPostsStatus();
             System.Diagnostics.Debug.WriteLine($"[HOME_CCT_POSTS] {ex}");
         }
         finally
@@ -264,8 +353,9 @@ public partial class HomePage : ContentPage
     private void RenderCctPosts(IReadOnlyList<CCT_USCF.Models.CctPost> posts, string? stateOverride)
     {
         CctPostsStack.Children.Clear();
-        CctPostsStateLabel.Text = stateOverride ??
-            $"{posts.Count} published post{(posts.Count == 1 ? string.Empty : "s")}";
+        _cctPostsStateKey = stateOverride;
+        _publishedPostsCount = stateOverride == null ? posts.Count : null;
+        UpdateCctPostsStatus();
 
         foreach (var post in posts)
         {
@@ -307,7 +397,7 @@ public partial class HomePage : ContentPage
             });
             var sourceLabel = new Label
             {
-                Text = "USCF COMMUNITY",
+                Text = _appearance.GetText("Home.UscfCommunity").ToUpperInvariant(),
                 FontSize = 10,
                 FontAttributes = FontAttributes.Bold,
                 CharacterSpacing = 1.2,
@@ -333,7 +423,9 @@ public partial class HomePage : ContentPage
             AddCctPostMedia(body, post);
             body.Children.Add(new Label
             {
-                Text = $"Posted {post.CreatedAtUtc.ToLocalTime():MMM d, yyyy · h:mm tt}",
+                Text = _appearance.GetText(
+                    "Home.Posted",
+                    post.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy · h:mm tt")),
                 FontSize = 11,
                 TextColor = Color.FromArgb("#8B7650")
             });
@@ -342,7 +434,7 @@ public partial class HomePage : ContentPage
         }
     }
 
-    private static void AddCctPostMedia(VerticalStackLayout body, CCT_USCF.Models.CctPost post)
+    private void AddCctPostMedia(VerticalStackLayout body, CCT_USCF.Models.CctPost post)
     {
         if (string.IsNullOrWhiteSpace(post.MediaUrl))
             return;
@@ -373,9 +465,9 @@ public partial class HomePage : ContentPage
         {
             Text = viewerType switch
             {
-                "video" => "▶ Open video",
-                "audio" => "▶ Open audio",
-                _ => "↗ Open document"
+                "video" => _appearance.GetText("Home.OpenVideo"),
+                "audio" => _appearance.GetText("Home.OpenAudio"),
+                _ => _appearance.GetText("Home.OpenDocument")
             },
             BackgroundColor = Color.FromArgb("#EAF7EE"),
             TextColor = Color.FromArgb("#167A4A")
@@ -385,15 +477,15 @@ public partial class HomePage : ContentPage
         body.Children.Add(button);
     }
 
-    private static (string Label, Color Color) GetPlusCategory(string postType)
+    private (string Label, Color Color) GetPlusCategory(string postType)
         => postType.Trim().ToLowerInvariant() switch
         {
-            "scripture" => ("📖 SCRIPTURE", Color.FromArgb("#17315F")),
-            "encouragement" => ("💬 ENCOURAGEMENT", Color.FromArgb("#38216B")),
-            "worship" => ("🎵 WORSHIP", Color.FromArgb("#123B73")),
-            "prayer" => ("🙏 PRAYER", Color.FromArgb("#167A4A")),
-            "notice" => ("📢 NOTICE", Color.FromArgb("#684400")),
-            "event" => ("📅 EVENT", Color.FromArgb("#167A4A")),
+            "scripture" => (_appearance.GetText("Home.PostType.Scripture"), Color.FromArgb("#17315F")),
+            "encouragement" => (_appearance.GetText("Home.PostType.Encouragement"), Color.FromArgb("#38216B")),
+            "worship" => (_appearance.GetText("Home.PostType.Worship"), Color.FromArgb("#123B73")),
+            "prayer" => (_appearance.GetText("Home.PostType.Prayer"), Color.FromArgb("#167A4A")),
+            "notice" => (_appearance.GetText("Home.PostType.Notice"), Color.FromArgb("#684400")),
+            "event" => (_appearance.GetText("Home.PostType.Event"), Color.FromArgb("#167A4A")),
             _ => (string.IsNullOrWhiteSpace(postType) ? "POST" : postType.Trim().ToUpperInvariant(), Color.FromArgb("#167A4A"))
         };
 
@@ -402,15 +494,16 @@ public partial class HomePage : ContentPage
         CCT_USCF.Models.NationalCommunityPost post)
     {
         var viewer = MauiProgram.Services.GetRequiredService<MediaViewerService>();
+        var appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
         if (!string.IsNullOrWhiteSpace(post.VideoUrl))
         {
-            var button = new Button { Text = "▶ Play video", BackgroundColor = Color.FromArgb("#1E40AF"), TextColor = Colors.White };
+            var button = new Button { Text = appearance.GetText("Home.PlayVideo"), BackgroundColor = Color.FromArgb("#1E40AF"), TextColor = Colors.White };
             button.Clicked += async (_, _) => await viewer.OpenMediaAsync(post.VideoUrl, "video");
             stack.Children.Add(button);
         }
         if (!string.IsNullOrWhiteSpace(post.AudioUrl))
         {
-            var button = new Button { Text = "▶ Play audio", BackgroundColor = Color.FromArgb("#0F766E"), TextColor = Colors.White };
+            var button = new Button { Text = appearance.GetText("Home.PlayAudio"), BackgroundColor = Color.FromArgb("#0F766E"), TextColor = Colors.White };
             button.Clicked += async (_, _) => await viewer.OpenMediaAsync(post.AudioUrl, "audio");
             stack.Children.Add(button);
         }
@@ -502,6 +595,9 @@ public partial class HomePage : ContentPage
     private async void OpenGivingButton(object? sender, EventArgs e)
         => await Shell.Current.GoToAsync(nameof(GivingPage));
 
+    private async void OpenAboutCctUsfcButton(object? sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(AboutCctUsfcPage));
+ 
     private async void OpenShareAndServe(object? sender, TappedEventArgs e)
         => await OpenShareAndServeAsync();
 
@@ -555,15 +651,15 @@ public partial class HomePage : ContentPage
             "Open Share and Serve");
     }
 
-    private static string GetGreeting(string name)
+    private string GetGreeting(string name)
     {
-        var greeting = DateTime.Now.Hour switch
+        var greetingKey = DateTime.Now.Hour switch
         {
-            < 12 => "GOOD MORNING",
-            < 18 => "GOOD AFTERNOON",
-            _ => "GOOD EVENING"
+            < 12 => "Home.GoodMorning",
+            < 18 => "Home.GoodAfternoon",
+            _ => "Home.GoodEvening"
         };
-        return $"{greeting}, {name.ToUpperInvariant()} 👋";
+        return $"{_appearance.GetText(greetingKey)}, {name.ToUpperInvariant()} 👋";
     }
 
     private static string FirstNonEmpty(params string?[] values)

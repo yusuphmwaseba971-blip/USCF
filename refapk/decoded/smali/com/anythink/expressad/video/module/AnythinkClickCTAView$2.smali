@@ -1,0 +1,43 @@
+.class final Lcom/anythink/expressad/video/module/AnythinkClickCTAView$2;
+.super Lcom/anythink/expressad/widget/a;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingMethod;
+    value = Lcom/anythink/expressad/video/module/AnythinkClickCTAView;->c()V
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x0
+    name = null
+.end annotation
+
+
+# instance fields
+.field final synthetic a:Lcom/anythink/expressad/video/module/AnythinkClickCTAView;
+
+
+# direct methods
+.method constructor <init>(Lcom/anythink/expressad/video/module/AnythinkClickCTAView;)V
+    .locals 0
+
+    .line 118
+    iput-object p1, p0, Lcom/anythink/expressad/video/module/AnythinkClickCTAView$2;->a:Lcom/anythink/expressad/video/module/AnythinkClickCTAView;
+
+    invoke-direct {p0}, Lcom/anythink/expressad/widget/a;-><init>()V
+
+    return-void
+.end method
+
+
+# virtual methods
+.method protected final a(Landroid/view/View;)V
+    .locals 0
+
+    .line 121
+    iget-object p1, p0, Lcom/anythink/expressad/video/module/AnythinkClickCTAView$2;->a:Lcom/anythink/expressad/video/module/AnythinkClickCTAView;
+
+    invoke-static {p1}, Lcom/anythink/expressad/video/module/AnythinkClickCTAView;->b(Lcom/anythink/expressad/video/module/AnythinkClickCTAView;)V
+
+    return-void
+.end method

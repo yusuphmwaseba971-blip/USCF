@@ -32,6 +32,13 @@
                        FontSize="13" TextColor="{AppThemeBinding Light={StaticResource BrandDeepGreen}, Dark={StaticResource Gray300}}" LineBreakMode="WordWrap" />
             </Border>
 
+            <Button x:Name="GoogleCreateAccountButton" Text="CREATE ACCOUNT WITH GOOGLE"
+                    Clicked="OnGoogleCreateAccountClicked"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                    TextColor="{AppThemeBinding Light={StaticResource BrandDeepGreen}, Dark={StaticResource White}}"
+                    BorderColor="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}"
+                    BorderWidth="1" CornerRadius="14" HeightRequest="54" FontAttributes="Bold" />
+
             <VerticalStackLayout x:Name="AccountInformationSection" Spacing="12">
                 <Label Text="PERSONAL INFORMATION" FontSize="12" FontAttributes="Bold"
                        CharacterSpacing="1.5" TextColor="{StaticResource BrandGreen}" />
@@ -88,9 +95,14 @@
                             <Picker x:Name="RolePicker" Title="Select account type"
                                     SelectedIndexChanged="OnRoleChanged">
                                 <Picker.Items>
-                                    <x:String>USCF Member</x:String>
-                                    <x:String>USCF Leader</x:String>
-                                    <x:String>Pastor</x:String>
+                                    <x:String>ASSOCIATE</x:String>
+                                    <x:String>OTHER</x:String>
+                                    <x:String>PASTOR</x:String>
+                                    <x:String>Teacher</x:String>
+                                    <x:String>USCF_LEADER</x:String>
+                                    <x:String>USCF_MEMBER</x:String>
+                                    <x:String>WAFADHILI</x:String>
+                                    <x:String>WALEZI</x:String>
                                 </Picker.Items>
                             </Picker>
                             <Button Grid.Column="1" Text="Why do we ask?" CommandParameter="Role"

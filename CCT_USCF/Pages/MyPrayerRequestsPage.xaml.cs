@@ -9,11 +9,13 @@ namespace CCT_USCF.Pages;
 public partial class MyPrayerRequestsPage : ContentPage
 {
     private readonly PrayerService _prayerService;
+    private readonly AppAppearanceService _appearance;
 
     public MyPrayerRequestsPage()
     {
         InitializeComponent();
         _prayerService = MauiProgram.Services.GetRequiredService<PrayerService>();
+        _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
     }
 
     protected override async void OnAppearing()
@@ -36,7 +38,7 @@ public partial class MyPrayerRequestsPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[PRAYER] LoadMyRequests error: {ex}");
-            ErrorMessage.Text = "We couldn't load your prayer requests. Please check your connection and try again.";
+            ErrorMessage.SetDynamicResource(Label.TextProperty, "AppText_Prayer_LoadMineError");
             ErrorState.IsVisible = true;
         }
         finally
@@ -52,7 +54,11 @@ public partial class MyPrayerRequestsPage : ContentPage
     {
         if (sender is Button b && b.BindingContext is CCT_USCF.Models.PrayerRequest dto)
         {
-            var ok = await DisplayAlert("Confirm", "Delete this prayer request?", "Delete", "Cancel");
+            var ok = await DisplayAlert(
+                _appearance.GetText("Prayer.Confirm"),
+                _appearance.GetText("Prayer.DeleteConfirm"),
+                _appearance.GetText("Common.Delete"),
+                _appearance.GetText("Common.Cancel"));
             if (!ok) return;
 
             try
@@ -60,16 +66,25 @@ public partial class MyPrayerRequestsPage : ContentPage
                 var prayer = await _prayerService.GetPrayerAsync(dto.PrayerId);
                 if (prayer == null)
                 {
-                    await DisplayAlert("Error", "Unable to find this prayer request.", "OK");
+                    await DisplayAlert(
+                        _appearance.GetText("Settings.Error"),
+                        _appearance.GetText("Prayer.NotFound"),
+                        _appearance.GetText("Common.Ok"));
                     return;
                 }
 
-                await DisplayAlert("Prayer requests", "Prayer removal is not enabled in the current prayer wall release.", "OK");
+                await DisplayAlert(
+                    _appearance.GetText("Prayer.MyRequests"),
+                    _appearance.GetText("Prayer.RemovalDisabled"),
+                    _appearance.GetText("Common.Ok"));
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[PRAYER] Delete error: {ex}");
-                await DisplayAlert("Error", "Unable to delete prayer request right now.", "OK");
+                await DisplayAlert(
+                    _appearance.GetText("Settings.Error"),
+                    _appearance.GetText("Prayer.DeleteError"),
+                    _appearance.GetText("Common.Ok"));
             }
         }
     }

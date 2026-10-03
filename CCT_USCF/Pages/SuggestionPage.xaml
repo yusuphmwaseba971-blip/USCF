@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.SuggestionPage"
+    Title="Send Suggestion"
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20,24,20,32" Spacing="14">
+            <Label Text="Send Suggestion" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+            <Label Text="Title" FontSize="15" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <Entry
+                x:Name="TitleEntry"
+                Placeholder="A short title for your suggestion"
+                MaxLength="255"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                TextColor="{StaticResource TextPrimary}"
+                SemanticProperties.Description="Suggestion title" />
+            <Label Text="Where would this improvement help?" FontSize="15" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <Picker
+                x:Name="CategoryPicker"
+                Title="Select feature"
+                ItemDisplayBinding="{Binding Name}"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                TextColor="{StaticResource TextPrimary}"
+                SemanticProperties.Description="Select where the suggestion applies" />
+            <Label Text="Your suggestion" FontSize="15" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+            <Editor
+                x:Name="DescriptionEditor"
+                HeightRequest="180"
+                AutoSize="TextChanges"
+                Placeholder="Tell us how we can improve"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                TextColor="{StaticResource TextPrimary}"
+                SemanticProperties.Description="Describe your suggestion" />
+            <Label
+                x:Name="StatusLabel"
+                IsVisible="False"
+                FontSize="14"
+                TextColor="#B42318"
+                LineBreakMode="WordWrap" />
+            <ActivityIndicator x:Name="SubmitActivity" IsVisible="False" IsRunning="False" Color="{StaticResource BrandGreen}" />
+            <Button
+                x:Name="SubmitButton"
+                Text="Submit Suggestion"
+                Clicked="OnSubmitClicked"
+                BackgroundColor="{StaticResource BrandDeepGreen}"
+                TextColor="White"
+                FontAttributes="Bold"
+                CornerRadius="16"
+                HeightRequest="54"
+                SemanticProperties.Description="Submit suggestion" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

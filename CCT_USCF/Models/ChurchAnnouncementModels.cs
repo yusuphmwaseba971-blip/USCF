@@ -1,8 +1,15 @@
 namespace CCT_USCF.Models;
 
-public sealed record ChurchAnnouncementTarget(string Level, int Id, string Name, int? RegionId, int? DistrictId)
+public sealed record ChurchAnnouncementTarget(string Level, int? Id, string Name, int? RegionId, int? DistrictId)
 {
-    public override string ToString() => $"{Level}: {Name}";
+    public override string ToString() => Level.Trim().ToUpperInvariant() switch
+    {
+        "BRANCH" => "My Branch",
+        "DISTRICT" => "My District",
+        "REGION" or "REGIONAL" => "My Region",
+        "NATIONAL" => "National",
+        _ => Name
+    };
 }
 
 public sealed record ChurchAnnouncementOptions(string LeadershipLevel, string Organization, IReadOnlyList<ChurchAnnouncementTarget> Targets);

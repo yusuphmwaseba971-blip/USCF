@@ -3,53 +3,53 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.AddPrayerPage"
-    Title="Add Prayer"
-    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    Title="{DynamicResource AppText_Prayer_AddTitle}"
+    BackgroundColor="{DynamicResource AppPageBackground}">
 
     <ScrollView>
         <VerticalStackLayout Padding="24" Spacing="16">
             <Label Text="🙏" FontSize="48" HorizontalOptions="Center" />
-            <Label Text="Prayer Request" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" HorizontalOptions="Center" />
-            <Label Text="How can we pray for you?" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
+            <Label Text="{DynamicResource AppText_Prayer_RequestTitle}" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" HorizontalOptions="Center" />
+            <Label Text="{DynamicResource AppText_Prayer_HowCanWePray}" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
 
             <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Share what's on your heart." FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                    <Editor x:Name="PrayerEditor" Placeholder="Write your prayer request here..." MinimumHeightRequest="120" AutoSize="TextChanges" BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource SurfaceDark}}" />
+                    <Label Text="{DynamicResource AppText_Prayer_ShareHeart}" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                    <Editor x:Name="PrayerEditor" Placeholder="{DynamicResource AppText_Prayer_WriteRequest}" MinimumHeightRequest="120" AutoSize="TextChanges" BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource SurfaceDark}}" />
                 </VerticalStackLayout>
             </Border>
 
             <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Prayer Category" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                    <Picker x:Name="CategoryPicker" Title="Select a category" />
+                    <Label Text="{DynamicResource AppText_Prayer_Category}" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                    <Picker x:Name="CategoryPicker" Title="{DynamicResource AppText_Prayer_SelectCategory}" />
                 </VerticalStackLayout>
             </Border>
 
             <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Who should pray for you?" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                    <Picker x:Name="ReachPicker" Title="Select prayer reach" />
+                    <Label Text="{DynamicResource AppText_Prayer_WhoShouldPray}" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                    <Picker x:Name="ReachPicker" Title="{DynamicResource AppText_Prayer_SelectReach}" />
                 </VerticalStackLayout>
             </Border>
 
             <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Who can see the prayer?" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                    <Picker x:Name="VisibilityPicker" Title="Prayer visibility" />
+                    <Label Text="{DynamicResource AppText_Prayer_WhoCanSeePrayer}" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                    <Picker x:Name="VisibilityPicker" Title="{DynamicResource AppText_Prayer_Visibility}" />
                 </VerticalStackLayout>
             </Border>
 
             <Border BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Who can see your name?" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                    <Picker x:Name="NameVisibilityPicker" Title="Author visibility" />
+                    <Label Text="{DynamicResource AppText_Prayer_WhoCanSeeName}" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                    <Picker x:Name="NameVisibilityPicker" Title="{DynamicResource AppText_Prayer_AuthorVisibility}" />
                 </VerticalStackLayout>
             </Border>
 
             <Button
                 x:Name="SubmitPrayerButton"
-                Text="🙏 ADD PRAYER"
+                Text="{DynamicResource AppText_Prayer_Submit}"
                 BackgroundColor="{StaticResource BrandGreen}"
                 TextColor="White"
                 CornerRadius="18"

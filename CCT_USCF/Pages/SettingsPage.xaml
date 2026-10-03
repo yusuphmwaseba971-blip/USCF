@@ -4,45 +4,45 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="CCT_USCF.Pages.SettingsPage"
-    Title="Settings"
-    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    Title="{DynamicResource AppText_Settings_Title}"
+    BackgroundColor="{DynamicResource AppPageBackground}">
 
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="18">
 
-            <Label Text="Account Settings" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Label Text="{DynamicResource AppText_Settings_Account}" FontSize="24" FontAttributes="Bold" TextColor="#1E40AF" />
 
             <Frame BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Padding="12">
                 <VerticalStackLayout Spacing="12">
-                    <Entry x:Name="FullNameEntry" Placeholder="Full name" />
-                    <Entry x:Name="UsernameEntry" Placeholder="Username" />
-                    <Entry x:Name="EmailEntry" Placeholder="Email (managed by Firebase)"
+                    <Entry x:Name="FullNameEntry" Placeholder="{DynamicResource AppText_Settings_FullName}" />
+                    <Entry x:Name="UsernameEntry" Placeholder="{DynamicResource AppText_Settings_Username}" />
+                    <Entry x:Name="EmailEntry" Placeholder="{DynamicResource AppText_Settings_EmailFirebase}"
                            Keyboard="Email" IsReadOnly="True" />
-                    <Entry x:Name="PhoneNumberEntry" Placeholder="Phone number" Keyboard="Telephone" />
+                    <Entry x:Name="PhoneNumberEntry" Placeholder="{DynamicResource AppText_Settings_Phone}" Keyboard="Telephone" />
                 </VerticalStackLayout>
             </Frame>
 
-            <Label Text="Change Password" FontSize="18" FontAttributes="Bold" />
+            <Label Text="{DynamicResource AppText_Settings_ChangePassword}" FontSize="18" FontAttributes="Bold" />
             <Frame BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Padding="12">
                 <VerticalStackLayout Spacing="12">
-                    <Entry x:Name="CurrentPasswordEntry" Placeholder="Current password" IsPassword="True" />
-                    <Entry x:Name="NewPasswordEntry" Placeholder="New password" IsPassword="True" />
-                    <Entry x:Name="ConfirmPasswordEntry" Placeholder="Confirm new password" IsPassword="True" />
+                    <Entry x:Name="CurrentPasswordEntry" Placeholder="{DynamicResource AppText_Settings_CurrentPassword}" IsPassword="True" />
+                    <Entry x:Name="NewPasswordEntry" Placeholder="{DynamicResource AppText_Settings_NewPassword}" IsPassword="True" />
+                    <Entry x:Name="ConfirmPasswordEntry" Placeholder="{DynamicResource AppText_Settings_ConfirmPassword}" IsPassword="True" />
                 </VerticalStackLayout>
             </Frame>
 
-            <Button x:Name="SaveButton" Text="Save Changes" Clicked="OnSaveClicked" />
+            <Button x:Name="SaveButton" Text="{DynamicResource AppText_Settings_SaveChanges}" Clicked="OnSaveClicked" />
 
             <Border x:Name="GroupSettingsSection" IsVisible="False"
                     Padding="14" BackgroundColor="#FFF5F4" Stroke="#F2C8C5"
                     StrokeThickness="1" StrokeShape="RoundRectangle 14">
                 <VerticalStackLayout Spacing="8">
-                    <Label x:Name="GroupSettingsTitle" Text="Group Settings"
+                    <Label x:Name="GroupSettingsTitle" Text="{DynamicResource AppText_Settings_GroupSettings}"
                            FontSize="18" FontAttributes="Bold" TextColor="#A12622" />
-                    <Label Text="Only this group's authorized creator or administrator can deactivate it."
+                    <Label Text="{DynamicResource AppText_Settings_GroupDeactivateInfo}"
                            FontSize="13" TextColor="#7A3B38" />
                     <Button x:Name="DeleteGroupFromSettingsButton"
-                            Text="Delete group"
+                            Text="{DynamicResource AppText_Settings_DeleteGroup}"
                             IsVisible="False"
                             Clicked="OnDeleteGroupFromSettingsClicked"
                             BackgroundColor="#A12622" TextColor="White"
@@ -53,23 +53,23 @@
             <Border Padding="14" BackgroundColor="#FFF5F4" Stroke="#F2C8C5"
                     StrokeThickness="1" StrokeShape="RoundRectangle 14">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="Delete account" FontSize="18" FontAttributes="Bold"
+                    <Label Text="{DynamicResource AppText_Settings_DeleteAccount}" FontSize="18" FontAttributes="Bold"
                            TextColor="#A12622" />
-                    <Label Text="This permanently deletes your Firebase account and CCT-USCF Firestore profile. This action cannot be undone."
+                    <Label Text="{DynamicResource AppText_Settings_DeleteAccountWarning}"
                            FontSize="13" TextColor="#7A3B38" LineBreakMode="WordWrap" />
-                    <Button x:Name="DeleteAccountButton" Text="Delete my account"
+                    <Button x:Name="DeleteAccountButton" Text="{DynamicResource AppText_Settings_DeleteMyAccount}"
                             Clicked="OnDeleteAccountClicked"
                             BackgroundColor="#A12622" TextColor="White"
                             CornerRadius="10" HeightRequest="48" />
                 </VerticalStackLayout>
             </Border>
 
-            <Label Text="USCF Assistance" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Label Text="{DynamicResource AppText_Settings_Assistance}" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
             <Frame BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Padding="14">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                     <VerticalStackLayout Spacing="3">
-                        <Label Text="USCF Assistance" FontAttributes="Bold" />
-                        <Label Text="Get contextual help across CCT-USCF." FontSize="12"
+                        <Label Text="{DynamicResource AppText_Settings_Assistance}" FontAttributes="Bold" />
+                        <Label Text="{DynamicResource AppText_Settings_AssistancePrompt}" FontSize="12"
                                TextColor="#64748B" />
                     </VerticalStackLayout>
                     <Switch x:Name="AssistantSwitch" Grid.Column="1"
@@ -78,22 +78,25 @@
                 </Grid>
             </Frame>
 
-            <Label Text="Language &amp; Appearance" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
+            <Label Text="{DynamicResource AppText_Settings_LanguageAppearance}" FontSize="20" FontAttributes="Bold" TextColor="#1E40AF" />
             <Frame BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" Padding="12">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="🌐 App Language" FontAttributes="Bold" />
-                    <Picker x:Name="LanguagePicker" Title="Choose language" />
-                    <Label Text="🎨 App Background" FontAttributes="Bold" />
-                    <Picker x:Name="BackgroundPicker" Title="Choose background" />
-                    <Label Text="Preview" FontAttributes="Bold" />
+                    <Label Text="{DynamicResource AppText_Settings_AppLanguage}" FontAttributes="Bold" />
+                    <Picker x:Name="LanguagePicker" Title="{DynamicResource AppText_Settings_ChooseLanguage}"
+                            SelectedIndexChanged="OnLanguagePickerChanged" />
+                    <Label Text="{DynamicResource AppText_Settings_AppBackground}" FontAttributes="Bold" />
+                    <Picker x:Name="BackgroundPicker" Title="{DynamicResource AppText_Settings_ChooseBackground}"
+                            SelectedIndexChanged="OnBackgroundPickerChanged" />
+                    <Label Text="{DynamicResource AppText_Settings_Preview}" FontAttributes="Bold" />
                     <Border x:Name="BackgroundPreview" HeightRequest="70" Stroke="#CBD5E1" StrokeThickness="1">
                         <Label Text="USCF" HorizontalOptions="Center" VerticalOptions="Center" FontAttributes="Bold" />
                     </Border>
-                    <Entry x:Name="CustomColorEntry" Placeholder="Custom color (#RRGGBB)" />
-                    <Button Text="Apply appearance" Clicked="OnAppearanceClicked" />
-                    <Label Text="Chat Typography" FontAttributes="Bold" />
-                    <Picker x:Name="FontPreferencePicker" Title="Font preference" />
-                    <Picker x:Name="FontSizePreferencePicker" Title="Font size" />
+                    <Entry x:Name="CustomColorEntry" Placeholder="{DynamicResource AppText_Settings_CustomColor}" />
+                    <Button Text="{DynamicResource AppText_Settings_ApplyAppearance}" Clicked="OnAppearanceClicked" />
+                    <Label Text="{DynamicResource AppText_Settings_ChatTypography}" FontAttributes="Bold" />
+                    <Picker x:Name="FontPreferencePicker" Title="{DynamicResource AppText_Settings_FontPreference}" />
+                    <Picker x:Name="FontSizePreferencePicker" Title="{DynamicResource AppText_Settings_FontSize}"
+                            SelectedIndexChanged="OnFontSizePickerChanged" />
                 </VerticalStackLayout>
             </Frame>
 

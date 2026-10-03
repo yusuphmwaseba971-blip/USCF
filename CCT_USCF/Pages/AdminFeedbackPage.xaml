@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.AdminFeedbackPage"
+    Title="Feedback Admin"
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    <ScrollView>
+        <VerticalStackLayout Padding="16,20,16,28" Spacing="14">
+            <Label Text="Feedback Admin" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+
+            <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                <Border Grid.Row="0" Grid.ColumnSpan="3" Padding="14" StrokeThickness="0" StrokeShape="RoundRectangle 14" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Total Feedback" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                        <Label x:Name="TotalCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="1" Grid.Column="0" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="New" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="NewCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="1" Grid.Column="1" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="Reviewing" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="ReviewingCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="1" Grid.Column="2" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="Fixing" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="FixingCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="0" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="Fixed" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="FixedCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="1" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="Closed" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="ClosedCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="2" Grid.Column="2" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="Bug Reports" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="BugCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="3" Grid.Column="0" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="Suggestions" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="SuggestionCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+                <Border Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Padding="10" StrokeThickness="0" StrokeShape="RoundRectangle 12" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                    <VerticalStackLayout><Label Text="General Feedback" FontSize="12" TextColor="{StaticResource TextSecondary}" /><Label x:Name="GeneralCountLabel" Text="—" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" /></VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <SearchBar x:Name="SearchInput" Placeholder="Search reference, title, description, or user" SearchButtonPressed="OnSearchButtonPressed" TextChanged="OnSearchTextChanged" />
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                <Picker x:Name="StatusFilter" Title="Status" SelectedIndexChanged="OnFilterChanged" />
+                <Picker x:Name="TypeFilter" Grid.Column="1" Title="Type" SelectedIndexChanged="OnFilterChanged" />
+                <Picker x:Name="CategoryFilter" Grid.Column="2" Title="Category" SelectedIndexChanged="OnFilterChanged" />
+            </Grid>
+
+            <Label x:Name="MessageLabel" IsVisible="False" TextColor="#B42318" LineBreakMode="WordWrap" />
+            <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" IsRunning="False" Color="{StaticResource BrandGreen}" />
+            <Label x:Name="NoReportsLabel" IsVisible="False" Text="No feedback reports yet." FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" Padding="12" />
+
+            <CollectionView
+                x:Name="ReportsCollection"
+                SelectionMode="Single"
+                SelectionChanged="OnReportSelected">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,0,8" Padding="12" Stroke="#EEE7DE" StrokeThickness="1" StrokeShape="RoundRectangle 14" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}">
+                            <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="3">
+                                <Label Grid.Row="0" Text="{Binding Reference}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                                <Label Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Status}" FontSize="13" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                <Label Grid.Row="1" Text="{Binding Type}" FontSize="13" TextColor="{StaticResource TextPrimary}" />
+                                <Label Grid.Row="1" Grid.Column="1" Text="{Binding Category}" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                                <Label Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding Title}" FontSize="14" TextColor="{StaticResource TextPrimary}" LineBreakMode="TailTruncation" />
+                                <Label Grid.Row="3" Grid.ColumnSpan="3" Text="{Binding UserDisplay}" FontSize="12" TextColor="{StaticResource TextSecondary}" LineBreakMode="TailTruncation" />
+                                <Label Grid.Row="4" Text="{Binding RatingDisplay}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                <Label Grid.Row="4" Grid.Column="1" Text="{Binding CreatedDisplay}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                <Label Grid.Row="4" Grid.Column="2" Text="{Binding UpdatedDisplay}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Button x:Name="PreviousButton" Text="Previous" Clicked="OnPreviousClicked" />
+                <Label x:Name="PageLabel" Grid.Column="1" Text="Page 0 of 0" HorizontalOptions="Center" VerticalOptions="Center" TextColor="{StaticResource TextSecondary}" />
+                <Button x:Name="NextButton" Grid.Column="2" Text="Next" Clicked="OnNextClicked" />
+            </Grid>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

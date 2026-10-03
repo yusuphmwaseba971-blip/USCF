@@ -11,20 +11,35 @@ namespace CCT_USCF.Pages;
 public partial class AddPrayerPage : ContentPage
 {
     private readonly PrayerService _prayerService;
+    private readonly AppAppearanceService _appearance;
 
     public AddPrayerPage()
     {
         InitializeComponent();
         _prayerService = MauiProgram.Services.GetRequiredService<PrayerService>();
+        _appearance = MauiProgram.Services.GetRequiredService<AppAppearanceService>();
         LoadPickers();
     }
 
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        _appearance.AppearanceChanged += OnAppearanceChanged;
+        RefreshPickerLabels();
+    }
+
+    protected override void OnDisappearing()
+    {
+        _appearance.AppearanceChanged -= OnAppearanceChanged;
+        base.OnDisappearing();
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e) =>
+        MainThread.BeginInvokeOnMainThread(RefreshPickerLabels);
+
     private void LoadPickers()
     {
-        CategoryPicker.ItemsSource = Enum.GetNames(typeof(PrayerCategory)).Select(ToFriendlyName).ToList();
-        ReachPicker.ItemsSource = Enum.GetNames(typeof(PrayerReach)).Select(ToFriendlyName).ToList();
-        VisibilityPicker.ItemsSource = Enum.GetNames(typeof(PrayerVisibility)).Select(ToFriendlyName).ToList();
-        NameVisibilityPicker.ItemsSource = Enum.GetNames(typeof(PrayerNameVisibility)).Select(ToFriendlyName).ToList();
+        RefreshPickerLabels();
 
         CategoryPicker.SelectedIndex = 0;
         ReachPicker.SelectedIndex = 3;
@@ -32,64 +47,82 @@ public partial class AddPrayerPage : ContentPage
         NameVisibilityPicker.SelectedIndex = 0;
     }
 
+    private void RefreshPickerLabels()
+    {
+        SetPickerItems<PrayerCategory>(CategoryPicker);
+        SetPickerItems<PrayerReach>(ReachPicker);
+        SetPickerItems<PrayerVisibility>(VisibilityPicker);
+        SetPickerItems<PrayerNameVisibility>(NameVisibilityPicker);
+    }
+
+    private void SetPickerItems<TEnum>(Picker picker) where TEnum : struct, Enum
+    {
+        var selectedIndex = picker.SelectedIndex;
+        picker.ItemsSource = Enum.GetValues<TEnum>()
+            .Select(value => _appearance.GetText($"Prayer.Option.{typeof(TEnum).Name}.{value}"))
+            .ToList();
+        picker.SelectedIndex = selectedIndex;
+    }
+
     private async void OnSubmitPrayerClicked(object sender, EventArgs e)
     {
         var content = PrayerEditor.Text?.Trim();
         if (string.IsNullOrWhiteSpace(content))
         {
-            await DisplayAlert("Prayer request", "Please write a prayer request before submitting.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Prayer.RequestValidationTitle"),
+                _appearance.GetText("Prayer.WriteBeforeSubmit"),
+                _appearance.GetText("Common.Ok"));
             return;
         }
 
         if (CategoryPicker.SelectedIndex < 0 || ReachPicker.SelectedIndex < 0 || VisibilityPicker.SelectedIndex < 0 || NameVisibilityPicker.SelectedIndex < 0)
         {
-            await DisplayAlert("Prayer request", "Please complete every field before submitting.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Prayer.RequestValidationTitle"),
+                _appearance.GetText("Prayer.CompleteFields"),
+                _appearance.GetText("Common.Ok"));
             return;
         }
 
         try
         {
             SubmitPrayerButton.IsEnabled = false;
-            SubmitPrayerButton.Text = "Submitting...";
+            SubmitPrayerButton.Text = _appearance.GetText("Prayer.Submitting");
 
-            var category = ParseEnum<PrayerCategory>(CategoryPicker.SelectedItem?.ToString());
-            var reach = ParseEnum<PrayerReach>(ReachPicker.SelectedItem?.ToString());
-            var visibility = ParseEnum<PrayerVisibility>(VisibilityPicker.SelectedItem?.ToString());
-            var nameVisibility = ParseEnum<PrayerNameVisibility>(NameVisibilityPicker.SelectedItem?.ToString());
+            var category = GetSelectedEnum<PrayerCategory>(CategoryPicker);
+            var reach = GetSelectedEnum<PrayerReach>(ReachPicker);
+            var visibility = GetSelectedEnum<PrayerVisibility>(VisibilityPicker);
+            var nameVisibility = GetSelectedEnum<PrayerNameVisibility>(NameVisibilityPicker);
 
             await _prayerService.CreatePrayerAsync(content, category, reach, visibility, nameVisibility);
-            await DisplayAlert("Prayer shared", "Your prayer request has been shared with the community.", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Prayer.SharedTitle"),
+                _appearance.GetText("Prayer.SharedMessage"),
+                _appearance.GetText("Common.Ok"));
             await Shell.Current.GoToAsync("..");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[PRAYER_REQUEST_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message}");
-            await DisplayAlert("Prayer request", $"We couldn't submit your prayer request.\n{ex.Message}", "OK");
+            await DisplayAlert(
+                _appearance.GetText("Prayer.RequestValidationTitle"),
+                _appearance.GetText("Prayer.SubmitError", ex.Message),
+                _appearance.GetText("Common.Ok"));
         }
         finally
         {
             SubmitPrayerButton.IsEnabled = true;
-            SubmitPrayerButton.Text = "🙏 ADD PRAYER";
+            SubmitPrayerButton.Text = _appearance.GetText("Prayer.Submit");
         }
     }
 
-    private static T ParseEnum<T>(string? value) where T : struct, Enum
+    private static TEnum GetSelectedEnum<TEnum>(Picker picker) where TEnum : struct, Enum
     {
-        if (string.IsNullOrWhiteSpace(value))
-            return Enum.GetValues<T>().First();
-
-        var normalized = value.Replace(" ", string.Empty).Replace("-", string.Empty);
-        if (Enum.TryParse<T>(normalized, true, out var result))
-            return result;
-
-        return Enum.GetValues<T>().First();
-    }
-
-    private static string ToFriendlyName(string value)
-    {
-        var text = value.Replace("Uscf", "USCF");
-        text = System.Text.RegularExpressions.Regex.Replace(text, "([a-z])([A-Z])", "$1 $2");
-        return text;
+        var values = Enum.GetValues<TEnum>();
+        if (picker.SelectedIndex < 0 || picker.SelectedIndex >= values.Length)
+            throw new InvalidOperationException("A valid prayer option must be selected.");
+        return values[picker.SelectedIndex];
     }
 }

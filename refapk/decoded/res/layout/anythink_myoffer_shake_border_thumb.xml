@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/anythink_myoffer_splash_shake_border_img" android:layout_width="16.0dip" android:layout_height="16.0dip" android:tint="#ffffffff" />
+    <TextView android:textSize="12.0dip" android:textColor="#ffffffff" android:ellipsize="end" android:id="@id/anythink_myoffer_splash_shake_hint_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="6.0dip" android:maxWidth="72.0dip" android:text="@string/anythink_myoffer_shake_simple_title2" android:maxLines="1" />
+</merge>

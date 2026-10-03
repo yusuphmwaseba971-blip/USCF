@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="CCT_USCF.Pages.HelpFeedbackPage"
+    Title="Help &amp; Feedback"
+    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20,28,20,32" Spacing="16">
+            <Label
+                Text="Help &amp; Feedback"
+                FontSize="30"
+                FontAttributes="Bold"
+                TextColor="{StaticResource TextPrimary}"
+                HorizontalTextAlignment="Center" />
+
+            <Label
+                Text="Your feedback helps us improve CCT-USCF."
+                FontSize="15"
+                TextColor="{StaticResource TextSecondary}"
+                HorizontalTextAlignment="Center"
+                Margin="0,0,0,8" />
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="14">
+                    <Label Grid.Column="0" Text="🐛" FontSize="27" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                        <Label Text="Report a Bug" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="Tell us about a problem" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                    <Button
+                        Grid.ColumnSpan="3"
+                        Text=""
+                        BackgroundColor="Transparent"
+                        Clicked="OnReportBugClicked"
+                        SemanticProperties.Description="Report a Bug. Tell us about a problem." />
+                </Grid>
+            </Border>
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="14">
+                    <Label Grid.Column="0" Text="💡" FontSize="27" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                        <Label Text="Send Suggestion" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="Tell us how we can improve" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                    <Button
+                        Grid.ColumnSpan="3"
+                        Text=""
+                        BackgroundColor="Transparent"
+                        Clicked="OnSuggestionClicked"
+                        SemanticProperties.Description="Send Suggestion. Tell us how we can improve." />
+                </Grid>
+            </Border>
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="14">
+                    <Label Grid.Column="0" Text="⭐" FontSize="27" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                        <Label Text="General Feedback" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="Share your experience" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                    <Button
+                        Grid.ColumnSpan="3"
+                        Text=""
+                        BackgroundColor="Transparent"
+                        Clicked="OnGeneralFeedbackClicked"
+                        SemanticProperties.Description="General Feedback. Share your experience." />
+                </Grid>
+            </Border>
+
+            <Border
+                Padding="16,14"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="14">
+                    <Label Grid.Column="0" Text="▤" FontSize="27" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                        <Label Text="My Reports" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="View the reports you submitted" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                    <Button
+                        Grid.ColumnSpan="3"
+                        Text=""
+                        BackgroundColor="Transparent"
+                        Clicked="OnMyReportsClicked"
+                        SemanticProperties.Description="My Reports. View reports you submitted." />
+                </Grid>
+            </Border>
+
+            <Label
+                x:Name="AdminAccessStatusLabel"
+                IsVisible="False"
+                FontSize="13"
+                TextColor="#B42318"
+                LineBreakMode="WordWrap" />
+
+            <Border
+                x:Name="AdminFeedbackCard"
+                IsVisible="False"
+                Padding="16,14"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
+                Stroke="#E5DCC8"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+                <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="14">
+                    <Label Grid.Column="0" Text="⚙" FontSize="27" VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                        <Label Text="Admin Feedback" FontSize="17" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="Review and manage feedback reports" FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#B8986B" VerticalOptions="Center" />
+                    <Button
+                        Grid.ColumnSpan="3"
+                        Text=""
+                        BackgroundColor="Transparent"
+                        Clicked="OnAdminFeedbackClicked"
+                        SemanticProperties.Description="Admin Feedback. Review and manage feedback reports." />
+                </Grid>
+            </Border>
+
+            <Button
+                Text="Contact Support"
+                Clicked="OnContactSupportClicked"
+                BackgroundColor="Transparent"
+                BorderColor="{StaticResource BrandDeepGreen}"
+                BorderWidth="1"
+                TextColor="{StaticResource BrandDeepGreen}"
+                CornerRadius="14"
+                HeightRequest="50" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

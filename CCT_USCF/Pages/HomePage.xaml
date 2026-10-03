@@ -3,8 +3,8 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="CCT_USCF.Pages.HomePage"
-             Title="Home"
-             BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+             Title="{DynamicResource AppText_Home_Title}"
+             BackgroundColor="{DynamicResource AppPageBackground}">
     <Grid RowDefinitions="*,Auto">
         <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
             <VerticalStackLayout Padding="18,14,18,34" Spacing="18">
@@ -20,7 +20,7 @@
                     </Border>
                     <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
                         <Label Text="USCF" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
-                        <Label Text="My church headquarters" FontSize="11" TextColor="{StaticResource TextSecondary}" />
+                        <Label Text="{DynamicResource AppText_Home_ChurchHeadquarters}" FontSize="11" TextColor="{StaticResource TextSecondary}" />
                     </VerticalStackLayout>
                     <Border Grid.Column="2" WidthRequest="44" HeightRequest="44" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
                             Stroke="#DCEBE0" StrokeThickness="1" StrokeShape="RoundRectangle 14">
@@ -56,13 +56,13 @@
                         <Label Text="✝" FontSize="120" TextColor="White" Opacity="0.07"
                                HorizontalOptions="End" VerticalOptions="End" TranslationY="26" />
                         <VerticalStackLayout Spacing="5">
-                            <Label x:Name="GreetingLabel" Text="WELCOME BACK 👋" FontSize="11"
+                            <Label x:Name="GreetingLabel" Text="{DynamicResource AppText_Home_WelcomeBack}" FontSize="11"
                                    FontAttributes="Bold" TextColor="#C9F1D5" />
-                            <Label x:Name="UserNameLabel" Text="Your USCF community is active today."
+                            <Label x:Name="UserNameLabel" Text="{DynamicResource AppText_Home_CommunityActive}"
                                    FontSize="24" FontAttributes="Bold" TextColor="White" />
-                            <Label x:Name="ChurchContextLabel" Text="Your church context is loading..."
+                            <Label x:Name="ChurchContextLabel" Text="{DynamicResource AppText_Home_LoadingChurch}"
                                    FontSize="13" TextColor="#E3F8E9" />
-                            <Label Text="View your profile  ›" FontSize="12" TextColor="#C9F1D5"
+                            <Label Text="{DynamicResource AppText_Home_ViewProfile}" FontSize="12" TextColor="#C9F1D5"
                                    Margin="0,8,0,0" />
                         </VerticalStackLayout>
                     </Grid>
@@ -70,8 +70,8 @@
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="Today in USCF" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="View all activities  ›" Grid.Column="1" FontSize="12"
+                        <Label Text="{DynamicResource AppText_Home_TodayInUscf}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="{DynamicResource AppText_Home_ViewActivities}" Grid.Column="1" FontSize="12"
                                TextColor="{StaticResource BrandGreen}" VerticalOptions="End">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OpenNotifications" />
@@ -84,7 +84,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="!" FontSize="22" TextColor="{StaticResource AccentPurple}" />
                                 <Label x:Name="AnnouncementsCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="#38216B" />
-                                <Label Text="Announcements" FontSize="11" TextColor="#75658F" LineBreakMode="WordWrap" />
+                                <Label Text="{DynamicResource AppText_Home_Announcements}" FontSize="11" TextColor="#75658F" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Column="1" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -92,7 +92,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="♡" FontSize="23" TextColor="{StaticResource AccentBlue}" />
                                 <Label x:Name="PrayerCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="#123B73" />
-                                <Label Text="Prayer Requests" FontSize="11" TextColor="#54708B" LineBreakMode="WordWrap" />
+                                <Label Text="{DynamicResource AppText_Home_PrayerRequests}" FontSize="11" TextColor="#54708B" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Row="1" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -100,7 +100,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="♧" FontSize="23" TextColor="{StaticResource BrandGreen}" />
                                 <Label x:Name="ActivityCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
-                                <Label Text="Community activity" FontSize="11" TextColor="#537160" LineBreakMode="WordWrap" />
+                                <Label Text="{DynamicResource AppText_Home_CommunityActivity}" FontSize="11" TextColor="#537160" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Row="1" Grid.Column="1" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -108,7 +108,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="□" FontSize="23" TextColor="{StaticResource AccentGold}" />
                                 <Label x:Name="EventsCountLabel" Text="—" FontSize="24" FontAttributes="Bold" TextColor="#684400" />
-                                <Label Text="Church activity" FontSize="11" TextColor="#8A7045" LineBreakMode="WordWrap" />
+                                <Label Text="{DynamicResource AppText_Home_ChurchActivity}" FontSize="11" TextColor="#8A7045" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                         <Border Grid.Row="2" Padding="13" BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 18">
@@ -116,7 +116,7 @@
                             <VerticalStackLayout Spacing="3">
                                 <Label Text="▶" FontSize="20" TextColor="{StaticResource AccentBlue}" />
                                 <Label Text="—" FontSize="24" FontAttributes="Bold" TextColor="#273B73" />
-                                <Label Text="New sermon" FontSize="11" TextColor="#63739B" LineBreakMode="WordWrap" />
+                                <Label Text="{DynamicResource AppText_Home_NewSermon}" FontSize="11" TextColor="#63739B" LineBreakMode="WordWrap" />
                             </VerticalStackLayout>
                         </Border>
                     </Grid>
@@ -126,16 +126,16 @@
                     <Border.Shadow><Shadow Brush="#173B28" Offset="0,3" Radius="12" Opacity="0.10" /></Border.Shadow>
                     <VerticalStackLayout Spacing="12">
                         <Grid ColumnDefinitions="*,Auto">
-                            <Label Text="My Church" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                            <Label Text="Open  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                            <Label Text="{DynamicResource AppText_Home_MyChurch}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                            <Label Text="{DynamicResource AppText_Home_Open}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                                 <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenChurch" /></Label.GestureRecognizers>
                             </Label>
                         </Grid>
-                        <Label x:Name="MyChurchLabel" Text="Your organization will appear here." FontSize="18"
+                        <Label x:Name="MyChurchLabel" Text="{DynamicResource AppText_Home_OrganizationPlaceholder}" FontSize="18"
                                FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
-                        <Label x:Name="MyChurchMetaLabel" Text="Member count is not available from the current services."
+                        <Label x:Name="MyChurchMetaLabel" Text="{DynamicResource AppText_Home_MemberCountUnavailable}"
                                FontSize="12" TextColor="{StaticResource TextSecondary}" />
-                        <Button Text="Open My Church" Clicked="OpenChurchButton" BackgroundColor="{StaticResource SoftMint}"
+                        <Button Text="{DynamicResource AppText_Home_OpenMyChurch}" Clicked="OpenChurchButton" BackgroundColor="{StaticResource SoftMint}"
                                 TextColor="{StaticResource BrandGreen}" CornerRadius="14" />
                     </VerticalStackLayout>
                 </Border>
@@ -143,20 +143,20 @@
                 <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenNotifications" /></Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="7">
-                        <Label Text="OFFICIAL USCF UPDATE" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
-                        <Label x:Name="LatestAnnouncementTitleLabel" Text="No new announcements" FontSize="20"
+                        <Label Text="{DynamicResource AppText_Home_OfficialUpdate}" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource BrandGreen}" />
+                        <Label x:Name="LatestAnnouncementTitleLabel" Text="{DynamicResource AppText_Home_NoAnnouncements}" FontSize="20"
                                FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
-                        <Label x:Name="LatestAnnouncementMessageLabel" Text="You're all caught up."
+                        <Label x:Name="LatestAnnouncementMessageLabel" Text="{DynamicResource AppText_Home_CaughtUp}"
                                FontSize="13" TextColor="#537160" LineBreakMode="WordWrap" />
-                        <Label x:Name="LatestAnnouncementMetaLabel" Text="View announcements  ›" FontSize="12"
+                        <Label x:Name="LatestAnnouncementMetaLabel" Text="{DynamicResource AppText_Home_ViewAnnouncements}" FontSize="12"
                                TextColor="{StaticResource BrandGreen}" Margin="0,4,0,0" />
                     </VerticalStackLayout>
                 </Border>
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="Your Church Groups" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="See all  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                        <Label Text="{DynamicResource AppText_Home_YourGroups}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="{DynamicResource AppText_Home_SeeAll}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenChurch" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
@@ -167,8 +167,8 @@
                                 <Label Text="♧" FontSize="29" TextColor="#A66A00" HorizontalOptions="Center" VerticalOptions="Center" />
                             </Border>
                             <VerticalStackLayout Grid.Column="1" Spacing="3">
-                                <Label Text="Church Groups" FontSize="17" FontAttributes="Bold" TextColor="#684400" />
-                                <Label Text="Choose a level to view available groups." FontSize="12" TextColor="#8A7045" />
+                                <Label Text="{DynamicResource AppText_Home_Groups}" FontSize="17" FontAttributes="Bold" TextColor="#684400" />
+                                <Label Text="{DynamicResource AppText_Home_ChooseGroupLevel}" FontSize="12" TextColor="#8A7045" />
                             </VerticalStackLayout>
                             <Label Grid.Column="2" Text="›" FontSize="28" TextColor="#A66A00" VerticalOptions="Center" />
                         </Grid>
@@ -178,25 +178,25 @@
                 <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenPrayer" /></Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="8">
-                        <Label Text="PRAY WITH YOUR COMMUNITY" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
-                        <Label x:Name="PrayerPreviewLabel" Text="Prayer requests will appear here when available."
+                        <Label Text="{DynamicResource AppText_Home_PrayWithCommunity}" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
+                        <Label x:Name="PrayerPreviewLabel" Text="{DynamicResource AppText_Home_PrayerPreview}"
                                FontSize="16" FontAttributes="Bold" TextColor="#123B73" LineBreakMode="WordWrap" />
-                        <Button Text="Open prayer wall  ›" Clicked="OpenPrayerButton" BackgroundColor="Transparent"
+                        <Button Text="{DynamicResource AppText_Home_OpenPrayerWall}" Clicked="OpenPrayerButton" BackgroundColor="Transparent"
                                 TextColor="{StaticResource AccentBlue}" HorizontalOptions="Start" Padding="0" />
                     </VerticalStackLayout>
                 </Border>
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="Today's Word" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="Read passage  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                        <Label Text="{DynamicResource AppText_Home_TodayWord}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="{DynamicResource AppText_Home_ReadPassage}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenBible" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
                     <Border Padding="18" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" StrokeThickness="0" StrokeShape="RoundRectangle 22">
                         <Border.GestureRecognizers><TapGestureRecognizer Tapped="OpenBible" /></Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="6">
-                            <Label Text="TODAY'S WORD" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
+                            <Label Text="{DynamicResource AppText_Home_TodayWordUpper}" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource AccentBlue}" />
                             <Label Text="Your word is a lamp to my feet and a light to my path."
                                    FontSize="18" FontAttributes="Bold" TextColor="#17315F" />
                             <Label Text="Psalm 119:105" FontSize="12" TextColor="#63739B" />
@@ -207,8 +207,8 @@
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="USCF Community" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="See all  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                        <Label Text="{DynamicResource AppText_Home_UscfCommunity}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="{DynamicResource AppText_Home_SeeAll}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenCommunity" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
@@ -217,25 +217,25 @@
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="PLUS Posts" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="Refresh  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                        <Label Text="{DynamicResource AppText_Home_PlusPosts}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="{DynamicResource AppText_Home_Refresh}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="RefreshCctPosts" />
                             </Label.GestureRecognizers>
                         </Label>
                     </Grid>
-                    <Label x:Name="CctPostsStateLabel" Text="Loading posts..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    <Label x:Name="CctPostsStateLabel" Text="{DynamicResource AppText_Home_LoadingPosts}" FontSize="13" TextColor="{StaticResource TextSecondary}" />
                     <VerticalStackLayout x:Name="CctPostsStack" Spacing="10" />
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="Upcoming Church Activity" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="See all  ›" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
+                        <Label Text="{DynamicResource AppText_Home_UpcomingActivity}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                        <Label Text="{DynamicResource AppText_Home_SeeAll}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenEvents" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
-                    <Label x:Name="EventsPreviewLabel" Text="No upcoming activity available." FontSize="14" TextColor="{StaticResource TextSecondary}" />
+                    <Label x:Name="EventsPreviewLabel" Text="{DynamicResource AppText_Home_NoUpcomingActivity}" FontSize="14" TextColor="{StaticResource TextSecondary}" />
                 </VerticalStackLayout>
             </VerticalStackLayout>
         </ScrollView>
@@ -250,46 +250,48 @@
                 <VerticalStackLayout Spacing="12">
                     <Grid ColumnDefinitions="*,Auto">
                         <VerticalStackLayout Spacing="2">
-                            <Label Text="✨ Share &amp; Serve" FontSize="23" FontAttributes="Bold"
+                            <Label Text="{DynamicResource AppText_Home_ShareServe}" FontSize="23" FontAttributes="Bold"
                                    TextColor="{StaticResource BrandDeepGreen}" />
-                            <Label Text="What would you like to contribute?" FontSize="13"
+                            <Label Text="{DynamicResource AppText_Home_ContributePrompt}" FontSize="13"
                                    TextColor="{StaticResource TextSecondary}" />
                         </VerticalStackLayout>
                         <Button Grid.Column="1" Text="×" Clicked="CloseShareAndServe"
                                 BackgroundColor="{StaticResource SoftMint}" TextColor="{StaticResource BrandGreen}"
                                 WidthRequest="44" HeightRequest="44" CornerRadius="22" FontSize="24"
-                                SemanticProperties.Description="Close Share and Serve menu" />
+                                SemanticProperties.Description="{DynamicResource AppText_Home_CloseShareServe}" />
                     </Grid>
                     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto"
                           ColumnSpacing="10" RowSpacing="10">
-                        <Button Text="📖  Scripture" Clicked="OpenScriptureComposer" BackgroundColor="#EEF5FF" TextColor="#17315F" />
-                        <Button Grid.Column="1" Text="🙏  Prayer" Clicked="OpenPrayerFromShare" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource BrandDeepGreen}" />
-                        <Button Grid.Row="1" Text="💬  Encouragement" Clicked="OpenEncouragementComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentPurpleTint}, Dark={StaticResource SurfaceDark}}" TextColor="#38216B" />
-                        <Button Grid.Row="1" Grid.Column="1" Text="📢  Notice" Clicked="OpenNoticeComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" TextColor="#684400" />
-                        <Button Grid.Row="2" Text="🎵  Worship" Clicked="OpenWorshipComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" TextColor="#123B73" />
-                        <Button Grid.Row="2" Grid.Column="1" Text="📅  Event" Clicked="OpenEventComposer" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource BrandDeepGreen}" />
+                        <Button Text="{DynamicResource AppText_Home_Scripture}" Clicked="OpenScriptureComposer" BackgroundColor="#EEF5FF" TextColor="#17315F" />
+                        <Button Grid.Column="1" Text="{DynamicResource AppText_Home_Prayer}" Clicked="OpenPrayerFromShare" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource BrandDeepGreen}" />
+                        <Button Grid.Row="1" Text="{DynamicResource AppText_Home_Encouragement}" Clicked="OpenEncouragementComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentPurpleTint}, Dark={StaticResource SurfaceDark}}" TextColor="#38216B" />
+                        <Button Grid.Row="1" Grid.Column="1" Text="{DynamicResource AppText_Home_Notice}" Clicked="OpenNoticeComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentGoldTint}, Dark={StaticResource SurfaceDark}}" TextColor="#684400" />
+                        <Button Grid.Row="2" Text="{DynamicResource AppText_Home_Worship}" Clicked="OpenWorshipComposer" BackgroundColor="{AppThemeBinding Light={StaticResource AccentBlueTint}, Dark={StaticResource SurfaceDark}}" TextColor="#123B73" />
+                        <Button Grid.Row="2" Grid.Column="1" Text="{DynamicResource AppText_Home_Event}" Clicked="OpenEventComposer" BackgroundColor="{AppThemeBinding Light={StaticResource SoftMint}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource BrandDeepGreen}" />
                     </Grid>
-                    <Button Text="Close" Clicked="CloseShareAndServe" BackgroundColor="Transparent"
+                    <Button Text="{DynamicResource AppText_Common_Close}" Clicked="CloseShareAndServe" BackgroundColor="Transparent"
                             TextColor="{StaticResource BrandGreen}" />
                 </VerticalStackLayout>
             </Border>
         </Grid>
 
         <Grid Grid.Row="0" x:Name="ShortcutPanel" IsVisible="False" VerticalOptions="End" HorizontalOptions="End"
-              Margin="0,0,18,24" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
-            <Button Text="Announcements  !" Clicked="OpenNotificationsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
+              Margin="0,0,18,24" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+            <Button Text="{DynamicResource AppText_Home_ShortcutAnnouncements}" Clicked="OpenNotificationsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
-            <Button Grid.Row="1" Text="Events  □" Clicked="OpenEventsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
+            <Button Grid.Row="1" Text="{DynamicResource AppText_Home_ShortcutEvents}" Clicked="OpenEventsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
-            <Button Grid.Row="2" Text="Sermons  ▶" Clicked="OpenSermonsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
+            <Button Grid.Row="2" Text="{DynamicResource AppText_Home_ShortcutSermons}" Clicked="OpenSermonsButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
-            <Button Grid.Row="3" Text="Giving  ＋" Clicked="OpenGivingButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
+            <Button Grid.Row="3" Text="Discover CCT-USCF" Clicked="OpenAboutCctUsfcButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
+                    CornerRadius="20" Padding="14,8" FontSize="12" />
+            <Button Grid.Row="4" Text="{DynamicResource AppText_Home_ShortcutGiving}" Clicked="OpenGivingButton" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}" TextColor="{StaticResource TextPrimary}"
                     CornerRadius="20" Padding="14,8" FontSize="12" />
         </Grid>
         <Button Grid.Row="0" x:Name="ShortcutButton" Text="＋" Clicked="ToggleShortcuts"
                 HorizontalOptions="End" VerticalOptions="End" Margin="0,0,18,18"
                 WidthRequest="60" HeightRequest="60" CornerRadius="30" Padding="0" FontSize="30"
                 BackgroundColor="{StaticResource BrandGreen}" TextColor="White"
-                SemanticProperties.Description="Open quick shortcuts" />
+                SemanticProperties.Description="{DynamicResource AppText_Home_OpenShortcuts}" />
     </Grid>
 </ContentPage>
