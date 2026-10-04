@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using CCT_USCF.Models;
 
@@ -27,8 +28,11 @@ internal sealed record UpdateGroupMessageRequest(string Content);
     PropertyNameCaseInsensitive = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CommunityMessage))]
+[JsonSerializable(typeof(CctPost))]
+[JsonSerializable(typeof(List<CctPost>))]
 [JsonSerializable(typeof(CreateGroupMessageRequest))]
 [JsonSerializable(typeof(UpdateGroupMessageRequest))]
+[JsonSerializable(typeof(JsonElement))]
 internal partial class CommunityMessageApiJsonContext : JsonSerializerContext
 {
 }

@@ -14,10 +14,13 @@ namespace CCT_USCF.Pages;
 
 public partial class PrayerPage : ContentPage
 {
+    private const string PrayerLogTag = "CCT-USCF-Prayer";
+
     private readonly PrayerService _prayerService;
     private readonly AppAppearanceService _appearance;
     private readonly ObservableCollection<PrayerRequest> _items = new();
     private bool _isLoadingMore = false;
+    private bool _isLoadingInitial;
     private bool _initialLoadCompleted;
     private bool _noMoreRemotePrayers;
     private bool _isOpeningAddPrayer;
@@ -56,6 +59,11 @@ public partial class PrayerPage : ContentPage
 
     private async Task LoadPrayerWallAsync()
     {
+        if (_isLoadingInitial)
+            return;
+
+        _isLoadingInitial = true;
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_START]");
         _initialLoadCompleted = false;
         _noMoreRemotePrayers = false;
         PrayerLoadingIndicator.IsVisible = true;
@@ -71,16 +79,22 @@ public partial class PrayerPage : ContentPage
 
             PrayerCollectionView.ItemsSource = _items;
             _initialLoadCompleted = true;
+            Android.Util.Log.Info(
+                PrayerLogTag,
+                $"[PRAYER_LOAD_SUCCESS] visibleRecords={_items.Count}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message}");
+            Android.Util.Log.Error(
+                PrayerLogTag,
+                $"[PRAYER_LOAD_ERROR] exceptionType={ex.GetType().FullName} message={ex.Message} stack={ex.StackTrace}");
             PrayerCollectionView.ItemsSource = null;
             PrayerErrorMessage.SetDynamicResource(Label.TextProperty, "AppText_Prayer_LoadError");
             PrayerErrorState.IsVisible = true;
         }
         finally
         {
+            _isLoadingInitial = false;
             PrayerLoadingIndicator.IsVisible = false;
             PrayerRefreshView.IsRefreshing = false;
         }
@@ -187,7 +201,11 @@ public partial class PrayerPage : ContentPage
         });
     }
 
-    private async void OnRetryFetchClicked(object sender, EventArgs e) => await LoadPrayerWallAsync();
+    private async void OnRetryFetchClicked(object sender, EventArgs e)
+    {
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_RETRY] starting initial load again");
+        await LoadPrayerWallAsync();
+    }
 
     private void OnIntroDismissed(object sender, EventArgs e)
     {

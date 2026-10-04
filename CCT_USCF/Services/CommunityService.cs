@@ -2009,7 +2009,9 @@ SenderUid =
                {
                    request.Content =
                        body is JsonElement jsonElement
-                           ? JsonContent.Create(jsonElement)
+                           ? JsonContent.Create(
+                               jsonElement,
+                               CommunityMessageApiJsonContext.Default.JsonElement)
                            : JsonContent.Create(body);
                }
 
@@ -3946,8 +3948,9 @@ ConversationId =
                 if (!response.IsSuccessStatusCode)
                     throw new InvalidOperationException(body);
 
-                var posts = (JsonSerializer.Deserialize<List<CctPost>>(
-                        body, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [])
+                var posts = (JsonSerializer.Deserialize(
+                        body,
+                        CommunityMessageApiJsonContext.Default.ListCctPost) ?? [])
                     .Where(IsPublishedCctPost)
                     .Where(post => string.Equals(post.PostType, "FullCommunity", StringComparison.OrdinalIgnoreCase))
                     .GroupBy(post => post.Id, StringComparer.Ordinal)
@@ -4055,14 +4058,14 @@ ConversationId =
             if (isEncouragement)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[ENCOURAGEMENT_PUBLISH] started firebaseUid={userId ?? "<null>"} " +
+                    $"[ENCOURAGEMENT_PUBLISH] started firebaseUidPresent={!string.IsNullOrWhiteSpace(userId)} " +
                     $"contentLength={content?.Length ?? 0} postType={postType ?? "<null>"} " +
                     $"database={AppwriteConfig.DatabaseId} table={BiblePostsCollectionId}");
             }
             else if (isScripture)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[SCRIPTURE_PUBLISH] started firebaseUid={userId ?? "<null>"} " +
+                    $"[SCRIPTURE_PUBLISH] started firebaseUidPresent={!string.IsNullOrWhiteSpace(userId)} " +
                     $"contentLength={content?.Length ?? 0} postType={postType ?? "<null>"} " +
                     "mediaType=none " +
                     $"database={AppwriteConfig.DatabaseId} table={BiblePostsCollectionId}");
@@ -4070,7 +4073,7 @@ ConversationId =
             else if (isWorship)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[WORSHIP_PUBLISH] started firebaseUid={userId ?? "<null>"} " +
+                    $"[WORSHIP_PUBLISH] started firebaseUidPresent={!string.IsNullOrWhiteSpace(userId)} " +
                     $"contentLength={content?.Length ?? 0} postType={postType ?? "<null>"} " +
                     "mediaType=none " +
                     $"database={AppwriteConfig.DatabaseId} table={BiblePostsCollectionId}");
@@ -4095,6 +4098,10 @@ ConversationId =
                 })
             };
             await AddFirebaseAuthorizationAsync(request);
+            LogPlusPosts(
+                $"PLUS CREATE: request started type={postType.Trim()} " +
+                $"firebaseUidPresent={!string.IsNullOrWhiteSpace(userId)} " +
+                $"endpoint={_httpClient.BaseAddress}{request.RequestUri}");
             if (isEncouragement)
                 System.Diagnostics.Debug.WriteLine(
                     "[ENCOURAGEMENT_PUBLISH] sending authenticated create request.");
@@ -4110,20 +4117,25 @@ ConversationId =
             {
                 response = await _httpClient.SendAsync(request);
             }
-            catch (Exception ex) when (isScripture || isWorship)
+            catch (Exception ex)
             {
-                var tag = isScripture ? "SCRIPTURE_PUBLISH" : "WORSHIP_PUBLISH";
-                System.Diagnostics.Debug.WriteLine(
-                    $"[{tag}] failed exception={ex.GetType().Name} " +
-                    $"message={ex.Message} operation=Appwrite create request");
+                LogPlusPosts(
+                    $"PLUS CREATE: request failed type={postType.Trim()} " +
+                    $"exception={ex.GetType().Name}: {ex.Message}");
                 throw;
             }
 
             using (response)
             {
                 var responseBody = await response.Content.ReadAsStringAsync();
+                LogPlusPosts(
+                    $"PLUS CREATE: response status={(int)response.StatusCode} " +
+                    $"type={postType.Trim()} responseLength={responseBody.Length}");
                 if (!response.IsSuccessStatusCode)
                 {
+                    LogPlusPosts(
+                        $"PLUS CREATE: rejected response " +
+                        $"{SummarizePostApiError(responseBody, content, userId)}");
                     if (isEncouragement)
                         System.Diagnostics.Debug.WriteLine(
                             $"[ENCOURAGEMENT_PUBLISH] failed exception=HttpStatus " +
@@ -4140,10 +4152,21 @@ ConversationId =
                         $"The post service rejected the request ({(int)response.StatusCode}).");
                 }
 
-                var post = JsonSerializer.Deserialize<CctPost>(
-                    responseBody,
-                    new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                    ?? throw new InvalidOperationException("The post service returned no post.");
+                CctPost post;
+                try
+                {
+                    post = JsonSerializer.Deserialize(
+                        responseBody,
+                        CommunityMessageApiJsonContext.Default.CctPost)
+                        ?? throw new InvalidOperationException("The post service returned no post.");
+                }
+                catch (Exception ex)
+                {
+                    LogPlusPosts(
+                        $"PLUS CREATE: response mapping failed type={postType.Trim()} " +
+                        $"exception={ex.GetType().Name}: {ex.Message}");
+                    throw;
+                }
                 if (isEncouragement)
                     System.Diagnostics.Debug.WriteLine(
                         $"[ENCOURAGEMENT_PUBLISH] succeeded documentId={post.Id} " +
@@ -4213,9 +4236,9 @@ ConversationId =
                     $"PLUS POSTS: response status = {(int)response.StatusCode}; " +
                     $"response length = {responseBody.Length}");
                 response.EnsureSuccessStatusCode();
-                var posts = (JsonSerializer.Deserialize<List<CctPost>>(
+                var posts = (JsonSerializer.Deserialize(
                         responseBody,
-                        new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                        CommunityMessageApiJsonContext.Default.ListCctPost)
                     ?? new List<CctPost>())
                     .Where(IsPublishedCctPost)
                     .GroupBy(post => post.Id, StringComparer.Ordinal)
@@ -4308,6 +4331,39 @@ ConversationId =
 #if ANDROID
             Android.Util.Log.Debug("CCT_PLUS", message);
 #endif
+        }
+
+        private static string SummarizePostApiError(
+            string responseBody,
+            string content,
+            string? userId)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(responseBody);
+                var root = document.RootElement;
+                var fields = new[] { "code", "type", "message", "error" };
+                var summary = string.Join(
+                    "; ",
+                    fields
+                        .Where(field => root.TryGetProperty(field, out _))
+                        .Select(field =>
+                        {
+                            var value = root.GetProperty(field).ToString();
+                            if (!string.IsNullOrEmpty(content))
+                                value = value.Replace(content, "[content redacted]", StringComparison.Ordinal);
+                            if (!string.IsNullOrEmpty(userId))
+                                value = value.Replace(userId, "[user redacted]", StringComparison.Ordinal);
+                            return $"{field}={value}";
+                        }));
+                return string.IsNullOrEmpty(summary)
+                    ? $"responseLength={responseBody.Length}"
+                    : summary;
+            }
+            catch (JsonException)
+            {
+                return $"non-JSON responseLength={responseBody.Length}";
+            }
         }
 
         private static bool IsPublishedCctPost(CctPost post)

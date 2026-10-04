@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using CCT_USCF.Models;
@@ -15,6 +16,8 @@ namespace CCT_USCF.Services;
 
 public class PrayerService
 {
+    private const string PrayerLogTag = "CCT-USCF-Prayer";
+
     public event Action<IReadOnlyList<PrayerRequest>>? PrayersSynchronized;
     private readonly IFirebaseAuth _auth;
     private readonly IFirebaseFirestore _firestore;
@@ -100,19 +103,14 @@ public class PrayerService
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
 
-        var payload = new
-        {
-            content = prayer.Content,
-            leader_id = (string?)null,
-            is_private = isPrivate
-        };
+        var payload = new PrayerCreatePayload(prayer.Content, null, isPrivate);
         System.Diagnostics.Debug.WriteLine(
             $"[PRAYER_REQUEST_PAYLOAD] contentLength={prayer.Content.Length} " +
             $"private={isPrivate} leaderId=none");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/prayers")
         {
-            Content = JsonContent.Create(payload)
+            Content = JsonContent.Create(payload, PrayerJsonContext.Default.PrayerCreatePayload)
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         System.Diagnostics.Debug.WriteLine(
@@ -147,7 +145,7 @@ public class PrayerService
             {
                 System.Diagnostics.Debug.WriteLine(
                     $"[PRAYER_REQUEST_ERROR] exceptionType=HttpStatus " +
-                    $"status={(int)response.StatusCode} message={responseBody} " +
+                    $"status={(int)response.StatusCode} responseBodyLength={responseBody.Length} " +
                     "operation=Appwrite create request");
                 throw new HttpRequestException(
                     $"Prayer request could not be saved ({(int)response.StatusCode}).",
@@ -155,9 +153,9 @@ public class PrayerService
                     response.StatusCode);
             }
 
-            var result = System.Text.Json.JsonSerializer.Deserialize<PrayerCreateResponse>(
+            var result = System.Text.Json.JsonSerializer.Deserialize(
                 responseBody,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                PrayerJsonContext.Default.PrayerCreateResponse);
             if (result is null || !result.Success || string.IsNullOrWhiteSpace(result.RowId))
             {
                 System.Diagnostics.Debug.WriteLine(
@@ -171,8 +169,7 @@ public class PrayerService
             prayer.PrayerId = result.RowId;
             prayer.Status = ParseStatus(result.Status);
             System.Diagnostics.Debug.WriteLine(
-                $"[PRAYER_REQUEST_SUCCESS] documentId={result.RowId} " +
-                $"status={result.Status} private={result.IsPrivate}");
+                $"[PRAYER_REQUEST_SUCCESS] status={result.Status} private={result.IsPrivate}");
         }
 
         await SaveOrUpdateCachedPrayersAsync([prayer]);
@@ -185,7 +182,8 @@ public class PrayerService
         var token = await _authService.GetCurrentFirebaseIdTokenAsync();
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
-        System.Diagnostics.Debug.WriteLine($"[PRAYER_FETCH_AUTH] uid={_auth.CurrentUser?.Uid ?? "none"}");
+        System.Diagnostics.Debug.WriteLine(
+            $"[PRAYER_FETCH_AUTH] authenticatedUserAvailable={_auth.CurrentUser != null}");
 
         using var request = new HttpRequestMessage(
             HttpMethod.Get, $"api/prayers?limit={Math.Clamp(limit, 1, 100)}");
@@ -201,9 +199,9 @@ public class PrayerService
             throw new HttpRequestException($"Prayer requests could not be loaded ({(int)response.StatusCode}).");
         }
 
-        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerListResponse>(
+        var result = System.Text.Json.JsonSerializer.Deserialize(
             responseBody,
-            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            PrayerJsonContext.Default.PrayerListResponse);
         var items = (result?.Rows ?? [])
             .Where(row => !string.IsNullOrWhiteSpace(row.Content))
             .Select(MapPrayerRow)
@@ -278,7 +276,7 @@ public class PrayerService
                 if (!columns.Any(column => column.Name.Equals(nameof(CachedPrayer.IsPrayed), StringComparison.OrdinalIgnoreCase)))
                     await _cacheDatabase.ExecuteAsync("ALTER TABLE prayer_cache ADD COLUMN IsPrayed INTEGER NOT NULL DEFAULT 0;");
                 _cacheInitialized = true;
-                System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE] SQLite initialized");
+                Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_CACHE] SQLite prayer_cache initialized");
             }
         }
         finally
@@ -330,11 +328,11 @@ public class PrayerService
 
     public async Task<List<PrayerRequest>> LoadCachedPrayersAsync(int limit = 50)
     {
-        System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE_LOAD_START]");
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_CACHE] reading local cache");
         var ownerUid = _auth.CurrentUser?.Uid;
         if (string.IsNullOrWhiteSpace(ownerUid))
         {
-            System.Diagnostics.Debug.WriteLine("[PRAYER_CACHE_LOAD_SKIPPED] authenticated user unavailable");
+            Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_AUTH] authenticatedUserAvailable=false");
             return [];
         }
         var database = await GetCacheDatabaseAsync();
@@ -343,7 +341,7 @@ public class PrayerService
             .OrderByDescending(row => row.CreatedAtUtc)
             .Take(limit)
             .ToListAsync();
-        System.Diagnostics.Debug.WriteLine($"[PRAYER_CACHE_LOAD_RESULT] count={cached.Count}");
+        Android.Util.Log.Info(PrayerLogTag, $"[PRAYER_LOAD_CACHE] rows={cached.Count}");
         return cached
             .Select(row => ToPrayerRequest(row, _auth.CurrentUser?.Uid))
             .ToList();
@@ -384,8 +382,9 @@ public class PrayerService
             }
         }
 
-        System.Diagnostics.Debug.WriteLine(
-            $"[PRAYER_CACHE_SAVE] inserted={inserted} updated={updated} skipped={skipped}");
+        Android.Util.Log.Info(
+            PrayerLogTag,
+            $"[PRAYER_LOAD_CACHE_SAVE] inserted={inserted} updated={updated} unchanged={skipped}");
     }
 
     private async Task<(List<PrayerRequest> Rows, string? LastCursor)> FetchPagedPrayersAsync(
@@ -394,12 +393,14 @@ public class PrayerService
         string? newerThan = null)
     {
         var boundedLimit = Math.Clamp(limit, 1, 100);
-        System.Diagnostics.Debug.WriteLine(
-            $"[PRAYER_SYNC_REQUEST] limit={boundedLimit} cursorAfter={cursorAfter ?? "none"} newerThan={newerThan ?? "none"}");
+        Android.Util.Log.Info(
+            PrayerLogTag,
+            $"[PRAYER_LOAD_AUTH] firebaseUserAvailable={_auth.CurrentUser != null}");
 
         var token = await _authService.GetCurrentFirebaseIdTokenAsync();
         if (string.IsNullOrWhiteSpace(token))
             throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_AUTH] firebaseTokenAvailable=true");
 
         var query = $"api/prayers?limit={boundedLimit}";
         if (!string.IsNullOrWhiteSpace(cursorAfter))
@@ -409,16 +410,22 @@ public class PrayerService
 
         using var request = new HttpRequestMessage(HttpMethod.Get, query);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Android.Util.Log.Info(
+            PrayerLogTag,
+            $"[PRAYER_LOAD_REQUEST] route=api/prayers limit={boundedLimit} " +
+            $"cursorPresent={!string.IsNullOrWhiteSpace(cursorAfter)} newerThanPresent={!string.IsNullOrWhiteSpace(newerThan)}");
         using var response = await _http.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
-        System.Diagnostics.Debug.WriteLine(
-            $"[PRAYER_SYNC_RESPONSE] status={(int)response.StatusCode} requestedLimit={boundedLimit} bodyLength={body.Length}");
+        Android.Util.Log.Info(
+            PrayerLogTag,
+            $"[PRAYER_LOAD_RESPONSE] status={(int)response.StatusCode} requestedLimit={boundedLimit} bodyLength={body.Length}");
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Prayer requests could not be loaded ({(int)response.StatusCode}).");
 
-        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerListResponse>(
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_PARSE] started");
+        var result = System.Text.Json.JsonSerializer.Deserialize(
             body,
-            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            PrayerJsonContext.Default.PrayerListResponse);
         var rows = (result?.Rows ?? [])
             .Where(row => !string.IsNullOrWhiteSpace(row.Content))
             .Select(MapPrayerRow)
@@ -426,8 +433,9 @@ public class PrayerService
             .ToList();
 
         var lastCursor = rows.Count == 0 ? null : rows[^1].PrayerId;
-        System.Diagnostics.Debug.WriteLine(
-            $"[PRAYER_SYNC_RESULT] returned={rows.Count} lastCursor={lastCursor ?? "none"}");
+        Android.Util.Log.Info(
+            PrayerLogTag,
+            $"[PRAYER_LOAD_PARSE] records={rows.Count}; cursorAvailable={!string.IsNullOrWhiteSpace(lastCursor)}");
         return (rows, lastCursor);
     }
 
@@ -435,28 +443,32 @@ public class PrayerService
     {
         if (_auth.CurrentUser == null)
         {
-            System.Diagnostics.Debug.WriteLine("[PRAYER_INITIAL_LOAD_SKIPPED] authenticated user unavailable");
+            Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_AUTH] authenticatedUserAvailable=false");
             return [];
         }
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_AUTH] authenticatedUserAvailable=true");
         var cached = await LoadCachedPrayersAsync();
         if (cached.Count > 0)
         {
             var lastSyncText = Preferences.Default.Get(UserCacheKey(LastPrayerSyncKey), string.Empty);
             var isStale = !DateTime.TryParse(lastSyncText, out var lastSync) ||
                           DateTime.UtcNow - lastSync.ToUniversalTime() >= TimeSpan.FromHours(48);
-            System.Diagnostics.Debug.WriteLine(
-                $"[PRAYER_CACHE_FRESHNESS] stale={isStale} ageHours={(DateTime.TryParse(lastSyncText, out lastSync) ? (DateTime.UtcNow - lastSync.ToUniversalTime()).TotalHours : -1):F1}");
+            Android.Util.Log.Info(
+                PrayerLogTag,
+                $"[PRAYER_LOAD_CACHE] source=cache rows={cached.Count} stale={isStale}");
             if (isStale)
                 _ = SyncNewAndChangedPrayersAsync();
+            Android.Util.Log.Info(PrayerLogTag, $"[PRAYER_LOAD_SUCCESS] source=cache records={cached.Count}");
             return cached;
         }
 
-        System.Diagnostics.Debug.WriteLine("[PRAYER_SYNC_START] initialFetch limit=5");
+        Android.Util.Log.Info(PrayerLogTag, "[PRAYER_LOAD_REMOTE] initialFetch limit=5");
         var (rows, cursor) = await FetchPagedPrayersAsync(5);
         await SaveOrUpdateCachedPrayersAsync(rows);
         if (!string.IsNullOrWhiteSpace(cursor))
             Preferences.Default.Set(UserCacheKey(LastPrayerCursorKey), cursor);
         Preferences.Default.Set(UserCacheKey(LastPrayerSyncKey), DateTime.UtcNow.ToString("O"));
+        Android.Util.Log.Info(PrayerLogTag, $"[PRAYER_LOAD_SUCCESS] source=remote records={rows.Count}");
         return rows;
     }
 
@@ -525,7 +537,7 @@ public class PrayerService
 
         var boundedPageSize = Math.Clamp(pageSize, 1, 3);
         System.Diagnostics.Debug.WriteLine(
-            $"[PRAYER_LOAD_MORE_START] limit={boundedPageSize} cursorAfter={cursor}");
+            $"[PRAYER_LOAD_MORE_START] limit={boundedPageSize} cursorPresent=true");
         var (rows, nextCursor) = await FetchPagedPrayersAsync(boundedPageSize, cursorAfter: cursor);
         await SaveOrUpdateCachedPrayersAsync(rows);
         if (!string.IsNullOrWhiteSpace(nextCursor))
@@ -540,13 +552,14 @@ public class PrayerService
             throw new ArgumentException("Prayer ID is required.", nameof(prayerId));
         var token = await _authService.GetCurrentFirebaseIdTokenAsync()
             ?? throw new InvalidOperationException("Your Firebase session has expired. Please sign in again.");
-        System.Diagnostics.Debug.WriteLine($"[PRAYER_I_PRAY_START] prayerId={prayerId}");
+        System.Diagnostics.Debug.WriteLine("[PRAYER_I_PRAY_START]");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"api/prayers/{Uri.EscapeDataString(prayerId)}/pray");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await _http.SendAsync(request);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Prayer action could not be saved ({(int)response.StatusCode}).");
-        var result = await response.Content.ReadFromJsonAsync<PrayerActionResponse>();
+        var result = await response.Content.ReadFromJsonAsync(
+            PrayerJsonContext.Default.PrayerActionResponse);
         var recorded = result?.Recorded == true;
         var summary = await GetPrayerActionSummaryAsync(prayerId);
         var cached = await LoadCachedPrayersAsync(100);
@@ -574,7 +587,7 @@ public class PrayerService
         using var response = await _http.SendAsync(request);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Prayer count could not be loaded ({(int)response.StatusCode}).");
-        return await response.Content.ReadFromJsonAsync<PrayerActionSummary>()
+        return await response.Content.ReadFromJsonAsync(PrayerJsonContext.Default.PrayerActionSummary)
             ?? throw new InvalidOperationException("Prayer count response was empty.");
     }
 
@@ -598,24 +611,24 @@ public class PrayerService
             IsPrayed = row.IsPrayed
         };
 
-    private sealed class PrayerListResponse
+    internal sealed class PrayerListResponse
     {
         public List<PrayerRow> Rows { get; set; } = [];
     }
 
-    private sealed class PrayerActionResponse
+    internal sealed class PrayerActionResponse
     {
         public bool Recorded { get; set; }
     }
 
-    private sealed class PrayerActionSummary
+    internal sealed class PrayerActionSummary
     {
         public string PrayerId { get; set; } = string.Empty;
         public int Count { get; set; }
         public bool HasPrayed { get; set; }
     }
 
-    private sealed class PrayerRow
+    internal sealed class PrayerRow
     {
         public string Id { get; set; } = string.Empty;
         public string UserId { get; set; } = string.Empty;
@@ -640,7 +653,7 @@ public class PrayerService
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "api/prayers?limit=100&mine=true");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        System.Diagnostics.Debug.WriteLine($"[PRAYER_MY_REQUESTS_START] uid={uid}");
+        System.Diagnostics.Debug.WriteLine("[PRAYER_MY_REQUESTS_START] authenticatedUserAvailable=true");
         using var response = await _http.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
         System.Diagnostics.Debug.WriteLine(
@@ -648,9 +661,9 @@ public class PrayerService
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Your prayer requests could not be loaded ({(int)response.StatusCode}).");
 
-        var result = System.Text.Json.JsonSerializer.Deserialize<PrayerListResponse>(
+        var result = System.Text.Json.JsonSerializer.Deserialize(
             body,
-            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            PrayerJsonContext.Default.PrayerListResponse);
         return (result?.Rows ?? [])
             .Where(row => !string.IsNullOrWhiteSpace(row.Content) && row.UserId == uid)
             .Select(MapPrayerRow)
@@ -787,7 +800,12 @@ public class PrayerService
             : content.Trim();
     }
 
-    private sealed class PrayerCreateResponse
+    internal sealed record PrayerCreatePayload(
+        [property: JsonPropertyName("content")] string Content,
+        [property: JsonPropertyName("leader_id")] string? LeaderId,
+        [property: JsonPropertyName("is_private")] bool IsPrivate);
+
+    internal sealed class PrayerCreateResponse
     {
         public bool Success { get; set; }
         public string RowId { get; set; } = string.Empty;
@@ -952,4 +970,14 @@ public class PrayerService
         [FirestoreProperty("createdAtUtc")]
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     }
+}
+
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(PrayerService.PrayerCreatePayload))]
+[JsonSerializable(typeof(PrayerService.PrayerCreateResponse))]
+[JsonSerializable(typeof(PrayerService.PrayerListResponse))]
+[JsonSerializable(typeof(PrayerService.PrayerActionResponse))]
+[JsonSerializable(typeof(PrayerService.PrayerActionSummary))]
+internal partial class PrayerJsonContext : System.Text.Json.Serialization.JsonSerializerContext
+{
 }
