@@ -5,97 +5,121 @@
              Title="Bible"
              BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
     <Grid x:Name="RootGrid" RowDefinitions="Auto,*">
-        <ScrollView Grid.Row="0" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
-            <HorizontalStackLayout Padding="16,12,16,4" Spacing="8">
-                <Button Text="🇹🇿 Kiswahili — Neno" Clicked="OnSwahiliClicked" AutomationProperties.Name="Select Kiswahili Neno Bible" />
-                <Button Text="🇬🇧 English — KJV" Clicked="OnEnglishClicked" AutomationProperties.Name="Select English KJV Bible" />
-                <Button Text="Search" Clicked="OnSearchClicked" />
-                <Button Text="Bookmarks" Clicked="OnBookmarksClicked" />
-                <Button Text="Notebook" Clicked="OnNotebookClicked" />
-                <Button Text="Appearance" Clicked="OnAppearanceClicked" />
-            </HorizontalStackLayout>
-        </ScrollView>
+        <Grid Grid.Row="0" Padding="8,6" ColumnDefinitions="Auto,*,Auto,Auto"
+              BackgroundColor="{StaticResource BrandDeepGreen}">
+            <Button x:Name="BackButton" Grid.Column="0" Text="‹" FontSize="30" Padding="8,0"
+                    IsVisible="False" Clicked="OnBackClicked"
+                    TextColor="{StaticResource White}" BackgroundColor="Transparent"
+                    AutomationProperties.Name="Back" />
+            <Label x:Name="PageTitle" Grid.Column="1" Text="BIBLIA"
+                   VerticalOptions="Center" FontSize="18" FontAttributes="Bold"
+                   TextColor="{StaticResource White}" />
+            <Button Grid.Column="2" Text="Search" Clicked="OnSearchClicked"
+                    TextColor="{StaticResource White}" BackgroundColor="Transparent" />
+            <Button Grid.Column="3" Text="⋮" FontSize="24" Clicked="OnMoreClicked"
+                    TextColor="{StaticResource White}" BackgroundColor="Transparent"
+                    AutomationProperties.Name="Bible options" />
+        </Grid>
 
-        <ScrollView Grid.Row="1">
-            <VerticalStackLayout Padding="16,8,16,24" Spacing="14">
-                <Border BackgroundColor="{StaticResource BrandDeepGreen}" StrokeThickness="0" Padding="18" StrokeShape="RoundRectangle 20">
-                    <VerticalStackLayout Spacing="4">
-                        <Label Text="BIBLE" FontSize="13" CharacterSpacing="2" TextColor="{StaticResource BibleSecondaryDark}" />
-                        <Label x:Name="TranslationLabel" Text="King James Version" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource White}" />
-                        <Label x:Name="TranslationAttribution" IsVisible="False"
-                               Text="Biblica® Toleo Wazi Neno: Bibilia Takatifu™&#10;© 1984, 1989, 2009, 2015 Biblica, Inc.&#10;Licensed under CC BY-SA 4.0. Source: eBible.org / Biblica"
-                               FontSize="12" TextColor="{StaticResource BibleSecondaryDark}" />
-                        <Label x:Name="ContinueLabel" Text="Continue reading" TextColor="{StaticResource BibleSecondaryDark}" />
-                    </VerticalStackLayout>
-                </Border>
-
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                    <Picker x:Name="TestamentPicker" Title="Testament" SelectedIndexChanged="OnTestamentChanged" />
-                    <Picker x:Name="BookPicker" Grid.Column="1" Title="Book" SelectedIndexChanged="OnBookChanged" />
-                </Grid>
-                <Picker x:Name="ChapterPicker" Title="Chapter" SelectedIndexChanged="OnChapterChanged" />
-                <SearchBar x:Name="SearchBox" Placeholder="Search this translation offline" SearchButtonPressed="OnSearchPressed" />
-                <CollectionView x:Name="SearchResults" IsVisible="False" SelectionChanged="OnSearchResultSelected" MaximumHeightRequest="220">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Padding="8,6" ColumnDefinitions="Auto,*">
-                                <Label Text="{Binding Reference}" FontAttributes="Bold"
-                                       TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleAccentDark}}" />
-                                <Label Grid.Column="1" Text="{Binding Text}" LineBreakMode="TailTruncation" Margin="10,0,0,0" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-
-                <Label x:Name="VerseLoadingLabel" Text="Loading local Bible text…" IsVisible="False"
-                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource Gray300}}"
-                       HorizontalOptions="Center" />
-                <Border x:Name="VerseCard" IsVisible="False"
-                        BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceWhite}, Dark={StaticResource SurfaceDark}}"
-                        Stroke="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}"
-                        Padding="16" StrokeShape="RoundRectangle 20">
-                    <VerticalStackLayout Spacing="10">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label x:Name="VerseHeading" Text="JOHN 3" FontSize="22" FontAttributes="Bold"
-                                   TextColor="{AppThemeBinding Light={StaticResource BibleTextLight}, Dark={StaticResource BibleTextDark}}" />
-                            <Label x:Name="StatusLabel" Grid.Column="1" Text="Offline"
-                                   TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleSecondaryDark}}"
-                                   VerticalOptions="Center" />
+        <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto" Padding="12,8,12,12">
+            <SearchBar x:Name="SearchBox" Grid.Row="0" Placeholder="Search this translation"
+                       IsVisible="False" SearchButtonPressed="OnSearchPressed" />
+            <CollectionView x:Name="SearchResults" Grid.Row="0" IsVisible="False"
+                            SelectionMode="Single" SelectionChanged="OnSearchResultSelected"
+                            MaximumHeightRequest="240">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="10,8" ColumnDefinitions="Auto,*">
+                            <Label Text="{Binding Reference}" FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleAccentDark}}" />
+                            <Label Grid.Column="1" Text="{Binding Text}" LineBreakMode="TailTruncation"
+                                   Margin="10,0,0,0" />
                         </Grid>
-                        <CollectionView x:Name="VerseList" SelectionMode="None">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Padding="10" Margin="0,3" StrokeThickness="0" BackgroundColor="{Binding Background}">
-                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-                                            <Label Text="{Binding Number}" FontAttributes="Bold"
-                                                   TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleAccentDark}}"
-                                                   FontSize="16" />
-                                            <Label Grid.Column="1" Text="{Binding Text}" FontSize="{Binding FontSize}"
-                                                   TextColor="{AppThemeBinding Light={StaticResource BibleTextLight}, Dark={StaticResource BibleTextDark}}"
-                                                   LineHeight="1.35" Margin="10,0,0,0" />
-                                            <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,6,0,0">
-                                                <Button Text="Copy" FontSize="12" Padding="8,4" Clicked="OnCopyVerseClicked" CommandParameter="{Binding .}" />
-                                                <Button Text="Note" FontSize="12" Padding="8,4" Clicked="OnNoteVerseClicked" CommandParameter="{Binding .}" />
-                                                <Button Text="★" FontSize="12" Padding="8,4" Clicked="OnBookmarkVerseClicked" CommandParameter="{Binding .}" />
-                                                <Button Text="Highlight" FontSize="12" Padding="8,4" Clicked="OnHighlightVerseClicked" CommandParameter="{Binding .}" />
-                                                <Button Text="Share" FontSize="12" Padding="8,4" Clicked="OnShareVerseClicked" CommandParameter="{Binding .}" />
-                                            </HorizontalStackLayout>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
-                    </VerticalStackLayout>
-                </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
 
-                <HorizontalStackLayout HorizontalOptions="Center" Spacing="10">
-                    <Button x:Name="SpeechButton" Text="▶ Read aloud" Clicked="OnSpeechClicked" />
-                    <Button Text="Stop" Clicked="OnStopSpeechClicked" />
-                    <Button Text="Post reading" Clicked="OnPostBibleClicked" />
-                </HorizontalStackLayout>
-                <Label x:Name="LeaderStatusLabel" IsVisible="False" />
-                <Label x:Name="LeaderQuotaLabel" IsVisible="False" />
-            </VerticalStackLayout>
-        </ScrollView>
+            <Grid Grid.Row="1">
+                <VerticalStackLayout x:Name="BooksPanel" IsVisible="True" Spacing="0">
+                    <Label x:Name="BooksHeading" Text="OLD TESTAMENT" FontSize="13"
+                           CharacterSpacing="1.5" Padding="8,8,8,12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource Gray300}}" />
+                    <Label x:Name="BooksStatusLabel" Text="Opening Bible…" IsVisible="True"
+                           Padding="12" HorizontalTextAlignment="Center" />
+                    <CollectionView x:Name="BooksList" SelectionMode="Single"
+                                    SelectionChanged="OnBookSelected">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="12,14" ColumnDefinitions="*,Auto">
+                                    <Label Text="{Binding Name}" FontSize="18" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="›" FontSize="24" Opacity="0.6"
+                                           VerticalOptions="Center" />
+                                    <BoxView Grid.Row="1" Grid.ColumnSpan="2" HeightRequest="1"
+                                             VerticalOptions="End"
+                                             Color="{AppThemeBinding Light={StaticResource UscfBorder}, Dark={StaticResource Gray600}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout x:Name="ChaptersPanel" IsVisible="False" Spacing="0">
+                    <Label x:Name="ChaptersHeading" Text="CHAPTERS" FontSize="13"
+                           CharacterSpacing="1.5" Padding="8,8,8,12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource Gray300}}" />
+                    <CollectionView x:Name="ChaptersList" SelectionMode="None"
+                                    ItemsLayout="VerticalGrid, 4">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Button Text="{Binding .}" FontSize="22" FontAttributes="Bold"
+                                        Padding="8,18" Margin="3" Clicked="OnChapterClicked"
+                                        CommandParameter="{Binding .}" />
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+
+                <Grid x:Name="ReaderPanel" IsVisible="False" RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,*" Padding="0,0,0,8">
+                        <Button x:Name="PreviousChapterButton" Grid.Column="0" Text="‹"
+                                Clicked="OnPreviousChapterClicked" HorizontalOptions="Start" />
+                        <Label x:Name="VerseHeading" Grid.Column="1" Text="SURA YA 1"
+                               FontSize="18" VerticalOptions="Center" HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource BibleTextLight}, Dark={StaticResource BibleTextDark}}" />
+                        <Button x:Name="NextChapterButton" Grid.Column="2" Text="›"
+                                Clicked="OnNextChapterClicked" HorizontalOptions="End" />
+                    </Grid>
+
+                    <CollectionView x:Name="VerseList" Grid.Row="1" SelectionMode="Single"
+                                    SelectionChanged="OnVerseSelected">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="10,7" Margin="0,1" StrokeThickness="0"
+                                        BackgroundColor="{Binding Background}">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <Label Text="{Binding Number}" FontSize="18"
+                                               TextColor="{AppThemeBinding Light={StaticResource BibleAccentLight}, Dark={StaticResource BibleAccentDark}}" />
+                                        <Label Grid.Column="1" Text="{Binding Text}"
+                                               FontSize="{Binding FontSize}" LineHeight="1.35"
+                                               Margin="10,0,0,0"
+                                               TextColor="{AppThemeBinding Light={StaticResource BibleTextLight}, Dark={StaticResource BibleTextDark}}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </Grid>
+            </Grid>
+
+            <Grid x:Name="VerseActions" Grid.Row="2" IsVisible="False"
+                  VerticalOptions="End" HorizontalOptions="Center"
+                  ColumnDefinitions="Auto,Auto,Auto,Auto,Auto" Padding="0,8">
+                <Button Text="Copy" Grid.Column="0" Clicked="OnCopyVerseClicked" />
+                <Button Text="Note" Grid.Column="1" Clicked="OnNoteVerseClicked" />
+                <Button Text="★" Grid.Column="2" Clicked="OnBookmarkVerseClicked" />
+                <Button Text="Highlight" Grid.Column="3" Clicked="OnHighlightVerseClicked" />
+                <Button Text="Share" Grid.Column="4" Clicked="OnShareVerseClicked" />
+            </Grid>
+        </Grid>
     </Grid>
 </ContentPage>
