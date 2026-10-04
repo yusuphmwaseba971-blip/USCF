@@ -4,7 +4,7 @@
 
 - **Translation:** King James Version
 - **Language:** English
-- **Source in this project:** `Resources/Raw/kjv.json` (the existing project asset)
+- **Source in this project:** bundled local SQLite Bible database (`Resources/Raw/bible.sqlite`)
 - **Copyright/licence:** The 1611 KJV text is public domain in the United States and is treated as public-domain text for this offline engine.
 - **Redistribution:** Public-domain text may be bundled in the application. Modern editorial introductions or annotations are not included.
 - **Attribution:** "King James Version" is displayed in the Bible UI.
@@ -17,7 +17,7 @@
 - **Copyright:** © 1984, 1989, 2009, 2015 Biblica, Inc.
 - **License:** Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0)
 - **Official source:** [eBible.org translation details](https://ebible.org/find/details.php?id=swhonen), distributed by eBible.org from the Biblica source
-- **Bundled source:** `Resources/Raw/swahili_neno.json`, converted from the official `swhonen_usfm.zip` USFM download without rewriting or paraphrasing the verse text.
+- **Bundled source:** normalized SQLite data in `Resources/Raw/bible.sqlite`, created from the official source text without rewriting or paraphrasing the verse content.
 
 This translation is redistributed under the applicable CC BY-SA 4.0 terms. The copyright and
 source information above must remain with redistributed copies. Any modifications must be

@@ -37,7 +37,6 @@ public partial class BiblePage : ContentPage
         VerseList.ItemsSource = _verses;
         SearchResults.ItemsSource = _results;
         RootGrid.Opacity = 1;
-        _ = RenderImmediateDefaultChapterAsync();
         Loaded += (_, _) =>
         {
             if (_loadTask is not null && !_loadTask.IsCompleted)
@@ -45,35 +44,6 @@ public partial class BiblePage : ContentPage
 
             _loadTask = LoadAsync();
         };
-    }
-
-    private async Task RenderImmediateDefaultChapterAsync()
-    {
-        try
-        {
-            var verses = await BibleService.GetBundledDefaultVersesAsync();
-            if (_loadTask is not null && !_loadTask.IsCompleted)
-                return;
-
-            _language = BibleService.KjvId;
-            _book = "John";
-            _chapter = 3;
-            _fontSize = 22;
-            TranslationLabel.Text = "King James Version";
-            TranslationAttribution.IsVisible = false;
-            TestamentPicker.ItemsSource = new[] { "Old Testament", "New Testament" };
-            TestamentPicker.SelectedItem = "New Testament";
-            BookPicker.ItemsSource = new[] { "John" };
-            BookPicker.SelectedItem = "John";
-            ChapterPicker.ItemsSource = new[] { 3 };
-            ChapterPicker.SelectedItem = 3;
-            RenderVerses(verses);
-            PerfLog($"[BIBLE] Immediate bundled chapter rendered ({verses.Count} verses)");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[BIBLE] Immediate bundled chapter unavailable: {ex}");
-        }
     }
 
     private async Task LoadAsync()

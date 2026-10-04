@@ -18,9 +18,8 @@ public partial class App : Application
         RequestedThemeChanged += OnRequestedThemeChanged;
         Debug.WriteLine($"[STARTUP] App created at {DateTimeOffset.UtcNow:O}");
 
-        _ = MauiProgram.Services
-            .GetRequiredService<StartupPreloadCoordinator>()
-            .PreloadAsync();
+        // Bible startup is lazy-loaded by the Bible screen itself.
+        // No global Bible warmup runs during app startup.
 
         // NOTE: Region seeding is temporary and should be run manually.
         // The automatic seeder was disabled to avoid runtime write attempts
