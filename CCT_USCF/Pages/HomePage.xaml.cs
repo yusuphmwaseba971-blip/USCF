@@ -9,6 +9,7 @@ public partial class HomePage : ContentPage
 {
     private static readonly long StartupTimestamp = Stopwatch.GetTimestamp();
     private static readonly TimeSpan CctPostsFreshnessWindow = TimeSpan.FromMinutes(10);
+    private const double HomeRefreshPromptScrollThreshold = 24;
     private readonly CCT_USCF.Services.AppAppearanceService _appearance;
     private readonly CCT_USCF.Services.ChurchAnnouncementService _announcements;
     private readonly SemaphoreSlim _cctPostsLoadGate = new(1, 1);
@@ -280,7 +281,7 @@ public partial class HomePage : ContentPage
         {
             var community = MauiProgram.Services.GetRequiredService<CCT_USCF.Services.CommunityService>();
             NationalFeedStack.Children.Clear();
-            foreach (var post in await community.GetNationalPostsAsync(10))
+            foreach (var post in await community.GetNationalPostsAsync(8))
             {
                 var card = new Border { BackgroundColor = Colors.White, Padding = 12 };
                 var stack = new VerticalStackLayout { Spacing = 5 };
@@ -312,6 +313,16 @@ public partial class HomePage : ContentPage
 
     private async void RefreshCctPosts(object? sender, TappedEventArgs e)
         => await LoadCctPostsAsync(true);
+
+    private async void RefreshNationalPosts(object? sender, TappedEventArgs e)
+        => await LoadNationalFeedAsync();
+
+    private void OnHomeScrolled(object? sender, ScrolledEventArgs e)
+    {
+        var isScrolledDown = e.ScrollY > HomeRefreshPromptScrollThreshold;
+        CommunityRefreshLabel.IsVisible = isScrolledDown;
+        PlusRefreshLabel.IsVisible = isScrolledDown;
+    }
 
     private async Task LoadCctPostsAsync(bool forceRefresh = false)
     {

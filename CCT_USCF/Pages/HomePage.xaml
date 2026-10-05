@@ -6,7 +6,7 @@
              Title="{DynamicResource AppText_Home_Title}"
              BackgroundColor="{DynamicResource AppPageBackground}">
     <Grid RowDefinitions="*,Auto">
-        <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never">
+        <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never" Scrolled="OnHomeScrolled">
             <VerticalStackLayout Padding="18,14,18,34" Spacing="18">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                     <Border WidthRequest="44" HeightRequest="44" BackgroundColor="{StaticResource SoftMint}"
@@ -212,18 +212,27 @@
                             <Label.GestureRecognizers><TapGestureRecognizer Tapped="OpenCommunity" /></Label.GestureRecognizers>
                         </Label>
                     </Grid>
+                    <Label x:Name="CommunityRefreshLabel" Text="Refresh to get a new post"
+                           IsVisible="False" Opacity="0.82" FontSize="12"
+                           TextColor="{StaticResource BrandGreen}" HorizontalOptions="End">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="RefreshNationalPosts" />
+                        </Label.GestureRecognizers>
+                    </Label>
                     <StackLayout x:Name="NationalFeedStack" Spacing="12" />
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Spacing="10">
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid>
                         <Label Text="{DynamicResource AppText_Home_PlusPosts}" FontSize="21" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
-                        <Label Text="{DynamicResource AppText_Home_Refresh}" Grid.Column="1" FontSize="13" TextColor="{StaticResource BrandGreen}">
-                            <Label.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="RefreshCctPosts" />
-                            </Label.GestureRecognizers>
-                        </Label>
                     </Grid>
+                    <Label x:Name="PlusRefreshLabel" Text="Refresh to get a new post"
+                           IsVisible="False" Opacity="0.82" FontSize="12"
+                           TextColor="{StaticResource BrandGreen}" HorizontalOptions="End">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="RefreshCctPosts" />
+                        </Label.GestureRecognizers>
+                    </Label>
                     <Label x:Name="CctPostsStateLabel" Text="{DynamicResource AppText_Home_LoadingPosts}" FontSize="13" TextColor="{StaticResource TextSecondary}" />
                     <VerticalStackLayout x:Name="CctPostsStack" Spacing="10" />
                 </VerticalStackLayout>
