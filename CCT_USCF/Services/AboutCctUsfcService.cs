@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Appwrite;
 using Appwrite.Models;
 
@@ -14,10 +16,17 @@ public sealed class AboutCctUsfcService
     private const string ContactCollectionId = "cct_contact_information";
 
     private readonly CCT_USCF.Services.Appwrite.AppwriteService _appwriteService;
+    private readonly HttpClient _httpClient;
+    private readonly AuthService _authService;
 
-    public AboutCctUsfcService(CCT_USCF.Services.Appwrite.AppwriteService appwriteService)
+    public AboutCctUsfcService(
+        CCT_USCF.Services.Appwrite.AppwriteService appwriteService,
+        HttpClient httpClient,
+        AuthService authService)
     {
         _appwriteService = appwriteService ?? throw new ArgumentNullException(nameof(appwriteService));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
     }
 
     public async Task<IReadOnlyList<CctHistoryItem>> GetHistoryAsync(string? organizationLevel = null, string? organizationId = null)
@@ -128,11 +137,100 @@ public sealed class AboutCctUsfcService
     {
         var documents = await ListDocumentsAsync(ContactCollectionId);
 
-        return documents
+        var items = documents
             .Where(d => IsPublished(d) || IsActive(d))
             .Select(MapContact)
             .OrderByDescending(item => item.UpdatedAtUtc)
             .ToList();
+
+        var developerContact = items.FirstOrDefault(item =>
+            string.Equals(item.OfficialEmail, "YUSUPHMWASEBA@GMAIL.COM", StringComparison.OrdinalIgnoreCase) &&
+            item.OfficialPhone == "0741750014");
+        if (developerContact is null)
+        {
+            items.Add(new CctContactInformationItem
+            {
+                SupportName = "Developer & Customer Support",
+                OfficialEmail = "YUSUPHMWASEBA@GMAIL.COM",
+                OfficialPhone = "0741750014",
+                SupportDescription = "Contact the developer for CCT-USCF application support."
+            });
+        }
+        else
+        {
+            developerContact.SupportName = "Developer & Customer Support";
+            developerContact.SupportDescription = "Contact the developer for CCT-USCF application support.";
+        }
+
+        return items;
+    }
+
+    public Task SaveHistoryAsync(CctHistoryItem item) =>
+        SaveAsync("api/about/history", new
+        {
+            id = item.Id,
+            item.Title,
+            item.Period,
+            recordedBy = item.RecordedBy,
+            recordedByRole = item.RecordedByRole,
+            item.Content
+        });
+
+    public Task SaveMissionVisionAsync(CctMissionVisionItem item) =>
+        SaveAsync("api/about/mission-vision", new
+        {
+            id = item.Id,
+            item.Mission,
+            item.Vision
+        });
+
+    public Task SaveLeadershipAsync(CctLeadershipItem item) =>
+        SaveAsync("api/about/leadership", new
+        {
+            id = item.Id,
+            userName = item.UserName,
+            positionName = item.PositionName,
+            organizationLevel = item.OrganizationLevel,
+            organizationId = item.OrganizationId,
+            organizationName = item.OrganizationName,
+            description = item.Description,
+            term = item.Term
+        });
+
+    private async Task SaveAsync(string route, object payload)
+    {
+        await FirebaseInit.Initialized;
+        using var request = new HttpRequestMessage(HttpMethod.Post, route);
+        try
+        {
+            var token = await _authService.GetCurrentFirebaseIdTokenAsync();
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Content = JsonContent.Create(payload);
+
+            using var response = await _httpClient.SendAsync(request);
+            if (response.IsSuccessStatusCode) return;
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[ABOUT_CONTENT_SAVE] route={route} status={(int)response.StatusCode}");
+            throw new AboutSaveException(response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? "Only a Leader can edit this About content."
+                : "Unable to save About content. Please try again.");
+        }
+        catch (AboutSaveException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ABOUT_CONTENT_SAVE] route={route} {ex}");
+            throw new InvalidOperationException(
+                "Unable to save About content. Check your connection and try again.", ex);
+        }
+    }
+
+    private sealed class AboutSaveException(string message) : InvalidOperationException(message)
+    {
     }
 
     private async Task<IReadOnlyList<Document>> ListDocumentsAsync(string collectionId)
@@ -191,6 +289,9 @@ public sealed class AboutCctUsfcService
             Title = ReadString(data, "title"),
             Summary = ReadString(data, "summary"),
             Content = ReadString(data, "content"),
+            Period = ReadString(data, "period"),
+            RecordedBy = ReadString(data, "recorded_by"),
+            RecordedByRole = ReadString(data, "recorded_by_role"),
             CoverImageUrl = ReadNullableString(data, "cover_image_url"),
             Status = ReadString(data, "status"),
             UpdatedAtUtc = ParseTimestamp(document.UpdatedAt)
@@ -225,6 +326,8 @@ public sealed class AboutCctUsfcService
             OrganizationLevel = ReadString(data, "organization_level"),
             OrganizationId = ReadString(data, "organization_id"),
             OrganizationName = ReadString(data, "organization_name"),
+            Description = ReadString(data, "description"),
+            Term = ReadString(data, "term"),
             IsActive = ReadBool(data, "is_active"),
             Status = ReadString(data, "status"),
             UpdatedAtUtc = ParseTimestamp(document.UpdatedAt)
@@ -291,6 +394,9 @@ public sealed class CctHistoryItem
     public string Title { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
+    public string Period { get; set; } = string.Empty;
+    public string RecordedBy { get; set; } = string.Empty;
+    public string RecordedByRole { get; set; } = string.Empty;
     public string? CoverImageUrl { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime UpdatedAtUtc { get; set; }
@@ -317,6 +423,8 @@ public sealed class CctLeadershipItem
     public string OrganizationLevel { get; set; } = string.Empty;
     public string OrganizationId { get; set; } = string.Empty;
     public string OrganizationName { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Term { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime UpdatedAtUtc { get; set; }

@@ -245,6 +245,7 @@
                         </Label>
                     </Grid>
                     <Label x:Name="EventsPreviewLabel" Text="{DynamicResource AppText_Home_NoUpcomingActivity}" FontSize="14" TextColor="{StaticResource TextSecondary}" />
+                    <Button Text="About / History" Clicked="OpenAboutCctUsfcButton" />
                 </VerticalStackLayout>
             </VerticalStackLayout>
         </ScrollView>

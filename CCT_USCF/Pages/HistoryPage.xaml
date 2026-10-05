@@ -8,6 +8,24 @@
         <VerticalStackLayout Padding="18,16,18,28" Spacing="14">
             <Label Text="History" FontSize="27" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
             <Label x:Name="StatusLabel" Text="Loading history..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button x:Name="EditHistoryButton" Text="Edit History" IsVisible="False" Clicked="OnEditHistoryClicked" />
+                <Button x:Name="AddHistoryButton" Grid.Column="1" Text="Add History" IsVisible="False" Clicked="OnAddHistoryClicked" />
+            </Grid>
+            <Border x:Name="HistoryEditorPanel" IsVisible="False" Padding="16" BackgroundColor="{StaticResource SurfaceWhite}" Stroke="#E8E0D2" StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Edit historical information" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                    <Entry x:Name="HistoryTitleEntry" Placeholder="Title" />
+                    <Entry x:Name="HistoryPeriodEntry" Placeholder="Year, date, or period" />
+                    <Entry x:Name="RecordedByEntry" Placeholder="Written/Recorded By" />
+                    <Entry x:Name="RecordedByRoleEntry" Placeholder="Recorder role/position (optional)" />
+                    <Editor x:Name="HistoryContentEditor" Placeholder="Historical description" AutoSize="TextChanges" MinimumHeightRequest="140" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button x:Name="SaveHistoryButton" Text="Save" Clicked="OnSaveHistoryClicked" />
+                        <Button Grid.Column="1" Text="Cancel" Clicked="OnCancelHistoryClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
             <VerticalStackLayout x:Name="HistoryStack" Spacing="12" />
         </VerticalStackLayout>
     </ScrollView>

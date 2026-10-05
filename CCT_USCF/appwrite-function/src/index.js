@@ -7,6 +7,9 @@ import {
   buildGroupMessageQueries,
   getTrustedRegistrationCutoff
 } from "./group-message-visibility.js";
+import {
+  saveAuthorizedAboutContent
+} from "./about-content.js";
 
 /*
  * ============================================================
@@ -991,7 +994,8 @@ async function ensureAboutCollections() {
         ["scope_type", 32], ["title", 255], ["summary", 2000], ["content", 12000],
         ["status", 32], ["organization_level", 32], ["organization_id", 128],
         ["parent_organization_id", 128], ["created_by", 255], ["updated_by", 255],
-        ["created_at", 64], ["updated_at", 64]
+        ["created_at", 64], ["updated_at", 64], ["period", 128],
+        ["recorded_by", 255], ["recorded_by_role", 255]
       ],
       integer: ["region_id", "district_id", "branch_id"]
     },
@@ -1006,10 +1010,12 @@ async function ensureAboutCollections() {
     [ABOUT_LEADERSHIP_COLLECTION_ID]: {
       string: [
         ["user_uid", 255], ["user_name", 255], ["position", 255], ["position_name", 255],
-        ["scope_type", 32], ["organization_level", 32], ["organization_id", 128], ["status", 32],
+        ["scope_type", 32], ["organization_level", 32], ["organization_id", 128],
+        ["organization_name", 255], ["description", 4000], ["term", 128], ["status", 32],
         ["created_by", 255], ["updated_by", 255], ["created_at", 64], ["updated_at", 64]
       ],
-      integer: ["region_id", "district_id", "branch_id"]
+      integer: ["region_id", "district_id", "branch_id"],
+      boolean: ["is_active"]
     },
     [ABOUT_DOCUMENTS_COLLECTION_ID]: {
       string: [
@@ -1037,6 +1043,19 @@ async function ensureAboutCollections() {
     }
   };
 
+  const existingCollectionMigrations = {
+    [ABOUT_HISTORY_COLLECTION_ID]: {
+      string: [["period", 128], ["recorded_by", 255], ["recorded_by_role", 255]],
+      integer: [],
+      boolean: []
+    },
+    [ABOUT_LEADERSHIP_COLLECTION_ID]: {
+      string: [["organization_name", 255], ["description", 4000], ["term", 128]],
+      integer: [],
+      boolean: ["is_active"]
+    }
+  };
+
   try {
     const current = await appwriteDatabaseRequest(
       `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections`,
@@ -1045,22 +1064,34 @@ async function ensureAboutCollections() {
     const existingIds = new Set((current.collections || []).map(collection => normalizeString(collection.$id || collection.collectionId || collection.id)));
 
     for (const [collectionId, schema] of Object.entries(collectionSchemas)) {
-      if (existingIds.has(collectionId)) {
-        continue;
+      const exists = existingIds.has(collectionId);
+      let existingAttributeIds = new Set();
+      let schemaToEnsure = schema;
+      if (exists) {
+        schemaToEnsure = existingCollectionMigrations[collectionId];
+        if (!schemaToEnsure) continue;
+        const currentAttributes = await appwriteDatabaseRequest(
+          `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes`,
+          "GET"
+        );
+        existingAttributeIds = new Set(
+          (currentAttributes.attributes || []).map(attribute => normalizeString(attribute.key || attribute.$id))
+        );
+      } else {
+        await appwriteDatabaseRequest(
+          `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections`,
+          "POST",
+          {
+            collectionId,
+            name: collectionId,
+            documentSecurity: false,
+            permissions: []
+          }
+        );
       }
 
-      await appwriteDatabaseRequest(
-        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections`,
-        "POST",
-        {
-          collectionId,
-          name: collectionId,
-          documentSecurity: false,
-          permissions: []
-        }
-      );
-
-      for (const [attributeId, size] of schema.string || []) {
+      for (const [attributeId, size] of schemaToEnsure.string || []) {
+        if (existingAttributeIds.has(attributeId)) continue;
         await appwriteDatabaseRequest(
           `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/string`,
           "POST",
@@ -1068,9 +1099,19 @@ async function ensureAboutCollections() {
         );
       }
 
-      for (const attributeId of schema.integer || []) {
+      for (const attributeId of schemaToEnsure.integer || []) {
+        if (existingAttributeIds.has(attributeId)) continue;
         await appwriteDatabaseRequest(
           `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/integer`,
+          "POST",
+          { key: attributeId, required: false }
+        );
+      }
+
+      for (const attributeId of schemaToEnsure.boolean || []) {
+        if (existingAttributeIds.has(attributeId)) continue;
+        await appwriteDatabaseRequest(
+          `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/boolean`,
           "POST",
           { key: attributeId, required: false }
         );
@@ -1102,10 +1143,6 @@ async function ensureChurchAnnouncementCollections() {
       boolean: ["is_read"]
     },
     [CHURCH_DEVICE_TOKENS_COLLECTION_ID]: {
-      string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
-      integer: ["region_id", "district_id", "branch_id"]
-    },
-    "church_device_tokens": {
       string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
       integer: ["region_id", "district_id", "branch_id"]
     },
@@ -1141,6 +1178,10 @@ async function ensureChurchAnnouncementCollections() {
       ],
       integer: []
     }
+    "church_device_tokens": {
+      string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
   };
 
   const collectionSchemas = Object.fromEntries(
@@ -1979,6 +2020,21 @@ async function listAboutPublishedCollection(req, log, collectionId, kind) {
       };
     })
   };
+}
+
+async function saveAboutContent(req, log, collectionId, kind) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  return saveAuthorizedAboutContent({
+    firebaseUser,
+    readRole: async uid => {
+      const profile = await firebaseDb.collection("users").doc(uid).get();
+      return profile.exists ? profile.data()?.role : null;
+    },
+    collectionId,
+    kind,
+    body: getRequestBody(req),
+    request: appwriteCollectionRequest
+  });
 }
 
 async function resolveBranchName(branchId) {
@@ -4185,6 +4241,7 @@ async function submitSupportRequest(req, log) {
 }
 
 
+
 /* ============================================================
  * ROUTE RESOLUTION
  * ============================================================
@@ -4302,9 +4359,9 @@ export default async ({
           currentStage = "GET about history";
           return jsonResponse(res, await listAboutPublishedCollection(req, log, ABOUT_HISTORY_COLLECTION_ID, "history"), 200);
         }
-        if (req.method === "POST" || req.method === "PATCH" || req.method === "PUT" || req.method === "DELETE") {
-          currentStage = `${req.method} about history`;
-          throw rejectPrivilegedAboutWrite(log, `about history ${req.method.toLowerCase()}`);
+        if (req.method === "POST") {
+          currentStage = "POST about history";
+          return jsonResponse(res, await saveAboutContent(req, log, ABOUT_HISTORY_COLLECTION_ID, "history"), 200);
         }
         throw announcementError("Method not allowed.", 405);
       }
@@ -4314,9 +4371,9 @@ export default async ({
           currentStage = "GET about mission vision";
           return jsonResponse(res, await listAboutPublishedCollection(req, log, ABOUT_MISSION_VISION_COLLECTION_ID, "missionVision"), 200);
         }
-        if (req.method === "POST" || req.method === "PATCH" || req.method === "PUT" || req.method === "DELETE") {
-          currentStage = `${req.method} about mission vision`;
-          throw rejectPrivilegedAboutWrite(log, `about mission vision ${req.method.toLowerCase()}`);
+        if (req.method === "POST") {
+          currentStage = "POST about mission vision";
+          return jsonResponse(res, await saveAboutContent(req, log, ABOUT_MISSION_VISION_COLLECTION_ID, "missionVision"), 200);
         }
         throw announcementError("Method not allowed.", 405);
       }
@@ -4326,9 +4383,9 @@ export default async ({
           currentStage = "GET about leadership";
           return jsonResponse(res, await listAboutPublishedCollection(req, log, ABOUT_LEADERSHIP_COLLECTION_ID, "leadership"), 200);
         }
-        if (req.method === "POST" || req.method === "PATCH" || req.method === "PUT" || req.method === "DELETE") {
-          currentStage = `${req.method} about leadership`;
-          throw rejectPrivilegedAboutWrite(log, `about leadership ${req.method.toLowerCase()}`);
+        if (req.method === "POST") {
+          currentStage = "POST about leadership";
+          return jsonResponse(res, await saveAboutContent(req, log, ABOUT_LEADERSHIP_COLLECTION_ID, "leadership"), 200);
         }
         throw announcementError("Method not allowed.", 405);
       }
@@ -4514,7 +4571,6 @@ export default async ({
       currentStage = "POST support request";
       return jsonResponse(res, await submitSupportRequest(req, log), 201);
     }
-
     /*
      * ========================================================
      * COMMUNITY GROUP REGISTRY ROUTE

@@ -8,6 +8,23 @@
         <VerticalStackLayout Padding="18,16,18,28" Spacing="14">
             <Label Text="Mission &amp; Vision" FontSize="27" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
             <Label x:Name="StatusLabel" Text="Loading mission and vision..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button x:Name="EditMissionButton" Text="Edit Mission &amp; Vision" IsVisible="False" Clicked="OnEditMissionClicked" />
+                <Button x:Name="AddMissionButton" Grid.Column="1" Text="Add Statement" IsVisible="False" Clicked="OnAddMissionClicked" />
+            </Grid>
+            <Border x:Name="MissionEditorPanel" IsVisible="False" Padding="16" BackgroundColor="{StaticResource SurfaceWhite}" Stroke="#E8E0D2" StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Edit Mission &amp; Vision" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                    <Label Text="Mission Statement" FontAttributes="Bold" />
+                    <Editor x:Name="MissionEditor" Placeholder="Mission statement" AutoSize="TextChanges" MinimumHeightRequest="130" />
+                    <Label Text="Vision Statement" FontAttributes="Bold" />
+                    <Editor x:Name="VisionEditor" Placeholder="Vision statement" AutoSize="TextChanges" MinimumHeightRequest="110" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button x:Name="SaveMissionButton" Text="Save" Clicked="OnSaveMissionClicked" />
+                        <Button Grid.Column="1" Text="Cancel" Clicked="OnCancelMissionClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
             <VerticalStackLayout x:Name="MissionVisionStack" Spacing="12" />
         </VerticalStackLayout>
     </ScrollView>

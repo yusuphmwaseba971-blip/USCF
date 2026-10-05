@@ -8,6 +8,23 @@
         <VerticalStackLayout Padding="18,16,18,28" Spacing="14">
             <Label Text="Leadership" FontSize="27" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
             <Label x:Name="StatusLabel" Text="Loading leadership..." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+            <Button x:Name="AddLeadershipButton" Text="Add Leadership Entry" IsVisible="False" Clicked="OnAddLeadershipClicked" />
+            <Border x:Name="LeadershipEditorPanel" IsVisible="False" Padding="16" BackgroundColor="{StaticResource SurfaceWhite}" Stroke="#E8E0D2" StrokeShape="RoundRectangle 18">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Edit leadership information" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
+                    <Entry x:Name="LeaderNameEntry" Placeholder="Full Name" />
+                    <Entry x:Name="LeaderPositionEntry" Placeholder="Position/Office" />
+                    <Entry x:Name="LeaderLevelEntry" Placeholder="Leadership level" />
+                    <Entry x:Name="LeaderOrganizationIdEntry" Placeholder="Organization ID (optional)" />
+                    <Entry x:Name="LeaderOrganizationNameEntry" Placeholder="Region, district, or branch name (optional)" />
+                    <Editor x:Name="LeaderDescriptionEditor" Placeholder="Credentials/Biography/Description (optional)" AutoSize="TextChanges" MinimumHeightRequest="90" />
+                    <Entry x:Name="LeaderTermEntry" Placeholder="Term/Period (optional)" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button x:Name="SaveLeadershipButton" Text="Save" Clicked="OnSaveLeadershipClicked" />
+                        <Button Grid.Column="1" Text="Cancel" Clicked="OnCancelLeadershipClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
             <VerticalStackLayout x:Name="LeadershipStack" Spacing="12" />
         </VerticalStackLayout>
     </ScrollView>
