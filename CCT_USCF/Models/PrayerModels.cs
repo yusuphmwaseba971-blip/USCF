@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using Microsoft.Maui.Graphics;
 
 namespace CCT_USCF.Models;
@@ -47,8 +48,12 @@ public enum PrayerStatus
     Moderated = 3
 }
 
-public class PrayerRequest
+public class PrayerRequest : INotifyPropertyChanged
 {
+    private int _prayerCount;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public string PrayerId { get; set; } = string.Empty;
     public string AuthorUid { get; set; } = string.Empty;
     public string AuthorDisplayName { get; set; } = string.Empty;
@@ -64,7 +69,18 @@ public class PrayerRequest
     public PrayerStatus Status { get; set; } = PrayerStatus.Active;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
-    public int PrayerCount { get; set; }
+    public int PrayerCount
+    {
+        get => _prayerCount;
+        set
+        {
+            if (_prayerCount == value)
+                return;
+
+            _prayerCount = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PrayerCount)));
+        }
+    }
     public bool IsAnswered { get; set; }
     public DateTime? AnsweredAtUtc { get; set; }
     public bool IsOwnerVisible { get; set; }
