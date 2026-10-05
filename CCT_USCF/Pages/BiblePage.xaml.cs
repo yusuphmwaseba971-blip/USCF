@@ -156,6 +156,8 @@ public partial class BiblePage : ContentPage
         VerseHeading.Text = _language == BibleService.NenoId
             ? $"SURA YA {_chapter}"
             : $"CHAPTER {_chapter}";
+        PreviousChapterButton.Text = _language == BibleService.NenoId ? "‹  SURA" : "‹  CHAPTER";
+        NextChapterButton.Text = _language == BibleService.NenoId ? "SURA  ›" : "CHAPTER  ›";
         PreviousChapterButton.IsEnabled = chapterIndex > 0;
         NextChapterButton.IsEnabled = chapterIndex >= 0 && chapterIndex < _chapters.Count - 1;
     }

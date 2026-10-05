@@ -40,13 +40,13 @@
             </CollectionView>
 
             <Grid Grid.Row="1">
-                <VerticalStackLayout x:Name="BooksPanel" IsVisible="True" Spacing="0">
-                    <Label x:Name="BooksHeading" Text="OLD TESTAMENT" FontSize="13"
+                <Grid x:Name="BooksPanel" IsVisible="True" RowDefinitions="Auto,Auto,*">
+                    <Label x:Name="BooksHeading" Grid.Row="0" Text="OLD TESTAMENT" FontSize="13"
                            CharacterSpacing="1.5" Padding="8,8,8,12"
                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource Gray300}}" />
-                    <Label x:Name="BooksStatusLabel" Text="Opening Bible…" IsVisible="True"
+                    <Label x:Name="BooksStatusLabel" Grid.Row="1" Text="Opening Bible…" IsVisible="True"
                            Padding="12" HorizontalTextAlignment="Center" />
-                    <CollectionView x:Name="BooksList" SelectionMode="Single"
+                    <CollectionView x:Name="BooksList" Grid.Row="2" SelectionMode="Single"
                                     SelectionChanged="OnBookSelected">
                         <CollectionView.ItemTemplate>
                             <DataTemplate>
@@ -61,7 +61,7 @@
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
-                </VerticalStackLayout>
+                </Grid>
 
                 <VerticalStackLayout x:Name="ChaptersPanel" IsVisible="False" Spacing="0">
                     <Label x:Name="ChaptersHeading" Text="CHAPTERS" FontSize="13"
