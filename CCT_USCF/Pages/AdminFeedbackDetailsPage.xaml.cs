@@ -8,7 +8,9 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
     private static readonly string[] Statuses = ["New", "Reviewing", "Fixing", "Fixed", "Closed"];
     private readonly IFeedbackService _feedbackService;
     private FeedbackModel? _report;
+    private string? _feedbackId;
     private bool _authorized;
+    private bool _isAdminView = true;
     private bool _checkingAccess;
 
     public AdminFeedbackDetailsPage()
@@ -22,8 +24,16 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
     {
         if (query.TryGetValue("feedback", out var feedback) && feedback is FeedbackModel report)
         {
+            _isAdminView = true;
             _report = report;
             ShowReport(report);
+        }
+
+        if (query.TryGetValue("feedbackId", out var feedbackId))
+        {
+            _feedbackId = feedbackId?.ToString();
+            _isAdminView = query.TryGetValue("isAdminView", out var adminView) &&
+                adminView is bool isAdminView && isAdminView;
         }
     }
 
@@ -36,6 +46,17 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
         _checkingAccess = true;
         try
         {
+            if (!_isAdminView)
+            {
+                WorkflowStatusLayout.IsVisible = false;
+                if (string.IsNullOrWhiteSpace(_feedbackId))
+                    throw new FeedbackSubmissionException("The feedback report could not be found.");
+
+                _report = await _feedbackService.GetMyReportAsync(_feedbackId);
+                ShowReport(_report);
+                return;
+            }
+
             if (!await _feedbackService.IsFeedbackAdminAsync())
             {
                 _authorized = false;
@@ -55,7 +76,12 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[FEEDBACK ADMIN] Access check failed: {ex}");
-            await DisplayAlertAsync("Feedback unavailable", "The admin panel could not be opened.", "OK");
+            await DisplayAlertAsync(
+                "Feedback unavailable",
+                _isAdminView
+                    ? "The admin panel could not be opened."
+                    : "The feedback report could not be opened.",
+                "OK");
             await Shell.Current.GoToAsync("..");
         }
         finally
@@ -96,7 +122,8 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
 
     private async void OnViewScreenshotClicked(object? sender, EventArgs e)
     {
-        if (!_authorized || _report is null || string.IsNullOrWhiteSpace(_report.ScreenshotId))
+        if (_report is null || string.IsNullOrWhiteSpace(_report.ScreenshotId) ||
+            (_isAdminView && !_authorized))
             return;
 
         ViewScreenshotButton.IsEnabled = false;
@@ -104,7 +131,9 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
         ScreenshotActivity.IsRunning = true;
         try
         {
-            var image = await _feedbackService.GetAdminScreenshotAsync(_report.Id);
+            var image = _isAdminView
+                ? await _feedbackService.GetAdminScreenshotAsync(_report.Id)
+                : await _feedbackService.GetScreenshotAsync(_report.Id);
             ScreenshotImage.Source = ImageSource.FromStream(() => new MemoryStream(image));
             ScreenshotImage.IsVisible = true;
         }
@@ -152,6 +181,7 @@ public partial class AdminFeedbackDetailsPage : ContentPage, IQueryAttributable
 
         var statusIndex = Array.IndexOf(Statuses, report.Status);
         StatusPicker.SelectedIndex = statusIndex >= 0 ? statusIndex : 0;
+        WorkflowStatusLayout.IsVisible = _isAdminView;
         var hasScreenshot = !string.IsNullOrWhiteSpace(report.ScreenshotId);
         ViewScreenshotButton.IsVisible = hasScreenshot;
         NoScreenshotLabel.IsVisible = !hasScreenshot;

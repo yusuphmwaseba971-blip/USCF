@@ -1,0 +1,3261 @@
+import { createHash, randomUUID } from "node:crypto";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
+
+/*
+ * ============================================================
+ * CCT-USCF APPWRITE FUNCTION
+ * ============================================================
+ *
+ * Production flow:
+ *
+ * CCT Android
+ *     ↓
+ * Firebase Authentication
+ *     ↓
+ * Firebase ID Token
+ *     ↓
+ * Appwrite Function
+ *     ↓
+ * Firebase Admin verification
+ *     ↓
+ * Appwrite Database
+ *     ↓
+ * community_messages
+ *
+ * Routes:
+ *
+ * GET  /api/community/messages/group
+ * POST /api/community/messages/group
+ *
+ * ============================================================
+ */
+
+/* ============================================================
+ * FIREBASE INITIALIZATION
+ * ============================================================
+ */
+
+function createFirebaseApp() {
+  const existingApps = getApps();
+
+  if (existingApps.length > 0) {
+    return existingApps[0];
+  }
+
+  const serviceAccountJson =
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (serviceAccountJson) {
+    let serviceAccount;
+
+    try {
+      serviceAccount =
+        JSON.parse(serviceAccountJson);
+    } catch (error) {
+      throw new Error(
+        "FIREBASE_SERVICE_ACCOUNT_JSON contains invalid JSON."
+      );
+    }
+
+    return initializeApp({
+      credential: cert(serviceAccount)
+    });
+  }
+
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID;
+
+  const clientEmail =
+    process.env.FIREBASE_CLIENT_EMAIL;
+
+  const privateKey =
+    process.env.FIREBASE_PRIVATE_KEY;
+
+  if (
+    !projectId ||
+    !clientEmail ||
+    !privateKey
+  ) {
+    throw new Error(
+      "Firebase Admin configuration is incomplete."
+    );
+  }
+
+  const normalizedPrivateKey =
+    privateKey
+      .replace(/\\n/g, "\n")
+      .replace(/\r\n/g, "\n")
+      .trim();
+
+  return initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey: normalizedPrivateKey
+    })
+  });
+}
+
+const firebaseApp =
+  createFirebaseApp();
+
+const auth =
+  getAuth(firebaseApp);
+
+
+/* ============================================================
+ * APPWRITE INITIALIZATION
+ * ============================================================
+ */
+
+const appwriteEndpoint =
+  process.env.APPWRITE_ENDPOINT ||
+  "https://sgp.cloud.appwrite.io/v1";
+
+const appwriteProjectId =
+  process.env.APPWRITE_PROJECT_ID ||
+  "cct-uscf";
+
+const appwriteApiKey =
+  process.env.APPWRITE_API_KEY;
+
+if (!appwriteProjectId) {
+  throw new Error(
+    "APPWRITE_PROJECT_ID is not configured."
+  );
+}
+
+if (!appwriteApiKey) {
+  throw new Error(
+    "APPWRITE_API_KEY is not configured."
+  );
+}
+
+const DEFAULT_DATABASE_ID =
+  process.env.APPWRITE_DATABASE_ID ||
+  "database-cct-uscf-db";
+
+const ANNOUNCEMENTS_TABLE_ID =
+  process.env.APPWRITE_ANNOUNCEMENTS_TABLE_ID ||
+  process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID ||
+  process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID ||
+  "announcements";
+const PRAYERS_TABLE_ID = "cct_prayers";
+const PRAYER_ACTIONS_TABLE_ID =
+  process.env.APPWRITE_PRAYER_ACTIONS_TABLE_ID ||
+  "cct_prayer_actions";
+
+const COMMUNITY_MESSAGES_COLLECTION_ID =
+  process.env.APPWRITE_COMMUNITY_MESSAGES_COLLECTION_ID ||
+  "community_messages";
+const COMMUNITY_GROUPS_COLLECTION_ID =
+  process.env.APPWRITE_COMMUNITY_GROUPS_COLLECTION_ID ||
+  "community_groups";
+const COMMUNITY_GROUP_MEMBERS_COLLECTION_ID =
+  process.env.APPWRITE_COMMUNITY_GROUP_MEMBERS_COLLECTION_ID ||
+  "community_group_members";
+
+const CHURCH_ANNOUNCEMENTS_COLLECTION_ID =
+  process.env.APPWRITE_CHURCH_ANNOUNCEMENTS_COLLECTION_ID ||
+  process.env.APPWRITE_ANNOUNCEMENTS_COLLECTION_ID ||
+  "announcements";
+
+const CHURCH_NOTIFICATIONS_COLLECTION_ID =
+  process.env.APPWRITE_CHURCH_NOTIFICATIONS_COLLECTION_ID ||
+  process.env.APPWRITE_NOTIFICATIONS_COLLECTION_ID ||
+  "notifications";
+
+const CHURCH_DEVICE_TOKENS_COLLECTION_ID =
+  process.env.APPWRITE_CHURCH_DEVICE_TOKENS_COLLECTION_ID ||
+  process.env.APPWRITE_DEVICE_TOKENS_COLLECTION_ID ||
+  "device_tokens";
+
+const SUPPORT_REQUESTS_COLLECTION_ID =
+  process.env.APPWRITE_SUPPORT_REQUESTS_COLLECTION_ID ||
+  "support_requests";
+
+const firebaseDb = getFirestore(firebaseApp);
+const firebaseMessaging = getMessaging(firebaseApp);
+
+
+/* ============================================================
+ * SAFE ERROR DIAGNOSTICS
+ * ============================================================
+ *
+ * Never log:
+ * - Firebase ID tokens
+ * - Authorization headers
+ * - Appwrite API keys
+ * - Firebase private keys
+ * - passwords
+ * - credentials
+ */
+
+function getErrorDetails(error) {
+  if (
+    error === null ||
+    error === undefined
+  ) {
+    return {
+      name: "UnknownError",
+      message: "Unknown error.",
+      cause: null,
+      stack: null
+    };
+  }
+
+  if (error instanceof Error) {
+    let cause = null;
+
+    if (error.cause !== undefined) {
+      if (error.cause instanceof Error) {
+        cause = {
+          name:
+            error.cause.name ||
+            "Error",
+
+          message:
+            error.cause.message ||
+            String(error.cause),
+
+          stack:
+            error.cause.stack ||
+            null
+        };
+      } else if (
+        typeof error.cause === "object" &&
+        error.cause !== null
+      ) {
+        try {
+          cause =
+            JSON.stringify(
+              error.cause
+            );
+        } catch {
+          cause =
+            String(error.cause);
+        }
+      } else {
+        cause =
+          String(error.cause);
+      }
+    }
+
+    return {
+      name:
+        error.name ||
+        "Error",
+
+      message:
+        error.message ||
+        String(error),
+
+      cause,
+
+      stack:
+        error.stack ||
+        null
+    };
+  }
+
+  return {
+    name: "UnknownError",
+    message: String(error),
+    cause: null,
+    stack: null
+  };
+}
+
+
+function logErrorDetails(
+  log,
+  error,
+  stage
+) {
+  const details =
+    getErrorDetails(error);
+
+  log(
+    `[CCT_ERROR] STAGE=${stage}`
+  );
+
+  log(
+    `[CCT_ERROR] NAME=${details.name}`
+  );
+
+  log(
+    `[CCT_ERROR] MESSAGE=${details.message}`
+  );
+
+  if (
+    details.cause !== null &&
+    details.cause !== undefined
+  ) {
+    log(
+      `[CCT_ERROR] CAUSE=${details.cause}`
+    );
+  } else {
+    log(
+      "[CCT_ERROR] CAUSE=<none>"
+    );
+  }
+
+  if (details.stack) {
+    log(
+      `[CCT_ERROR] STACK=${details.stack}`
+    );
+  }
+}
+
+
+/* ============================================================
+ * HTTP RESPONSE HELPERS
+ * ============================================================
+ */
+
+function jsonResponse(
+  res,
+  body,
+  statusCode = 200
+) {
+  return res.json(
+    body,
+    statusCode
+  );
+}
+
+
+/* ============================================================
+ * HEADER HELPERS
+ * ============================================================
+ */
+
+function readHeader(req, name) {
+  const requestedName = String(name).toLowerCase();
+  const candidates = [
+    req?.headers,
+    req?.header,
+    req?.request?.headers
+  ];
+
+  for (const headers of candidates) {
+    if (!headers) {
+      continue;
+    }
+
+    if (typeof headers.get === "function") {
+      const value = headers.get(name) ?? headers.get(requestedName);
+      if (value !== null && value !== undefined) {
+        return String(value).trim();
+      }
+    }
+
+    if (typeof headers === "object") {
+      for (const [key, value] of Object.entries(headers)) {
+        if (key.toLowerCase() === requestedName &&
+            value !== null &&
+            value !== undefined) {
+          return Array.isArray(value)
+            ? value.join(",").trim()
+            : String(value).trim();
+        }
+      }
+    }
+
+    if (typeof headers === "function") {
+      const value = headers(name);
+      if (value !== null && value !== undefined) {
+        return String(value).trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+
+/* ============================================================
+ * GENERAL UTILITY HELPERS
+ * ============================================================
+ */
+
+function normalizeString(value) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+
+function parseOptionalInt(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const number =
+    Number(value);
+
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  return Math.trunc(number);
+}
+
+
+function toNumber(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return 0;
+  }
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : 0;
+}
+
+
+function isAllowedMessageType(value) {
+  return [
+    "text",
+    "image",
+    "video",
+    "audio"
+  ].includes(value);
+}
+
+
+function safeIsoDate(value) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return new Date().toISOString();
+  }
+
+  return date.toISOString();
+}
+
+
+/* ============================================================
+ * APPWRITE DOCUMENT → API MESSAGE
+ * ============================================================
+ */
+
+function mapMessageDocument(
+  document
+) {
+  return {
+    id:
+      document.$id ??
+      document.id ??
+      "",
+
+    messageId:
+      document.message_id ??
+      "",
+
+    clientMessageId:
+      document.client_message_id ??
+      "",
+
+    senderUid:
+      document.sender_uid ??
+      "",
+
+    senderName:
+      document.sender_name ??
+      "",
+
+    content:
+      document.content ??
+      "",
+
+    communityId:
+      document.community_id ??
+      "",
+
+    branchId:
+      document.branch_id ??
+      null,
+
+    regionId:
+      document.region_id ??
+      null,
+
+    districtId:
+      document.district_id ??
+      null,
+
+    organizationalLevel:
+      document.organizational_level ??
+      document.organization_type ??
+      "",
+
+    organizationType:
+      document.organization_type ??
+      document.organizational_level ??
+      "",
+
+    organizationId:
+      document.organization_id ??
+      "",
+
+    appwriteTeamId:
+      document.appwrite_team_id ??
+      "",
+
+    messageType:
+      document.message_type ??
+      "text",
+
+    mediaUrl:
+      document.media_url ??
+      "",
+
+    thumbnailUrl:
+      document.thumbnail_url ??
+      "",
+
+    fileName:
+      document.file_name ??
+      "",
+
+    fileSize:
+      toNumber(
+        document.file_size
+      ),
+
+    duration:
+      toNumber(
+        document.duration
+      ),
+
+    createdAt:
+      safeIsoDate(
+        document.created_at ??
+        document.$createdAt
+      ),
+
+    updatedAt:
+      safeIsoDate(
+        document.updated_at ??
+        document.$updatedAt
+      ),
+
+    isDeleted:
+      document.is_deleted === true,
+
+    deletedAt:
+      safeIsoDate(document.deleted_at),
+
+    isEdited:
+      document.is_edited === true,
+
+    replyToMessageId:
+      document.reply_to_message_id ??
+      null,
+
+    replyToSenderName:
+      document.reply_to_sender_name ??
+      null,
+
+    replyToPreview:
+      document.reply_to_preview ??
+      null
+  };
+}
+
+
+/* ============================================================
+ * RESPONSE BUILDERS
+ * ============================================================
+ */
+
+function buildCreateResponse(
+  message
+) {
+  return {
+    success: true,
+
+    message,
+
+    data: message,
+
+    id:
+      message.id,
+
+    messageId:
+      message.messageId,
+
+    clientMessageId:
+      message.clientMessageId
+  };
+}
+
+
+function buildListResponse(
+  items
+) {
+  return {
+    success: true,
+
+    messages: items,
+
+    data: items,
+
+    items,
+
+    results: items,
+
+    count:
+      items.length
+  };
+}
+
+
+/* ============================================================
+ * FIREBASE AUTHENTICATION
+ * ============================================================
+ */
+
+async function verifyFirebaseRequest(
+  req,
+  log
+) {
+  log("[CCT_FIREBASE_AUTH] Request received");
+
+  const authorization =
+    readHeader(
+      req,
+      "authorization"
+    );
+
+  if (!authorization) {
+    log("[CCT_FIREBASE_AUTH] Authorization header found: NO");
+    const error = new Error(
+      "Missing Authorization header."
+    );
+    error.statusCode = 401;
+    throw error;
+  }
+
+  log("[CCT_FIREBASE_AUTH] Authorization header found: YES");
+
+  const normalizedAuthorization = authorization.trim();
+  let idToken = "";
+
+  const bearerMatch = normalizedAuthorization.match(/^Bearer\s+(.+)$/i);
+
+  if (bearerMatch) {
+    idToken = bearerMatch[1].trim();
+    log("[CCT_FIREBASE_AUTH] Authorization scheme = Bearer");
+  } else if (/^[A-Za-z0-9-_\.]+\.[A-Za-z0-9-_\.]+\.[A-Za-z0-9-_\.=]+$/.test(normalizedAuthorization)) {
+    idToken = normalizedAuthorization;
+    log("[CCT_FIREBASE_AUTH] Authorization scheme = raw-token");
+  } else {
+    log("[CCT_FIREBASE_AUTH] Authorization scheme = invalid");
+    const error = new Error(
+      "Invalid Authorization header. Expected 'Bearer <token>' or a raw Firebase ID token."
+    );
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (!idToken) {
+    log("[CCT_FIREBASE_AUTH] Authorization token present: NO");
+    const error = new Error(
+      "Missing Firebase ID token."
+    );
+    error.statusCode = 401;
+    throw error;
+  }
+
+  log("[CCT_FIREBASE_AUTH] Firebase token present: YES");
+  log(
+    "[CCT_FIREBASE_AUTH] Authorization header found: YES"
+  );
+
+  log(
+    "[CCT_FIREBASE_AUTH] Firebase ID-token verification START"
+  );
+
+  try {
+    const firebaseUser =
+      await auth.verifyIdToken(
+        idToken
+      );
+
+    if (
+      !firebaseUser ||
+      !firebaseUser.uid
+    ) {
+      const error =
+        new Error(
+          "Firebase ID-token verification returned no UID."
+        );
+
+      error.statusCode = 401;
+
+      throw error;
+    }
+
+    log(
+      `[CCT_FIREBASE_AUTH] Firebase ID-token verification SUCCESS UID=${firebaseUser.uid}`
+    );
+
+    return firebaseUser;
+  } catch (error) {
+    logErrorDetails(
+      log,
+      error,
+      "Firebase ID-token verification"
+    );
+
+    if (
+      error &&
+      error.statusCode === 401
+    ) {
+      throw error;
+    }
+
+    const authError =
+      new Error(
+        "Firebase ID-token verification failed."
+      );
+
+    authError.statusCode = 401;
+    authError.cause = error;
+
+    throw authError;
+  }
+}
+
+
+/* ============================================================
+ * REQUEST BODY
+ * ============================================================
+ */
+
+function getQueryValue(req, name) {
+  const queryValue =
+    req.query?.[name];
+
+  if (
+    queryValue !== undefined &&
+    queryValue !== null
+  ) {
+    return Array.isArray(queryValue)
+      ? queryValue[0]
+      : queryValue;
+  }
+
+  const requestUrl =
+    req.url ||
+    req.path ||
+    "";
+
+  if (!requestUrl) {
+    return undefined;
+  }
+
+  try {
+    return new URL(
+      requestUrl,
+      "https://appwrite.local"
+    ).searchParams.get(name) ??
+      undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseRequestDate(value) {
+  if (
+    typeof value !==
+    "string"
+  ) {
+    return null;
+  }
+
+  const normalizedValue =
+    value.replace(
+      /(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/,
+      "$1$2"
+    );
+
+  const parsedDate =
+    new Date(normalizedValue);
+
+  return Number.isNaN(
+    parsedDate.getTime()
+  )
+    ? null
+    : parsedDate;
+}
+
+function getRequestBody(req) {
+  if (!req.body) {
+    return {};
+  }
+
+  if (
+    typeof req.body ===
+    "object"
+  ) {
+    return req.body;
+  }
+
+  if (
+    typeof req.body ===
+    "string"
+  ) {
+    if (!req.body.trim()) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(
+        req.body
+      );
+    } catch {
+      throw new Error(
+        "Request body contains invalid JSON."
+      );
+    }
+  }
+
+  return {};
+}
+
+function announcementError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function appwriteCollectionRequest(collectionId, method, path = "", body, queries = []) {
+  const queryString = queries.length > 0
+    ? `?${queries.map(query => `queries[]=${encodeURIComponent(JSON.stringify(query))}`).join("&")}`
+    : "";
+  const response = await fetch(
+    `${appwriteEndpoint}/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
+    `/collections/${encodeURIComponent(collectionId)}/documents${path}${queryString}`,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": appwriteProjectId,
+        "X-Appwrite-Key": appwriteApiKey
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }
+  );
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+  if (!response.ok) {
+    throw new Error(`Appwrite request failed (${response.status}): ${text}`);
+  }
+  return result;
+}
+
+async function appwriteTableRowRequest(tableId, method, path = "", body, queries = []) {
+  const queryString = queries.length > 0
+    ? `?${queries.map(query => `queries[]=${encodeURIComponent(JSON.stringify(query))}`).join("&")}`
+    : "";
+  const response = await fetch(
+    `${appwriteEndpoint}/tablesdb/${encodeURIComponent(DEFAULT_DATABASE_ID)}` +
+    `/tables/${encodeURIComponent(tableId)}/rows${path}${queryString}`,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": appwriteProjectId,
+        "X-Appwrite-Key": appwriteApiKey
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }
+  );
+
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+  if (!response.ok) {
+    const error = new Error(
+      `Appwrite TablesDB request failed (${response.status}) ` +
+      `database=${DEFAULT_DATABASE_ID} table=${tableId}: ${text}`
+    );
+    error.statusCode = response.status;
+    error.appwriteCode = result.code ?? null;
+    error.appwriteMessage = result.message ?? null;
+    throw error;
+  }
+  return result;
+}
+
+async function appwriteDatabaseRequest(path, method, body) {
+  const response = await fetch(
+    `${appwriteEndpoint}${path}`,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Appwrite-Project": appwriteProjectId,
+        "X-Appwrite-Key": appwriteApiKey
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }
+  );
+
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = { message: text }; }
+
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`Appwrite database request failed (${response.status}): ${text}`);
+  }
+
+  return result;
+}
+
+async function ensureChurchAnnouncementCollections() {
+  const compatibilityCollections = {
+    [COMMUNITY_GROUPS_COLLECTION_ID]: {
+      string: [
+        ["group_name", 255], ["description", 2000], ["group_type", 64],
+        ["scope_type", 32], ["parent_group_id", 128], ["created_by_uid", 255],
+        ["created_at", 64]
+      ],
+      integer: ["region_id", "district_id", "branch_id"],
+      boolean: ["is_active"]
+    },
+    [COMMUNITY_GROUP_MEMBERS_COLLECTION_ID]: {
+      string: [["group_id", 128], ["user_uid", 255], ["role", 64], ["joined_at", 64]],
+      integer: [],
+      boolean: ["is_active"]
+    },
+    [CHURCH_ANNOUNCEMENTS_COLLECTION_ID]: {
+      string: [["title", 255], ["message", 2000], ["sender_uid", 255], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    "church_announcements": {
+      string: [["title", 255], ["message", 2000], ["sender_uid", 255], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    [CHURCH_NOTIFICATIONS_COLLECTION_ID]: {
+      string: [["announcement_id", 64], ["user_uid", 255], ["title", 255], ["message", 2000], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: [],
+      boolean: ["is_read"]
+    },
+    "church_notifications": {
+      string: [["announcement_id", 64], ["user_uid", 255], ["title", 255], ["message", 2000], ["sender_name", 255], ["target_level", 32], ["created_at", 64]],
+      integer: [],
+      boolean: ["is_read"]
+    },
+    [CHURCH_DEVICE_TOKENS_COLLECTION_ID]: {
+      string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    "church_device_tokens": {
+      string: [["user_uid", 255], ["token", 4096], ["user_name", 255], ["updated_at", 64]],
+      integer: ["region_id", "district_id", "branch_id"]
+    },
+    [SUPPORT_REQUESTS_COLLECTION_ID]: {
+      string: [
+        ["user_id", 255],
+        ["user_email", 255],
+        ["user_name", 255],
+        ["category", 64],
+        ["subject", 255],
+        ["message", 5000],
+        ["status", 32],
+        ["app_version", 128],
+        ["platform", 32],
+        ["created_at", 64],
+        ["updated_at", 64]
+      ],
+      integer: []
+    },
+    "support_requests": {
+      string: [
+        ["user_id", 255],
+        ["user_email", 255],
+        ["user_name", 255],
+        ["category", 64],
+        ["subject", 255],
+        ["message", 5000],
+        ["status", 32],
+        ["app_version", 128],
+        ["platform", 32],
+        ["created_at", 64],
+        ["updated_at", 64]
+      ],
+      integer: []
+    }
+  };
+
+  const collectionSchemas = Object.fromEntries(
+    Object.entries(compatibilityCollections).filter(([collectionId]) => collectionId && collectionId !== "undefined")
+  );
+
+  const collectionsResponse = await appwriteDatabaseRequest(
+    `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections?queries[]=${encodeURIComponent(JSON.stringify({ method: "limit", values: [250] }))}`,
+    "GET"
+  );
+
+  const existingIds = new Set((collectionsResponse.collections || []).map(collection => collection.$id || collection.id).filter(Boolean));
+
+  for (const [collectionId, schema] of Object.entries(collectionSchemas)) {
+    if (!existingIds.has(collectionId)) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections`,
+        "POST",
+        {
+          collectionId,
+          name: collectionId,
+          documentSecurity: false,
+          permissions: []
+        }
+      );
+      existingIds.add(collectionId);
+    }
+
+    for (const [attributeId, size] of schema.string || []) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/string`,
+        "POST",
+        { key: attributeId, size, required: false }
+      );
+    }
+
+    for (const attributeId of schema.integer || []) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/integer`,
+        "POST",
+        { key: attributeId, required: false }
+      );
+    }
+
+    for (const attributeId of schema.boolean || []) {
+      await appwriteDatabaseRequest(
+        `/databases/${encodeURIComponent(DEFAULT_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/attributes/boolean`,
+        "POST",
+        { key: attributeId, required: false, default: false }
+      );
+    }
+  }
+}
+
+async function getAnnouncementProfile(firebaseUser) {
+  const snapshot = await firebaseDb.collection(
+    process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
+  ).doc(firebaseUser.uid).get();
+  const profile = snapshot.exists ? snapshot.data() : {};
+  return {
+    uid: firebaseUser.uid,
+    name: normalizeString(profile.fullName || firebaseUser.name || firebaseUser.email || "Church leader"),
+    role: normalizeString(profile.role || firebaseUser.role),
+    leadershipLevel: normalizeString(profile.leadershipLevel || firebaseUser.leadershipLevel),
+    leadershipDuty: normalizeString(profile.leadershipDuty || firebaseUser.leadershipDuty),
+    organization: normalizeString(profile.organization || ""),
+    regionId: parseOptionalInt(profile.regionId),
+    districtId: parseOptionalInt(profile.districtId),
+    branchId: parseOptionalInt(profile.branchId),
+    createdAt: typeof (profile.createdAt || profile.created_at) === "string"
+      ? (profile.createdAt || profile.created_at)
+      : profile.createdAt?.toDate?.()?.toISOString?.() || null
+  };
+}
+
+function isAnnouncementLeader(profile) {
+  const values = [profile.role, profile.leadershipLevel, profile.leadershipDuty]
+    .map(value => normalizeString(value).toLowerCase().replace(/[\s_-]/g, ""));
+  return values.some(value =>
+    ["leader", "pastor", "priest", "chairman", "national", "regional", "district", "branch"].includes(value)
+  );
+}
+
+function canSendBranchAnnouncement(profile) {
+  return profile.branchId !== null && profile.branchId > 0;
+}
+
+function announcementTargets(profile) {
+  const targets = [];
+  if (isAnnouncementLeader(profile)) {
+    targets.push({ level: "National", id: 0, name: "All church members", regionId: null, districtId: null });
+  }
+  if (profile.regionId) {
+    targets.push({ level: "Region", id: profile.regionId, name: "My region", regionId: profile.regionId, districtId: null });
+  }
+  if (profile.districtId) {
+    targets.push({ level: "District", id: profile.districtId, name: "My district", regionId: profile.regionId, districtId: profile.districtId });
+  }
+  if (profile.branchId) {
+    targets.push({ level: "Branch", id: profile.branchId, name: "My branch", regionId: profile.regionId, districtId: profile.districtId });
+  }
+  return targets;
+}
+
+function targetMatchesToken(announcement, token) {
+  switch (announcement.target_level) {
+    case "National": return true;
+    case "Region": return String(token.region_id) === String(announcement.region_id);
+    case "District": return String(token.district_id) === String(announcement.district_id);
+    case "Branch": return String(token.branch_id) === String(announcement.branch_id);
+    default: return false;
+  }
+}
+
+function mapAnnouncement(document) {
+  return {
+    id: document.$id || document.id || "",
+    announcementId: document.announcement_id || document.$id || document.id || "",
+    title: document.title || "",
+    message: document.content || document.message || "",
+    senderName: document.sender_name || "",
+    targetLevel: document.target_level || "",
+    createdAtUtc: safeIsoDate(document.created_at),
+    isRead: document.is_read === true || document.is_read === "true"
+  };
+}
+
+function toGuidString(value) {
+  const compact = normalizeString(value).replace(/-/g, "");
+  return /^[0-9a-f]{32}$/i.test(compact)
+    ? `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`
+    : randomUUID();
+}
+
+function announcementVisibleToProfile(announcement, profile) {
+  const scope = normalizeString(announcement.scope_type).toLowerCase();
+  if (scope === "national") return true;
+  if (scope === "region") return String(announcement.region_id ?? "") === String(profile.regionId ?? "");
+  if (scope === "district") return String(announcement.district_id ?? "") === String(profile.districtId ?? "");
+  if (scope === "branch") return String(announcement.branch_id ?? "") === String(profile.branchId ?? "");
+  return false;
+}
+
+async function upsertDeviceToken(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+  const token = normalizeString(body.token);
+  if (!token) throw announcementError("FCM token is required.");
+  const documentId = Buffer.from(firebaseUser.uid).toString("base64url").slice(0, 36);
+  const data = {
+      user_uid: firebaseUser.uid,
+      token,
+      user_name: normalizeString(body.userName || firebaseUser.name || firebaseUser.email || ""),
+      region_id: parseOptionalInt(body.regionId),
+      district_id: parseOptionalInt(body.districtId),
+      branch_id: parseOptionalInt(body.branchId),
+      updated_at: new Date().toISOString()
+  };
+  try {
+    await appwriteCollectionRequest(
+      CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+      "PATCH",
+      `/${encodeURIComponent(documentId)}`,
+      { data }
+    );
+  } catch (error) {
+    if (!String(error.message || "").includes("404")) throw error;
+    await appwriteCollectionRequest(CHURCH_DEVICE_TOKENS_COLLECTION_ID, "POST", "", {
+      documentId,
+      data
+    });
+  }
+  return { success: true };
+}
+
+async function getAnnouncementOptions(req, log) {
+  const profile = await getAnnouncementProfile(await verifyFirebaseRequest(req, log));
+  if (!isAnnouncementLeader(profile) && !canSendBranchAnnouncement(profile)) {
+    throw announcementError("Your profile must have a branch assigned before sending announcements.", 403);
+  }
+  log(`[CCT_ANNOUNCEMENT_OPTIONS] uid=${profile.uid} role=${profile.role || "none"} branchId=${profile.branchId ?? "none"}`);
+  return {
+    leadershipLevel: profile.leadershipLevel || profile.role,
+    organization: profile.organization,
+    targets: announcementTargets(profile)
+  };
+}
+
+async function createPrayerRequest(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+  const content = normalizeString(body.content);
+  if (!content) throw announcementError("Prayer request content is required.");
+  const isPrivate = body.is_private === true || body.isPrivate === true;
+  const leaderId = normalizeString(body.leader_id || body.leaderId);
+  const rowId = randomUUID().replace(/-/g, "");
+  const data = {
+    user_id: firebaseUser.uid,
+    content,
+    leader_id: leaderId || null,
+    is_private: isPrivate,
+    status: "pending"
+  };
+  log(`[PRAYER_REQUEST_APPWRITE_CREATE] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} uid=${firebaseUser.uid} private=${isPrivate}`);
+  const row = await appwriteTableRowRequest(
+    PRAYERS_TABLE_ID,
+    "POST",
+    "",
+    { rowId, data }
+  );
+  log(`[PRAYER_REQUEST_SUCCESS] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} row=${row.$id || rowId}`);
+  return {
+    success: true,
+    rowId: row.$id || rowId,
+    userId: firebaseUser.uid,
+    content: row.content || content,
+    isPrivate: row.is_private ?? isPrivate,
+    status: row.status || "pending"
+  };
+}
+
+async function listPrayerRequests(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  let limit = Math.min(Math.max(Number(getQueryValue(req, "limit") || 25), 1), 100);
+  const mineOnly = ["1", "true", "yes"].includes(
+    String(getQueryValue(req, "mine") || "").toLowerCase()
+  );
+  const cursorAfter = getQueryValue(req, "cursorAfter") || getQueryValue(req, "cursor_after");
+  const newerThan = getQueryValue(req, "newerThan") || getQueryValue(req, "newer_than");
+  log(`[PRAYER_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} table=${PRAYERS_TABLE_ID} limit=${limit} cursorAfter=${cursorAfter || "none"} newerThan=${newerThan || "none"}`);
+
+  // Build Appwrite TablesDB queries honoring the requested limit and optional cursor
+  const queries = [
+    { method: "orderDesc", attribute: "$createdAt" },
+    { method: "limit", values: [limit] }
+  ];
+  if (cursorAfter) {
+    queries.push({ method: "cursorAfter", values: [cursorAfter] });
+  }
+  if (newerThan) {
+    queries.push({ method: "greaterThan", attribute: "$updatedAt", values: [newerThan] });
+  }
+  if (mineOnly) {
+    queries.push({ method: "equal", attribute: "user_id", values: [firebaseUser.uid] });
+  }
+
+  const page = await appwriteTableRowRequest(
+    PRAYERS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    queries
+  );
+
+  const isLeader = isAnnouncementLeader(profile);
+  const visibleRows = (page.rows || [])
+    .filter(row => normalizeString(row.status).toLowerCase() !== "archived")
+    .filter(row =>
+      mineOnly ||
+      row.is_private !== true ||
+      row.user_id === firebaseUser.uid ||
+      isLeader
+    );
+  const rows = await Promise.all(visibleRows
+    .sort((left, right) => new Date(right.$createdAt || 0) - new Date(left.$createdAt || 0))
+    .map(async row => ({
+      id: row.$id || "",
+      userId: row.user_id || "",
+      content: row.content || "",
+      isPrivate: row.is_private === true,
+      status: row.status || "pending",
+      createdAtUtc: safeIsoDate(row.$createdAt),
+      updatedAtUtc: safeIsoDate(row.$updatedAt || row.$createdAt),
+      ...(await getPrayerActionSummaryForUser(row.$id || "", firebaseUser.uid))
+    })));
+
+  log(`[PRAYER_FETCH_RESULT] rows=${page.rows?.length || 0} visible=${rows.length} requestedLimit=${limit} mineOnly=${mineOnly}`);
+  return { rows };
+}
+
+async function getPrayerActionSummaryForUser(prayerId, userUid) {
+  const page = await appwriteTableRowRequest(
+    PRAYER_ACTIONS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "prayer_id", values: [prayerId] },
+      { method: "limit", values: [5000] }
+    ]
+  );
+  const rows = page.rows || [];
+  return {
+    prayerCount: Number.isInteger(page.total) ? page.total : rows.length,
+    isPrayed: rows.some(row => row.user_uid === userUid)
+  };
+}
+
+async function recordPrayerAction(req, log, prayerId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  if (!prayerId) throw announcementError("Prayer ID is required.");
+  const actionId = createHash("sha256")
+    .update(`${prayerId}:${firebaseUser.uid}`)
+    .digest("hex")
+    .slice(0, 32);
+  const data = {
+    prayer_id: prayerId,
+    user_uid: firebaseUser.uid,
+    created_at: new Date().toISOString()
+  };
+
+  log(`[PRAYER_I_PRAY_REQUEST] prayerId=${prayerId} uid=${firebaseUser.uid}`);
+  try {
+    await appwriteTableRowRequest(
+      PRAYER_ACTIONS_TABLE_ID,
+      "POST",
+      "",
+      { rowId: actionId, data }
+    );
+  } catch (error) {
+    if (error?.statusCode !== 409) throw error;
+    log(`[PRAYER_I_PRAY_DUPLICATE_BLOCK] prayerId=${prayerId} uid=${firebaseUser.uid}`);
+    return { success: true, recorded: false };
+  }
+
+  log(`[PRAYER_I_PRAY_SUCCESS] prayerId=${prayerId} uid=${firebaseUser.uid}`);
+  return { success: true, recorded: true };
+}
+
+async function getPrayerActionSummary(req, log, prayerId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  if (!prayerId) throw announcementError("Prayer ID is required.");
+  const summary = await getPrayerActionSummaryForUser(prayerId, firebaseUser.uid);
+  return {
+    prayerId,
+    count: summary.prayerCount,
+    hasPrayed: summary.isPrayed
+  };
+}
+
+async function createChurchAnnouncement(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const body = getRequestBody(req);
+  const title = normalizeString(body.title);
+  const message = normalizeString(body.message);
+  const targetLevel = normalizeString(body.targetLevel);
+  if (!title || !message) throw announcementError("Title and message are required.");
+  if (!["National", "Region", "District", "Branch"].includes(targetLevel)) {
+    throw announcementError("A valid announcement audience is required.");
+  }
+  const regionId = parseOptionalInt(body.regionId);
+  const districtId = parseOptionalInt(body.districtId);
+  const branchId = parseOptionalInt(body.branchId);
+  const imageUrl = normalizeString(body.imageUrl);
+  const attachmentUrl = normalizeString(body.attachmentUrl);
+  const canSendRequestedAudience =
+    isAnnouncementLeader(profile) ||
+    (targetLevel === "Branch" && canSendBranchAnnouncement(profile));
+  if (!canSendRequestedAudience) {
+    throw announcementError("Members can send announcements only to their assigned branch.", 403);
+  }
+  if ((targetLevel === "Region" && regionId !== profile.regionId) ||
+      (targetLevel === "District" && districtId !== profile.districtId) ||
+      (targetLevel === "Branch" && branchId !== profile.branchId)) {
+    throw announcementError("You can only announce to an audience assigned to your profile.", 403);
+  }
+  const announcement = {
+    title,
+    message,
+    sender_uid: profile.uid,
+    sender_name: profile.name,
+    target_level: targetLevel,
+    region_id: regionId,
+    district_id: districtId,
+    branch_id: branchId,
+    created_at: new Date().toISOString()
+  };
+  log(`[CCT_ANNOUNCEMENT_CREATE] uid=${profile.uid} target=${targetLevel} branchId=${branchId ?? "none"}`);
+  const announcementId = randomUUID().replace(/-/g, "");
+  const tableData = {
+    announcement_id: announcementId,
+    title,
+    content: message,
+    sender_uid: profile.uid,
+    sender_name: profile.name,
+    scope_type: targetLevel,
+    region_id: regionId === null ? null : String(regionId),
+    district_id: districtId === null ? null : String(districtId),
+    branch_id: branchId === null ? null : String(branchId),
+    image_url: imageUrl || null,
+    attachment_url: attachmentUrl || null,
+    is_active: true
+  };
+
+  log(
+    `[CCT_ANNOUNCEMENT_STORAGE] database=${DEFAULT_DATABASE_ID} ` +
+    `table=${ANNOUNCEMENTS_TABLE_ID} row=${announcementId}`
+  );
+
+  if (process.env.APPWRITE_LEGACY_COLLECTIONS === "true") {
+    await appwriteCollectionRequest(CHURCH_ANNOUNCEMENTS_COLLECTION_ID, "POST", "", {
+      documentId: announcementId,
+      data: announcement
+    });
+  } else {
+    await appwriteTableRowRequest(
+      ANNOUNCEMENTS_TABLE_ID,
+      "POST",
+      "",
+      { rowId: announcementId, data: tableData }
+    );
+  }
+
+  let delivered = 0;
+  let notificationError = null;
+  try {
+    const tokenPage = await appwriteCollectionRequest(
+      CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+      "GET",
+      "",
+      undefined,
+      [{ method: "limit", values: [500] }]
+    );
+    const tokens = (tokenPage.documents || []).filter(token => targetMatchesToken(announcement, token));
+    const messages = tokens.map(token => ({
+      documentId: randomUUID().replace(/-/g, ""),
+      data: {
+        announcement_id: announcementId,
+        user_uid: token.user_uid,
+        title,
+        message,
+        sender_name: profile.name,
+        target_level: targetLevel,
+        is_read: false,
+        created_at: announcement.created_at
+      }
+    }));
+    await Promise.all(messages.map(item =>
+      appwriteCollectionRequest(CHURCH_NOTIFICATIONS_COLLECTION_ID, "POST", "", item)
+    ));
+    delivered = tokens.length;
+    if (tokens.length > 0) {
+      const delivery = await firebaseMessaging.sendEachForMulticast({
+        tokens: tokens.map(token => token.token),
+        notification: { title, body: message },
+        data: { announcementId, targetLevel }
+      });
+      delivered = delivery.successCount;
+      if (delivery.failureCount > 0) {
+        notificationError = `FCM delivery failed for ${delivery.failureCount} device(s).`;
+        log(`[CCT_ANNOUNCEMENT_FCM] success=${delivery.successCount} failed=${delivery.failureCount}`);
+      }
+    }
+  } catch (error) {
+    notificationError = error instanceof Error ? error.message : String(error);
+    log(`[CCT_ANNOUNCEMENT_NOTIFICATION_ERROR] ${notificationError}`);
+  }
+
+  return {
+    success: true,
+    announcementId,
+    delivered,
+    stored: true,
+    notificationError
+  };
+}
+
+async function listChurchNotifications(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const since = parseRequestDate(getQueryValue(req, "since"));
+  log(
+    `[ANNOUNCEMENT_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} ` +
+    `table=${ANNOUNCEMENTS_TABLE_ID} scope=authorized-user`
+  );
+  const page = await appwriteTableRowRequest(
+    ANNOUNCEMENTS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "limit", values: [500] }]
+  );
+  const rows = page.rows || [];
+  const visibleRows = rows
+    .filter(row => row.is_active !== false)
+    .filter(row => announcementVisibleToProfile(row, profile))
+    .filter(row => !since || new Date(row.$createdAt || 0) > since)
+    .sort((left, right) => new Date(right.$createdAt || 0) - new Date(left.$createdAt || 0));
+  log(
+    `[ANNOUNCEMENT_FETCH_RESULT] database=${DEFAULT_DATABASE_ID} ` +
+    `table=${ANNOUNCEMENTS_TABLE_ID} rows=${rows.length} visible=${visibleRows.length}`
+  );
+  return visibleRows.map(row => ({
+    id: toGuidString(row.$id || row.announcement_id),
+    announcementId: toGuidString(row.announcement_id || row.$id),
+    title: row.title || "",
+    message: row.content || "",
+    senderName: row.sender_name || "",
+    targetLevel: row.scope_type || "",
+    regionId: parseOptionalInt(row.region_id ?? row.region),
+    districtId: parseOptionalInt(row.district_id ?? row.district),
+    branchId: parseOptionalInt(row.branch_id ?? row.branch),
+    imageUrl: row.image_url || "",
+    attachmentUrl: row.attachment_url || "",
+    expiresAtUtc: safeIsoDate(row.expires_at),
+    isActive: row.is_active !== false,
+    createdAtUtc: safeIsoDate(row.$createdAt),
+    isRead: false
+  }));
+}
+
+async function markChurchNotificationRead(req, log, notificationId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const page = await appwriteCollectionRequest(
+    CHURCH_NOTIFICATIONS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "equal", attribute: "user_uid", values: [firebaseUser.uid] }, { method: "limit", values: [500] }]
+  );
+  const document = (page.documents || []).find(item => item.$id === notificationId);
+  if (!document) throw announcementError("Notification was not found.", 404);
+  await appwriteCollectionRequest(
+    CHURCH_NOTIFICATIONS_COLLECTION_ID,
+    "PATCH",
+    `/${encodeURIComponent(notificationId)}`,
+    { data: { is_read: true } }
+  );
+  return { success: true };
+}
+
+async function getUnreadChurchNotificationCount(req, log) {
+  const notifications = await listChurchNotifications(req, log);
+  return { count: notifications.filter(notification => !notification.isRead).length };
+}
+
+
+/* ============================================================
+ * GET GROUP MESSAGES
+ * ============================================================
+ */
+
+function normalizeScopeType(value) {
+  const scope = normalizeString(value).toUpperCase();
+  return ["NATIONAL", "REGIONAL", "DISTRICT", "BRANCH"].includes(scope)
+    ? scope
+    : "";
+}
+
+function canManageScope(profile, scopeType) {
+  const scope = normalizeScopeType(scopeType);
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return profile.regionId !== null;
+  if (scope === "DISTRICT") return profile.districtId !== null;
+  if (scope === "BRANCH") return profile.branchId !== null;
+  return false;
+}
+
+function canDeleteScope(profile, scopeType) {
+  const leadershipValues = [
+    profile.role,
+    profile.leadershipLevel,
+    profile.leadershipDuty
+  ].map(value => normalizeString(value).toLowerCase());
+  const isLeader = leadershipValues.some(value =>
+    ["leader", "admin", "administrator", "chairman", "pastor", "priest", "coordinator"]
+      .some(token => value.includes(token))
+  );
+  return isLeader && canManageScope(profile, scopeType);
+}
+
+function groupBelongsToProfile(group, profile) {
+  if (!group.is_active) return false;
+  const scope = normalizeScopeType(group.scope_type);
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return String(group.region_id ?? "") === String(profile.regionId ?? "");
+  if (scope === "DISTRICT") return String(group.district_id ?? "") === String(profile.districtId ?? "");
+  return String(group.branch_id ?? "") === String(profile.branchId ?? "");
+}
+
+function canManageGroup(group, profile) {
+  return group.created_by_uid === profile.uid ||
+    (canDeleteScope(profile, group.scope_type) &&
+      groupBelongsToProfile(group, profile));
+}
+
+const STANDARD_GROUP_TYPES = [
+  { key: "CHOIR", label: "Choir" },
+  { key: "PRAYER_TEAM", label: "Prayer Team" },
+  { key: "BIBLE_STUDY", label: "Bible Study" },
+  { key: "LEADERS", label: "Leaders" }
+];
+
+function normalizeGroupType(value) {
+  return normalizeString(value)
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function standardGroupType(value) {
+  const normalized = normalizeGroupType(value);
+  return STANDARD_GROUP_TYPES.find(type =>
+    type.key === normalized ||
+    (type.key === "PRAYER_TEAM" && normalized === "PRAYER") ||
+    (type.key === "BIBLE_STUDY" && normalized === "BIBLESTUDY") ||
+    (type.key === "LEADERS" && normalized === "LEADER")
+  );
+}
+
+function groupMatchesScopeIdentity(group, profile, scopeType) {
+  const scope = normalizeScopeType(scopeType);
+  if (normalizeScopeType(group.scope_type) !== scope) return false;
+  if (scope === "NATIONAL") return true;
+  if (scope === "REGIONAL") return String(group.region_id ?? "") === String(profile.regionId ?? "");
+  if (scope === "DISTRICT") return String(group.district_id ?? "") === String(profile.districtId ?? "");
+  return String(group.branch_id ?? "") === String(profile.branchId ?? "");
+}
+
+function standardGroupName(scopeType, standardType) {
+  const scopeLabel = scopeType.charAt(0) + scopeType.slice(1).toLowerCase();
+  return `${scopeLabel} ${standardType.label}`;
+}
+
+async function ensureStandardGroups(profile, scopeType, documents) {
+  const existingDocuments = documents || [];
+  const createdDocuments = [];
+
+  for (const standardType of STANDARD_GROUP_TYPES) {
+    const existing = existingDocuments.find(document => {
+      const data = document.data || document;
+      return data.is_active !== false &&
+        groupMatchesScopeIdentity(data, profile, scopeType) &&
+        standardGroupType(data.group_type)?.key === standardType.key;
+    });
+
+    if (existing) {
+      continue;
+    }
+
+    const scope = normalizeScopeType(scopeType);
+    const now = new Date().toISOString();
+    const groupId = randomUUID();
+    const data = {
+      group_name: standardGroupName(scope, standardType),
+      description: `${standardGroupName(scope, standardType)} group`,
+      group_type: standardType.key,
+      scope_type: scope,
+      parent_group_id: scope === "NATIONAL"
+        ? "national"
+        : scope === "REGIONAL"
+          ? `region:${profile.regionId}`
+          : scope === "DISTRICT"
+            ? `district:${profile.districtId}`
+            : `branch:${profile.branchId}`,
+      region_id: scope === "REGIONAL" ? profile.regionId : null,
+      district_id: scope === "DISTRICT" ? profile.districtId : null,
+      branch_id: scope === "BRANCH" ? profile.branchId : null,
+      created_by_uid: profile.uid,
+      created_at: now,
+      is_active: true
+    };
+
+    const document = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "POST",
+      "",
+      { documentId: groupId, data }
+    );
+    await appwriteCollectionRequest(
+      COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+      "POST",
+      "",
+      {
+        documentId: `${groupId}:${profile.uid}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 36),
+        data: {
+          group_id: groupId,
+          user_uid: profile.uid,
+          role: "administrator",
+          joined_at: now,
+          is_active: true
+        }
+      }
+    );
+    createdDocuments.push(document);
+    existingDocuments.push(document);
+  }
+
+  return createdDocuments;
+}
+
+async function countGroupMembers(groupId) {
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [groupId] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [500] }
+    ]
+  );
+  return (rows.documents || []).length;
+}
+
+async function isGroupMember(groupId, uid) {
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [groupId] },
+      { method: "equal", attribute: "user_uid", values: [uid] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [1] }
+    ]
+  );
+  return (rows.documents || []).length > 0;
+}
+
+async function authorizeGroupAccess(groupId, profile) {
+  const document = await appwriteCollectionRequest(
+    COMMUNITY_GROUPS_COLLECTION_ID,
+    "GET",
+    `/${encodeURIComponent(groupId)}`
+  );
+  const group = document.data || document;
+  if (!group || group.is_active === false ||
+      (group.created_by_uid !== profile.uid &&
+        !(await isGroupMember(groupId, profile.uid)))) {
+    const error = new Error("You are not a member of this group.");
+    error.statusCode = 403;
+    throw error;
+  }
+  return group;
+}
+
+function mapGroupDocument(document, profile, memberCount = 0) {
+  const data = document.data || document;
+  return {
+    groupId: document.$id || document.id || data.group_id,
+    groupName: data.group_name || "",
+    description: data.description || "",
+    groupType: data.group_type || "CUSTOM",
+    scopeType: data.scope_type || "BRANCH",
+    parentGroupId: data.parent_group_id || "",
+    regionId: parseOptionalInt(data.region_id),
+    districtId: parseOptionalInt(data.district_id),
+    branchId: parseOptionalInt(data.branch_id),
+    createdByUid: data.created_by_uid || "",
+    createdAt: data.created_at || null,
+    isActive: data.is_active !== false,
+    canManage: canManageGroup(data, profile),
+    memberCount
+  };
+}
+
+async function listChurchGroups(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const requestedScope = normalizeScopeType(req.query?.scopeType);
+  const rows = await appwriteCollectionRequest(
+    COMMUNITY_GROUPS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "limit", values: [500] }]
+  );
+  rows.documents = rows.documents || [];
+  if (requestedScope && canManageScope(profile, requestedScope)) {
+    await ensureStandardGroups(profile, requestedScope, rows.documents || []);
+    if (rows.documents.length < 500) {
+      const refreshed = await appwriteCollectionRequest(
+        COMMUNITY_GROUPS_COLLECTION_ID,
+        "GET",
+        "",
+        undefined,
+        [{ method: "limit", values: [500] }]
+      );
+      rows.documents = refreshed.documents || [];
+    }
+  }
+  const groups = [];
+  for (const document of (rows.documents || [])) {
+      const data = document.data || document;
+      if ((requestedScope && normalizeScopeType(data.scope_type) !== requestedScope) ||
+          !groupBelongsToProfile(data, profile)) continue;
+      const isCreator = data.created_by_uid === profile.uid;
+      const isStandard = Boolean(standardGroupType(data.group_type));
+      if (!isCreator && !isStandard &&
+          !(await isGroupMember(document.$id || data.group_id, profile.uid))) continue;
+      groups.push(mapGroupDocument(
+        document,
+        profile,
+        await countGroupMembers(document.$id || data.group_id)
+      ));
+  }
+  return { groups };
+}
+
+async function createChurchGroup(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const body = getRequestBody(req);
+  const name = normalizeString(body.name);
+  const description = normalizeString(body.description);
+  const groupType = normalizeString(body.groupType || "CUSTOM").toUpperCase();
+  const scopeType = normalizeScopeType(body.scopeType);
+
+  if (name.length < 2 || name.length > 120) {
+    throw announcementError("Group name must be between 2 and 120 characters.");
+  }
+
+  async function deleteChurchGroup(req, log, groupId) {
+    const firebaseUser = await verifyFirebaseRequest(req, log);
+    const profile = await getAnnouncementProfile(firebaseUser);
+    const document = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "GET",
+      `/${encodeURIComponent(groupId)}`
+    );
+    const data = document.data || document;
+    if (!data || data.is_active === false) {
+      throw announcementError("Group was not found.", 404);
+    }
+
+    const isOwner = data.created_by_uid === profile.uid;
+    const canManage =
+      canDeleteScope(profile, data.scope_type) &&
+      groupBelongsToProfile(data, profile);
+    if (!isOwner && !canManage) {
+      throw announcementError("You are not authorized to delete this group.", 403);
+    }
+
+    const updated = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "PATCH",
+      `/${encodeURIComponent(groupId)}`,
+      {
+        data: {
+          is_active: false,
+          updated_at: new Date().toISOString()
+        }
+      }
+    );
+    return {
+      success: true,
+      groupId,
+      isActive: (updated.data || updated).is_active !== false
+    };
+  }
+  if (!scopeType || !canManageScope(profile, scopeType)) {
+    throw announcementError("You are not authorized to create a group in this scope.", 403);
+  }
+
+  const existing = await appwriteCollectionRequest(
+    COMMUNITY_GROUPS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [{ method: "limit", values: [500] }]
+  );
+  const existingStandard = (existing.documents || []).find(document => {
+    const data = document.data || document;
+    return data.is_active !== false &&
+      groupMatchesScopeIdentity(data, profile, scopeType) &&
+      standardGroupType(data.group_type)?.key === normalizeGroupType(groupType);
+  });
+  if (existingStandard) {
+    const data = existingStandard.data || existingStandard;
+    return mapGroupDocument(
+      existingStandard,
+      profile,
+      await countGroupMembers(existingStandard.$id || data.group_id)
+    );
+  }
+  const normalizedName = name.toLowerCase();
+  const duplicate = (existing.documents || []).some(document => {
+    const data = document.data || document;
+    return groupBelongsToProfile(data, profile) &&
+      normalizeScopeType(data.scope_type) === scopeType &&
+      normalizeString(data.group_name).toLowerCase() === normalizedName;
+  });
+  if (duplicate) {
+    throw announcementError("An active group with this name already exists in the selected scope.", 409);
+  }
+
+  const now = new Date().toISOString();
+  const groupId = randomUUID();
+  const data = {
+    group_name: name,
+    description: description.slice(0, 2000),
+    group_type: groupType.slice(0, 64),
+    scope_type: scopeType,
+    parent_group_id: scopeType === "NATIONAL"
+      ? "national"
+      : scopeType === "REGIONAL"
+        ? `region:${profile.regionId}`
+        : scopeType === "DISTRICT"
+          ? `district:${profile.districtId}`
+          : `branch:${profile.branchId}`,
+    region_id: scopeType === "REGIONAL" ? profile.regionId : null,
+    district_id: scopeType === "DISTRICT" ? profile.districtId : null,
+    branch_id: scopeType === "BRANCH" ? profile.branchId : null,
+    created_by_uid: profile.uid,
+    created_at: now,
+    is_active: true
+  };
+
+  try {
+    const document = await appwriteCollectionRequest(
+      COMMUNITY_GROUPS_COLLECTION_ID,
+      "POST",
+      "",
+      { documentId: groupId, data }
+    );
+    await appwriteCollectionRequest(
+      COMMUNITY_GROUP_MEMBERS_COLLECTION_ID,
+      "POST",
+      "",
+      {
+        documentId: `${groupId}:${profile.uid}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 36),
+        data: {
+          group_id: groupId,
+          user_uid: profile.uid,
+          role: "administrator",
+          joined_at: now,
+          is_active: true
+        }
+      }
+    );
+    return mapGroupDocument(document, profile, 1);
+  } catch (error) {
+    try {
+      await appwriteCollectionRequest(
+        COMMUNITY_GROUPS_COLLECTION_ID,
+        "DELETE",
+        `/${encodeURIComponent(groupId)}`
+      );
+    } catch (rollbackError) {
+      log(`[CCT_GROUP_ROLLBACK_FAILED] group=${groupId} error=${rollbackError.message}`);
+    }
+    throw error;
+  }
+}
+
+async function listGroupMessages(
+  req,
+  log
+) {
+  const firebaseUser =
+    await verifyFirebaseRequest(
+      req,
+      log
+    );
+
+  const profile = await getAnnouncementProfile(firebaseUser);
+
+  const body =
+    getRequestBody(req);
+
+  const communityId =
+    normalizeString(
+      req.query?.communityId ??
+      req.query?.community_id ??
+      body.communityId ??
+      body.community_id
+    );
+
+  if (!communityId) {
+    throw new Error(
+      "communityId is required."
+    );
+  }
+
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+    await authorizeGroupAccess(communityId, profile);
+  }
+
+  const organizationalLevel =
+    normalizeString(
+      req.query?.organizationalLevel ??
+      req.query?.organizational_level ??
+      body.organizationalLevel ??
+      body.organizational_level ??
+      ""
+    );
+
+  const branchId =
+    parseOptionalInt(
+      req.query?.branchId ??
+      req.query?.branch_id ??
+      body.branchId ??
+      body.branch_id
+    );
+
+  const regionId =
+    parseOptionalInt(
+      req.query?.regionId ??
+      req.query?.region_id ??
+      body.regionId ??
+      body.region_id
+    );
+
+  const districtId =
+    parseOptionalInt(
+      req.query?.districtId ??
+      req.query?.district_id ??
+      body.districtId ??
+      body.district_id
+    );
+
+  const newerThanValue =
+    getQueryValue(req, "newerThan") ??
+    getQueryValue(req, "newer_than") ??
+    body.newerThan ??
+    body.newer_than;
+
+  const newerThan =
+    parseRequestDate(
+      newerThanValue
+    );
+
+  const newerThanMs =
+    newerThan &&
+    !Number.isNaN(newerThan.getTime())
+      ? newerThan.getTime()
+      : null;
+
+  const membershipSince =
+    parseRequestDate(
+      getQueryValue(req, "membershipSince") ??
+      getQueryValue(req, "membership_since") ??
+      body.membershipSince ??
+      body.membership_since ??
+      profile.createdAt
+    );
+
+  if (
+    organizationalLevel.toLowerCase() === "branch" &&
+    (!profile.branchId || profile.branchId !== branchId)
+  ) {
+    const authorizationError = new Error(
+      "You are not assigned to this branch."
+    );
+    authorizationError.statusCode = 403;
+    throw authorizationError;
+  }
+
+  let limit =
+    parseOptionalInt(
+      req.query?.limit ??
+      body.limit
+    );
+
+  if (
+    !limit ||
+    limit < 1
+  ) {
+    limit = 50;
+  }
+
+  if (limit > 100) {
+    limit = 100;
+  }
+
+  log(
+    `[CCT_MESSAGE_LIST] UID=${firebaseUser.uid} ` +
+    `communityId=${communityId} ` +
+    `newerThan=${newerThan?.toISOString() ?? "none"}`
+  );
+
+  const cursor = normalizeString(
+    getQueryValue(req, "cursor") ??
+    body.cursor ??
+    ""
+  );
+
+  const queries = [
+    { method: "equal", attribute: "community_id", values: [communityId] },
+    { method: "equal", attribute: "organization_type", values: [organizationalLevel || "Branch"] },
+    { method: "limit", values: [Math.min(limit, 50)] },
+    { method: "orderDesc", attribute: "created_at" }
+  ];
+
+  if (branchId !== null) queries.push({ method: "equal", attribute: "branch_id", values: [String(branchId)] });
+  if (regionId !== null) queries.push({ method: "equal", attribute: "region_id", values: [String(regionId)] });
+  if (districtId !== null) queries.push({ method: "equal", attribute: "district_id", values: [String(districtId)] });
+  if (membershipSince && !Number.isNaN(membershipSince.getTime())) {
+    queries.push({ method: "greaterThanEqual", attribute: "created_at", values: [membershipSince.toISOString()] });
+  }
+  if (newerThan && !Number.isNaN(newerThan.getTime())) {
+    queries.push({ method: "greaterThan", attribute: "created_at", values: [newerThan.toISOString()] });
+  }
+  if (cursor) queries.push({ method: "cursorAfter", values: [cursor] });
+
+  log(
+    `[CCT_MESSAGE_LIST] Appwrite TablesDB query ` +
+    `communityId=${communityId} branchId=${branchId ?? "none"} ` +
+    `membershipSince=${membershipSince?.toISOString() ?? "none"} ` +
+    `limit=${Math.min(limit, 50)} cursor=${cursor || "none"}`
+  );
+
+  const page = await appwriteTableRowRequest(
+    COMMUNITY_MESSAGES_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    queries
+  );
+  const documents = Array.isArray(page.rows)
+    ? page.rows
+    : (Array.isArray(page.documents) ? page.documents : []);
+  const nextCursor = documents.length === Math.min(limit, 50)
+    ? documents[documents.length - 1].$id
+    : null;
+
+  const items =
+    documents
+      .filter(document => {
+        const documentCommunityId =
+          normalizeString(document.community_id);
+
+        if (documentCommunityId !== communityId) {
+          return false;
+        }
+
+        const documentOrganizationType =
+          normalizeString(
+            document.organization_type ??
+            document.organizational_level
+          );
+
+        if (
+          organizationalLevel &&
+          documentOrganizationType !== organizationalLevel
+        ) {
+          return false;
+        }
+
+        if (newerThanMs !== null) {
+          const createdAtMs =
+            new Date(
+              document.created_at ??
+              document.$createdAt ??
+              0
+            ).getTime();
+
+          if (
+            Number.isNaN(createdAtMs) ||
+            createdAtMs <= newerThanMs
+          ) {
+            return false;
+          }
+        }
+
+        const matchesOptionalId =
+          (requestedId, documentValue) =>
+            requestedId === null ||
+            normalizeString(documentValue) ===
+              String(requestedId);
+
+        return (
+          matchesOptionalId(branchId, document.branch_id) &&
+          matchesOptionalId(regionId, document.region_id) &&
+          matchesOptionalId(districtId, document.district_id)
+        );
+      })
+      .sort((left, right) => {
+        const leftDate =
+          new Date(
+            left.created_at ??
+            left.$createdAt ??
+            0
+          ).getTime();
+        const rightDate =
+          new Date(
+            right.created_at ??
+            right.$createdAt ??
+            0
+          ).getTime();
+
+        return rightDate - leftDate;
+      })
+      .map(
+        mapMessageDocument
+      );
+
+  log(
+    `[CCT_MESSAGE_LIST] Filtered response count=${items.length} ` +
+    `membershipSinceApplied=${membershipSince !== null} cursor=${nextCursor ?? "none"}`
+  );
+
+  return {
+    ...buildListResponse(items),
+    nextCursor
+  };
+}
+
+
+/* ============================================================
+ * POST CREATE GROUP MESSAGE
+ * ============================================================
+ */
+
+async function createGroupMessage(
+  req,
+  log
+) {
+  const body =
+    getRequestBody(req);
+
+  log(
+    "[CCT_MESSAGE_CREATE] Request body parsed."
+  );
+
+  /*
+   * Firebase authentication MUST happen
+   * before Appwrite message creation.
+   */
+  const firebaseUser =
+    await verifyFirebaseRequest(
+      req,
+      log
+    );
+
+  const communityId =
+    normalizeString(
+      body.communityId ??
+      body.community_id ??
+      ""
+    );
+
+  if (!communityId) {
+    throw new Error(
+      "communityId is required."
+    );
+  }
+
+  const profile = await getAnnouncementProfile(firebaseUser);
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+    await authorizeGroupAccess(communityId, profile);
+  }
+
+  const messageType =
+    normalizeString(
+      body.messageType ??
+      body.message_type ??
+      "text"
+    ).toLowerCase();
+
+  if (
+    !isAllowedMessageType(
+      messageType
+    )
+  ) {
+    throw new Error(
+      "Invalid messageType."
+    );
+  }
+
+  const content =
+    normalizeString(
+      body.content ??
+      ""
+    );
+
+  const mediaUrl =
+    normalizeString(
+      body.mediaUrl ??
+      body.media_url ??
+      ""
+    );
+
+  if (
+    messageType === "text" &&
+    !content
+  ) {
+    throw new Error(
+      "Text message content is required."
+    );
+  }
+
+  if (
+    messageType !== "text" &&
+    !mediaUrl
+  ) {
+    throw new Error(
+      "mediaUrl is required for media messages."
+    );
+  }
+
+  /*
+   * SECURITY:
+   *
+   * Firebase verified UID is authoritative.
+   *
+   * senderUid supplied by the mobile client
+   * is deliberately ignored.
+   */
+  const senderUid =
+    firebaseUser.uid;
+
+  const senderName =
+    normalizeString(
+      body.senderName ??
+      body.sender_name ??
+      firebaseUser.name ??
+      firebaseUser.email ??
+      ""
+    );
+
+  const clientMessageId =
+    normalizeString(
+      body.clientMessageId ??
+      body.client_message_id ??
+      ""
+    );
+
+  const messageId =
+    clientMessageId ||
+    randomUUID().replace(
+      /-/g,
+      ""
+    );
+
+  const branchId =
+    parseOptionalInt(
+      body.branchId ??
+      body.branch_id
+    );
+
+  const regionId =
+    parseOptionalInt(
+      body.regionId ??
+      body.region_id
+    );
+
+  const districtId =
+    parseOptionalInt(
+      body.districtId ??
+      body.district_id
+    );
+
+  const organizationalLevel =
+    normalizeString(
+      body.organizationalLevel ??
+      body.organizational_level ??
+      "Branch"
+    ) || "Branch";
+
+  if (organizationalLevel.toLowerCase() === "branch") {
+    if (!profile.branchId || profile.branchId !== branchId) {
+      const authorizationError = new Error("You are not assigned to this branch.");
+      authorizationError.statusCode = 403;
+      throw authorizationError;
+    }
+  }
+
+  const thumbnailUrl =
+    normalizeString(
+      body.thumbnailUrl ??
+      body.thumbnail_url ??
+      ""
+    );
+
+  const fileName =
+    normalizeString(
+      body.fileName ??
+      body.file_name ??
+      ""
+    );
+
+  const fileSize =
+    toNumber(
+      body.fileSize ??
+      body.file_size ??
+      0
+    );
+
+  const duration =
+    toNumber(
+      body.duration ??
+      0
+    );
+
+  const appwriteTeamId =
+    normalizeString(
+      body.appwriteTeamId ??
+      body.appwrite_team_id ??
+      ""
+    );
+
+  const organizationId =
+    normalizeString(
+      body.organizationId ??
+      body.organization_id ??
+      ""
+    );
+
+  const createdAt =
+    new Date().toISOString();
+
+  log(
+    "[CCT_MESSAGE_CREATE] Starting create..."
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] MessageId=${messageId}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] ClientMessageId=${clientMessageId || messageId}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] CommunityId=${communityId}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] MessageType=${messageType}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] Verified Firebase UID=${senderUid}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] BranchId=${branchId ?? ""}`
+  );
+
+  const documentData = {
+    message_id:
+      messageId,
+
+    client_message_id:
+      clientMessageId ||
+      messageId,
+
+    sender_uid:
+      senderUid,
+
+    sender_name:
+      senderName,
+
+    content:
+      content,
+
+    community_id:
+      communityId,
+
+    branch_id:
+      branchId !== null
+        ? String(branchId)
+        : null,
+
+    region_id:
+      regionId !== null
+        ? String(regionId)
+        : null,
+
+    district_id:
+      districtId !== null
+        ? String(districtId)
+        : null,
+
+    organization_type:
+      organizationalLevel,
+
+    organization_id:
+      organizationId,
+
+    message_type:
+      messageType,
+
+    media_url:
+      mediaUrl,
+
+    thumbnail_url:
+      thumbnailUrl,
+
+    file_name:
+      fileName,
+
+    file_size:
+      fileSize,
+
+    duration:
+      duration,
+
+    created_at:
+      createdAt,
+
+    appwrite_team_id:
+      appwriteTeamId,
+
+    is_deleted:
+      false,
+
+    is_edited:
+      false,
+
+    reply_to_message_id:
+      normalizeString(body.replyToMessageId ?? body.reply_to_message_id ?? "") || null,
+
+    reply_to_sender_name:
+      normalizeString(body.replyToSenderName ?? body.reply_to_sender_name ?? "") || null,
+
+    reply_to_preview:
+      normalizeString(body.replyToPreview ?? body.reply_to_preview ?? "") || null
+  };
+
+  log(
+    `[CCT_MESSAGE_CREATE] Database=${DEFAULT_DATABASE_ID}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] Collection=${COMMUNITY_MESSAGES_COLLECTION_ID}`
+  );
+
+  log("[CCT_MESSAGE_CREATE] Appwrite REST create START");
+
+  let document;
+
+  try {
+    document = await appwriteTableRowRequest(
+      COMMUNITY_MESSAGES_COLLECTION_ID,
+      "POST",
+      "",
+      {
+        rowId: messageId,
+        data: documentData
+      }
+    );
+
+    log(
+      `[CCT_MESSAGE_CREATE] Appwrite TablesDB create SUCCESS rowId=${document.$id || document.id || ""}`
+    );
+
+  } catch (error) {
+    logErrorDetails(
+      log,
+      error,
+      "Appwrite createDocument"
+    );
+
+    throw error;
+  }
+
+  const message =
+    mapMessageDocument(
+      document
+    );
+
+  await notifyBranchMessageRecipients(
+    message,
+    firebaseUser.uid,
+    log
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] Mapped response MessageId=${message.messageId}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] Mapped response ClientMessageId=${message.clientMessageId}`
+  );
+
+  log(
+    `[CCT_MESSAGE_CREATE] Mapped response CommunityId=${message.communityId}`
+  );
+
+  if (!message.messageId) {
+    throw new Error(
+      "Appwrite document was created but mapped MessageId is empty."
+    );
+  }
+
+  if (!message.communityId) {
+    throw new Error(
+      "Appwrite document was created but mapped CommunityId is empty."
+    );
+  }
+
+  return buildCreateResponse(
+    message
+  );
+}
+
+async function notifyBranchMessageRecipients(message, senderUid, log) {
+  const branchId = normalizeString(message.branchId);
+  if (!branchId) return;
+
+  try {
+    const tokenPage = await appwriteTableRowRequest(
+      CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+      "GET",
+      "",
+      undefined,
+      [
+        { method: "equal", attribute: "branch_id", values: [branchId] },
+        { method: "limit", values: [100] }
+      ]
+    );
+    const tokens = (tokenPage.rows || tokenPage.documents || [])
+      .filter(token => normalizeString(token.user_uid) !== senderUid)
+      .map(token => normalizeString(token.token))
+      .filter(Boolean);
+    if (!tokens.length) return;
+
+    const preview = message.isDeleted
+      ? "Message deleted"
+      : normalizeString(message.content).slice(0, 120);
+    const result = await firebaseMessaging.sendEachForMulticast({
+      tokens,
+      notification: {
+        title: message.senderName || "Branch Church Group",
+        body: preview
+      },
+      data: {
+        type: "branch_message",
+        groupId: branchId,
+        messageId: normalizeString(message.messageId)
+      }
+    });
+    log(`[FCM] Branch notification target group=${branchId} sent=${result.successCount} failed=${result.failureCount}`);
+  } catch (error) {
+    log(`[FCM] Branch notification failed group=${branchId}: ${error.message}`);
+  }
+}
+
+async function updateGroupMessage(req, log, messageId, deleted) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const row = await appwriteTableRowRequest(
+    COMMUNITY_MESSAGES_COLLECTION_ID,
+    "GET",
+    `/${encodeURIComponent(messageId)}`
+  );
+
+  if (normalizeString(row.sender_uid) !== firebaseUser.uid) {
+    const authorizationError = new Error(
+      "You are not authorized to change this message."
+    );
+    authorizationError.statusCode = 403;
+    throw authorizationError;
+  }
+
+  const body = getRequestBody(req);
+  const now = new Date().toISOString();
+  const data = deleted
+    ? {
+        content: "Message deleted",
+        is_deleted: true,
+        deleted_at: now,
+        updated_at: now
+      }
+    : {
+        content: normalizeString(body.content ?? ""),
+        is_edited: true,
+        updated_at: now
+      };
+
+  if (!deleted && !data.content) {
+    throw new Error("Message content is required.");
+  }
+
+  const updated = await appwriteTableRowRequest(
+    COMMUNITY_MESSAGES_COLLECTION_ID,
+    "PATCH",
+    `/${encodeURIComponent(messageId)}`,
+    { data }
+  );
+
+  return mapMessageDocument(updated);
+}
+
+const CCT_POSTS_COLLECTION_ID = "cct_posts";
+
+function mapCctPostDocument(document) {
+  const data = document?.data || document || {};
+  return {
+    id: document.$id || document.id,
+    userId: normalizeString(data.user_id),
+    content: normalizeString(data.content),
+    postType: normalizeString(data.post_type),
+    mediaType: normalizeString(data.media_type || "none"),
+    mediaUrl: data.media_url || null,
+    siaObjectId: data.sia_object_id || null,
+    mediaSize: data.media_size ?? null,
+    status: normalizeString(data.status),
+    isPublished: data.is_published === true || data.is_published === "true",
+    createdAtUtc: safeIsoDate(document.$createdAt || data.created_at),
+    updatedAtUtc: safeIsoDate(document.$updatedAt || data.updated_at || document.$createdAt)
+  };
+}
+
+async function listCctPosts(req, log) {
+  await verifyFirebaseRequest(req, log);
+  const limit = Math.min(Math.max(parseOptionalInt(new URL(req.url).searchParams.get("limit")) || 20, 1), 50);
+  const result = await appwriteTableRowRequest(
+    CCT_POSTS_COLLECTION_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "is_published", values: [true] },
+      { method: "equal", attribute: "status", values: ["published"] },
+      { method: "orderDesc", attribute: "$createdAt" },
+      { method: "limit", values: [limit] }
+    ]
+  );
+  return (result.rows || []).map(mapCctPostDocument);
+}
+
+async function createCctPost(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+  const content = normalizeString(body.content);
+  const postType = normalizeString(body.postType);
+  if (!content) throw announcementError("Post content is required.", 400);
+  if (!postType) throw announcementError("Post type is required.", 400);
+  if (content.length > 5000) throw announcementError("Post content is too long.", 400);
+
+  const document = await appwriteTableRowRequest(
+    CCT_POSTS_COLLECTION_ID,
+    "POST",
+    "",
+    {
+      rowId: randomUUID().replace(/-/g, ""),
+      data: {
+        user_id: firebaseUser.uid,
+        content,
+        post_type: postType,
+        media_type: "none",
+        media_url: null,
+        sia_object_id: null,
+        media_size: null,
+        status: "published",
+        is_published: true
+      }
+    }
+  );
+  return mapCctPostDocument(document);
+}
+
+async function submitSupportRequest(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+
+  const category = normalizeString(body.category || body.type || "");
+  const subject = normalizeString(body.subject || "");
+  const message = normalizeString(body.message || "");
+
+  if (!category) {
+    throw announcementError("Please choose a support category.", 400);
+  }
+
+  if (!subject) {
+    throw announcementError("Please add a subject.", 400);
+  }
+
+  if (!message) {
+    throw announcementError("Please add a message.", 400);
+  }
+
+  const userId = normalizeString(body.userId || body.user_id || firebaseUser.uid || "");
+  const userEmail = normalizeString(body.userEmail || body.user_email || firebaseUser.email || "");
+  const userName = normalizeString(body.userName || body.user_name || firebaseUser.name || firebaseUser.email || "");
+  const appVersion = normalizeString(body.appVersion || body.app_version || "");
+  const platform = normalizeString(body.platform || "Android");
+  const now = new Date().toISOString();
+  const documentId = randomUUID();
+
+  const document = await appwriteCollectionRequest(
+    SUPPORT_REQUESTS_COLLECTION_ID,
+    "POST",
+    "",
+    {
+      documentId,
+      data: {
+        user_id: userId || firebaseUser.uid,
+        user_email: userEmail || firebaseUser.email || "",
+        user_name: userName,
+        category: category.slice(0, 64),
+        subject: subject.slice(0, 255),
+        message: message.slice(0, 5000),
+        status: "new",
+        app_version: appVersion.slice(0, 128),
+        platform: platform.slice(0, 32),
+        created_at: now,
+        updated_at: now
+      }
+    }
+  );
+
+  log(`[CCT_SUPPORT_REQUEST] uid=${firebaseUser.uid} category=${category} subject=${subject}`);
+
+  return {
+    success: true,
+    id: document.$id || document.id || documentId,
+    status: "new"
+  };
+}
+
+
+/* ============================================================
+ * ROUTE RESOLUTION
+ * ============================================================
+ */
+
+function getRoute(req) {
+  const url =
+    new URL(
+      req.url ||
+      "https://example.invalid/"
+    );
+
+  return (
+    url.pathname ||
+    req.path ||
+    "/"
+  )
+    .split("?")[0]
+    .replace(
+      /\/+$/,
+      ""
+    );
+}
+
+
+/* ============================================================
+ * ERROR STATUS
+ * ============================================================
+ */
+
+function getErrorStatusCode(error) {
+  if (
+    error &&
+    Number.isInteger(
+      error.statusCode
+    )
+  ) {
+    return error.statusCode;
+  }
+
+  const message =
+    error?.message ||
+    "";
+
+  if (
+    message ===
+      "Missing Authorization header." ||
+    message ===
+      "Invalid Authorization header." ||
+    message ===
+      "Missing Firebase ID token." ||
+    message ===
+      "Firebase ID-token verification failed."
+  ) {
+    return 401;
+  }
+
+  if (
+    message ===
+    "Method not allowed."
+  ) {
+    return 405;
+  }
+
+  return 500;
+}
+
+
+/* ============================================================
+ * MAIN APPWRITE FUNCTION
+ * ============================================================
+ */
+
+export default async ({
+  req,
+  res,
+  log,
+  error
+}) => {
+  let currentStage =
+    "Function startup";
+
+  try {
+    log(
+      "CCT API function started"
+    );
+
+    const route =
+      getRoute(req);
+
+    log(
+      `CCT community route: ${route}`
+    );
+
+    log(
+      `CCT request method: ${req.method}`
+    );
+
+    log(
+      `CCT request URL: ${req.url || ""}`
+    );
+
+    log(
+      `CCT request path: ${req.path || ""}`
+    );
+
+      if (process.env.APPWRITE_BOOTSTRAP_COLLECTIONS === "true") {
+        await ensureChurchAnnouncementCollections();
+      }
+
+    if (route === "/api/church-announcements/options" ||
+        route === "api/church-announcements/options") {
+      if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
+      currentStage = "GET church announcement options";
+      return jsonResponse(res, await getAnnouncementOptions(req, log), 200);
+    }
+
+    if (route === "/api/prayers" || route === "api/prayers") {
+      if (req.method === "GET") {
+        currentStage = "GET prayer requests";
+        return jsonResponse(res, await listPrayerRequests(req, log), 200);
+      }
+      if (req.method === "POST") {
+        currentStage = "POST prayer request";
+        return jsonResponse(res, await createPrayerRequest(req, log), 201);
+      }
+      throw announcementError("Method not allowed.", 405);
+    }
+
+    const prayerActionMatch = route.match(
+      /^\/?api\/prayers\/([^/]+)\/(pray|actions)$/
+    );
+    if (prayerActionMatch) {
+      const prayerId = decodeURIComponent(prayerActionMatch[1]);
+      if (prayerActionMatch[2] === "pray") {
+        if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+        currentStage = "POST prayer action";
+        return jsonResponse(res, await recordPrayerAction(req, log, prayerId), 200);
+      }
+      if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
+      currentStage = "GET prayer action summary";
+      return jsonResponse(res, await getPrayerActionSummary(req, log, prayerId), 200);
+    }
+
+    if (route === "/api/church-announcements" ||
+        route === "api/church-announcements") {
+      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+      currentStage = "POST church announcement";
+      return jsonResponse(res, await createChurchAnnouncement(req, log), 201);
+    }
+
+    if (route === "/api/church-announcements/token" ||
+        route === "api/church-announcements/token") {
+      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+      currentStage = "POST church device token";
+      return jsonResponse(res, await upsertDeviceToken(req, log), 200);
+    }
+
+    if (route === "/api/church-announcements/notifications" ||
+        route === "api/church-announcements/notifications") {
+      if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
+      currentStage = "GET church notifications";
+      return jsonResponse(res, await listChurchNotifications(req, log), 200);
+    }
+
+    if (route === "/api/church-announcements/notifications/unread-count" ||
+        route === "api/church-announcements/notifications/unread-count") {
+      if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
+      currentStage = "GET church unread count";
+      return jsonResponse(res, await getUnreadChurchNotificationCount(req, log), 200);
+    }
+
+    const readNotificationMatch = route.match(
+      /^\/?api\/church-announcements\/notifications\/([^/]+)\/read$/
+    );
+    if (readNotificationMatch) {
+      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+      currentStage = "POST church notification read";
+      return jsonResponse(
+        res,
+        await markChurchNotificationRead(req, log, decodeURIComponent(readNotificationMatch[1])),
+        200
+      );
+    }
+
+    if (route === "/api/community/posts" ||
+        route === "api/community/posts") {
+      if (req.method === "GET") {
+        currentStage = "GET CCT posts";
+        return jsonResponse(res, await listCctPosts(req, log), 200);
+      }
+      if (req.method === "POST") {
+        currentStage = "POST CCT post";
+        return jsonResponse(res, await createCctPost(req, log), 201);
+      }
+      throw announcementError("Method not allowed.", 405);
+    }
+
+    if (route === "/api/support/feedback" || route === "api/support/feedback") {
+      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+      currentStage = "POST support request";
+      return jsonResponse(res, await submitSupportRequest(req, log), 201);
+    }
+
+    /*
+     * ========================================================
+     * COMMUNITY GROUP REGISTRY ROUTE
+     * ========================================================
+     */
+
+    if (
+      route === "/api/community/groups" ||
+      route === "api/community/groups"
+    ) {
+      if (req.method === "GET") {
+        currentStage = "GET community groups";
+        return jsonResponse(res, await listChurchGroups(req, log), 200);
+      }
+      if (req.method === "POST") {
+        currentStage = "POST community group";
+        return jsonResponse(res, await createChurchGroup(req, log), 201);
+      }
+      return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
+    }
+
+    const groupMutation = route.match(/^\/?api\/community\/groups\/([^/]+)$/);
+    if (groupMutation) {
+      if (req.method !== "DELETE") {
+        return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
+      }
+      currentStage = "DELETE community group";
+      return jsonResponse(
+        res,
+        await deleteChurchGroup(req, log, decodeURIComponent(groupMutation[1])),
+        200
+      );
+    }
+
+    /*
+     * ========================================================
+     * COMMUNITY GROUP MESSAGE ROUTE
+     * ========================================================
+     */
+
+    if (
+      route ===
+        "/api/community/messages/group" ||
+      route ===
+        "api/community/messages/group"
+    ) {
+
+      /*
+       * ------------------------------------------------------
+       * GET
+       * ------------------------------------------------------
+       */
+
+      if (
+        req.method === "GET"
+      ) {
+        currentStage =
+          "GET group messages";
+
+        const result =
+          await listGroupMessages(
+            req,
+            log
+          );
+
+        return jsonResponse(
+          res,
+          result,
+          200
+        );
+      }
+
+
+      /*
+       * ------------------------------------------------------
+       * POST
+       * ------------------------------------------------------
+       */
+
+      if (
+        req.method === "POST"
+      ) {
+        currentStage =
+          "POST create group message";
+
+        const result =
+          await createGroupMessage(
+            req,
+            log
+          );
+
+        return jsonResponse(
+          res,
+          result,
+          200
+        );
+      }
+
+
+      /*
+       * ------------------------------------------------------
+       * OTHER METHODS
+       * ------------------------------------------------------
+       */
+
+      return jsonResponse(
+        res,
+        {
+          success: false,
+          error: "Method not allowed."
+        },
+        405
+      );
+    }
+
+    const groupMessageMutation = route.match(
+      /^\/?api\/community\/messages\/group\/([^/]+)$/
+    );
+    if (groupMessageMutation) {
+      const messageId = decodeURIComponent(groupMessageMutation[1]);
+      if (req.method === "PATCH" || req.method === "PUT") {
+        currentStage = "PATCH group message";
+        return jsonResponse(
+          res,
+          await updateGroupMessage(req, log, messageId, false),
+          200
+        );
+      }
+      if (req.method === "DELETE") {
+        currentStage = "DELETE group message";
+        return jsonResponse(
+          res,
+          await updateGroupMessage(req, log, messageId, true),
+          200
+        );
+      }
+      return jsonResponse(res, { error: "Method not allowed." }, 405);
+    }
+
+
+    /*
+     * ========================================================
+     * DEFAULT / HEALTH RESPONSE
+     * ========================================================
+     */
+
+    return jsonResponse(
+      res,
+      {
+        success: true,
+
+        service:
+          "CCT Appwrite API",
+
+        status:
+          "online",
+
+        route
+      },
+      200
+    );
+
+  } catch (e) {
+
+    /*
+     * --------------------------------------------------------
+     * SAFE DIAGNOSTICS
+     * --------------------------------------------------------
+     */
+
+    logErrorDetails(
+      log,
+      e,
+      currentStage
+    );
+
+
+    /*
+     * Preserve Appwrite error logger.
+     *
+     * This must NEVER replace the original
+     * exception if logging itself fails.
+     */
+
+    try {
+      error(e);
+    } catch {
+      // Ignore diagnostic logger failure.
+    }
+
+
+    const details =
+      getErrorDetails(e);
+
+    const statusCode =
+      getErrorStatusCode(e);
+
+    /*
+     * --------------------------------------------------------
+     * SAFE CLIENT RESPONSE
+     * --------------------------------------------------------
+     *
+     * Never return:
+     * - stack traces
+     * - Firebase tokens
+     * - Authorization headers
+     * - private keys
+     * - Appwrite API keys
+     * - credentials
+     */
+
+    return jsonResponse(
+      res,
+      {
+        success: false,
+
+        error:
+          details.message ||
+          "Internal server error.",
+        appwriteCode: e?.appwriteCode ?? null,
+        appwriteMessage: e?.appwriteMessage ?? null
+      },
+      statusCode
+    );
+  }
+};

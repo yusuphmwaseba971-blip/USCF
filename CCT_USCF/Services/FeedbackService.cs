@@ -14,8 +14,10 @@ public interface IFeedbackService
     Task<FeedbackReceipt> CreateBugReportAsync(BugFeedbackRequest request);
     Task<FeedbackReceipt> CreateSuggestionAsync(SuggestionFeedbackRequest request);
     Task<FeedbackReceipt> CreateGeneralFeedbackAsync(GeneralFeedbackRequest request);
+    Task<FeedbackReceipt> CreateSupportFeedbackAsync(string category, string subject, string message);
     Task<IReadOnlyList<FeedbackModel>> GetMyReportsAsync();
     Task<FeedbackAdminPage> GetMyReportsPageAsync(int offset, int limit);
+    Task<FeedbackModel> GetMyReportAsync(string feedbackId);
     Task<byte[]> GetScreenshotAsync(string feedbackId);
     Task<bool> IsFeedbackAdminAsync();
     Task<FeedbackAdminSummary> GetAdminSummaryAsync();
@@ -42,7 +44,7 @@ public sealed class FeedbackService : IFeedbackService
     public const int MaximumScreenshotBytes = 2 * 1024 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions =
-        new(JsonSerializerDefaults.Web);
+        FeedbackJsonContext.Default.Options;
 
     private readonly AuthService _authService;
     private readonly HttpClient _httpClient;
@@ -138,6 +140,33 @@ public sealed class FeedbackService : IFeedbackService
             null);
     }
 
+    public Task<FeedbackReceipt> CreateSupportFeedbackAsync(
+        string category,
+        string subject,
+        string message)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+            throw new FeedbackSubmissionException("Please choose a support category.");
+        if (string.IsNullOrWhiteSpace(subject))
+            throw new FeedbackSubmissionException("Please add a subject.");
+        if (string.IsNullOrWhiteSpace(message))
+            throw new FeedbackSubmissionException("Please add a message.");
+
+        return SubmitAsync(
+            Guid.NewGuid().ToString("N"),
+            FeedbackType.General,
+            FeedbackCategory.Other,
+            subject,
+            $"Support category: {category.Trim()}{Environment.NewLine}{Environment.NewLine}{message.Trim()}",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
+
     public async Task<IReadOnlyList<FeedbackModel>> GetMyReportsAsync()
     {
         using var response = await SendAuthenticatedAsync(
@@ -179,6 +208,21 @@ public sealed class FeedbackService : IFeedbackService
             Limit = result.Limit,
             Offset = result.Offset
         };
+    }
+
+    public async Task<FeedbackModel> GetMyReportAsync(string feedbackId)
+    {
+        if (string.IsNullOrWhiteSpace(feedbackId))
+            throw new ArgumentException("A feedback ID is required.", nameof(feedbackId));
+
+        using var response = await SendAuthenticatedAsync(
+            HttpMethod.Get,
+            $"/api/feedback/mine/{Uri.EscapeDataString(feedbackId)}",
+            content: null);
+        var body = await response.Content.ReadAsStringAsync();
+        EnsureSuccess(response.StatusCode, body);
+
+        return Deserialize<FeedbackModel>(body);
     }
 
     public async Task<byte[]> GetScreenshotAsync(string feedbackId)
@@ -269,7 +313,9 @@ public sealed class FeedbackService : IFeedbackService
             throw new ArgumentException("A feedback ID is required.", nameof(feedbackId));
 
         using var content = new StringContent(
-            JsonSerializer.Serialize(new { status }, JsonOptions),
+            JsonSerializer.Serialize(
+                new FeedbackStatusPayload { Status = status },
+                FeedbackJsonContext.Default.FeedbackStatusPayload),
             Encoding.UTF8,
             "application/json");
         using var response = await SendAuthenticatedAsync(
@@ -362,7 +408,9 @@ public sealed class FeedbackService : IFeedbackService
         };
 
         using var content = new StringContent(
-            JsonSerializer.Serialize(payload, JsonOptions),
+            JsonSerializer.Serialize(
+                payload,
+                FeedbackJsonContext.Default.FeedbackPayload),
             Encoding.UTF8,
             "application/json");
 
@@ -485,7 +533,7 @@ public sealed class FeedbackService : IFeedbackService
         }
     }
 
-    private sealed class FeedbackPayload
+    internal sealed class FeedbackPayload
     {
         [JsonPropertyName("requestId")]
         public string RequestId { get; init; } = string.Empty;
@@ -519,7 +567,13 @@ public sealed class FeedbackService : IFeedbackService
         public string? ScreenshotContentType { get; init; }
     }
 
-    private sealed class SubmitResponse
+    internal sealed class FeedbackStatusPayload
+    {
+        [JsonPropertyName("status")]
+        public string Status { get; init; } = string.Empty;
+    }
+
+    internal sealed class SubmitResponse
     {
         [JsonPropertyName("success")]
         public bool Success { get; init; }
@@ -533,13 +587,13 @@ public sealed class FeedbackService : IFeedbackService
         public DateTimeOffset? CreatedAt { get; init; }
     }
 
-    private sealed class ReportsResponse
+    internal sealed class ReportsResponse
     {
         [JsonPropertyName("reports")]
         public List<FeedbackModel>? Reports { get; init; }
     }
 
-    private sealed class AdminAccessResponse
+    internal sealed class AdminAccessResponse
     {
         [JsonPropertyName("success")]
         public bool Success { get; init; }
@@ -547,7 +601,7 @@ public sealed class FeedbackService : IFeedbackService
         public bool? IsAdmin { get; init; }
     }
 
-    private sealed class FeedbackAdminSummaryResponse
+    internal sealed class FeedbackAdminSummaryResponse
     {
         [JsonPropertyName("total")]
         public int Total { get; init; }
@@ -564,7 +618,7 @@ public sealed class FeedbackService : IFeedbackService
         };
     }
 
-    private sealed class AdminReportsResponse
+    internal sealed class AdminReportsResponse
     {
         [JsonPropertyName("reports")]
         public List<FeedbackModel>? Reports { get; init; }
@@ -576,21 +630,40 @@ public sealed class FeedbackService : IFeedbackService
         public int Offset { get; init; }
     }
 
-    private sealed class AdminFeedbackUpdateResponse
+    internal sealed class AdminFeedbackUpdateResponse
     {
         [JsonPropertyName("report")]
         public FeedbackModel? Report { get; init; }
     }
 
-    private sealed class ScreenshotResponse
+    internal sealed class ScreenshotResponse
     {
         [JsonPropertyName("imageBase64")]
         public string? ImageBase64 { get; init; }
     }
 
-    private sealed class ApiError
+    internal sealed class ApiError
     {
         [JsonPropertyName("error")]
         public string? Error { get; init; }
     }
+}
+
+[JsonSourceGenerationOptions(
+    PropertyNameCaseInsensitive = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(FeedbackService.FeedbackPayload))]
+[JsonSerializable(typeof(FeedbackService.FeedbackStatusPayload))]
+[JsonSerializable(typeof(FeedbackService.SubmitResponse))]
+[JsonSerializable(typeof(FeedbackService.ReportsResponse))]
+[JsonSerializable(typeof(FeedbackService.AdminAccessResponse))]
+[JsonSerializable(typeof(FeedbackService.FeedbackAdminSummaryResponse))]
+[JsonSerializable(typeof(FeedbackService.AdminReportsResponse))]
+[JsonSerializable(typeof(FeedbackService.AdminFeedbackUpdateResponse))]
+[JsonSerializable(typeof(FeedbackService.ScreenshotResponse))]
+[JsonSerializable(typeof(FeedbackService.ApiError))]
+[JsonSerializable(typeof(FeedbackModel))]
+[JsonSerializable(typeof(List<FeedbackModel>))]
+internal partial class FeedbackJsonContext : JsonSerializerContext
+{
 }

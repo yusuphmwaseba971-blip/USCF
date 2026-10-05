@@ -10,7 +10,7 @@
             <Label x:Name="ReferenceLabel" Text="Feedback report" FontSize="25" FontAttributes="Bold" TextColor="{StaticResource BrandDeepGreen}" />
             <VerticalStackLayout x:Name="DetailsLayout" Spacing="10" />
 
-            <VerticalStackLayout Spacing="8">
+            <VerticalStackLayout x:Name="WorkflowStatusLayout" Spacing="8">
                 <Label Text="Workflow status" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                 <Picker x:Name="StatusPicker" Title="Select status" />
                 <Button x:Name="SaveStatusButton" Text="Save Status" Clicked="OnSaveStatusClicked" BackgroundColor="{StaticResource BrandDeepGreen}" TextColor="White" />
