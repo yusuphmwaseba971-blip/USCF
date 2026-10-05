@@ -2,12 +2,18 @@ namespace CCT_USCF.Models;
 
 public sealed record ChurchAnnouncementTarget(string Level, int? Id, string Name, int? RegionId, int? DistrictId)
 {
+    public string ScopeId => Level.Trim().ToUpperInvariant() switch
+    {
+        "NATIONAL" or "NATION" => "NATIONAL",
+        _ => Id?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty
+    };
+
     public override string ToString() => Level.Trim().ToUpperInvariant() switch
     {
         "BRANCH" => "My Branch",
         "DISTRICT" => "My District",
         "REGION" or "REGIONAL" => "My Region",
-        "NATIONAL" => "National",
+        "NATIONAL" or "NATION" => "My Nation",
         _ => Name
     };
 }

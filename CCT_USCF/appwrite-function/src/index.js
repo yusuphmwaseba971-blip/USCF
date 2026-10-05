@@ -8,6 +8,10 @@ import {
   getTrustedRegistrationCutoff
 } from "./group-message-visibility.js";
 import {
+  announcementTargets,
+  announcementVisibleToProfile
+} from "./church-announcement-scope.js";
+import {
   saveAuthorizedAboutContent
 } from "./about-content.js";
 import {
@@ -1926,7 +1930,7 @@ async function deleteAboutAuthorityRecord(req, log, authorityId) {
   };
 }
 
-async function getAnnouncementProfile(firebaseUser) {
+async function getAnnouncementProfile(firebaseUser, { includeBranchName = true } = {}) {
   const snapshot = await firebaseDb.collection(
     process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
   ).doc(firebaseUser.uid).get();
@@ -1935,7 +1939,7 @@ async function getAnnouncementProfile(firebaseUser) {
   let branchName = normalizeString(
     profile.institutionName || profile.institution || profile.branchName || ""
   );
-  if (!branchName && branchId !== null) {
+  if (includeBranchName && !branchName && branchId !== null) {
     branchName = await resolveBranchName(branchId);
   }
   return {
@@ -2054,24 +2058,6 @@ function canSendBranchAnnouncement(profile) {
   return profile.branchId !== null && profile.branchId > 0;
 }
 
-function announcementTargets(profile) {
-  const targets = [];
-  const leader = isAnnouncementLeader(profile);
-  if (profile.branchId) {
-    targets.push({ level: "Branch", id: profile.branchId, name: "My branch", regionId: profile.regionId, districtId: profile.districtId });
-  }
-  if (leader && profile.districtId) {
-    targets.push({ level: "District", id: profile.districtId, name: "My district", regionId: profile.regionId, districtId: profile.districtId });
-  }
-  if (leader && profile.regionId) {
-    targets.push({ level: "Region", id: profile.regionId, name: "My region", regionId: profile.regionId, districtId: null });
-  }
-  if (leader) {
-    targets.push({ level: "National", id: null, name: "National", regionId: null, districtId: null });
-  }
-  return targets;
-}
-
 function targetMatchesToken(announcement, token) {
   switch (announcement.target_level) {
     case "National": return true;
@@ -2115,15 +2101,6 @@ function notificationRowId(announcementId, userUid) {
     .slice(0, 36);
 }
 
-function announcementVisibleToProfile(announcement, profile) {
-  const scope = normalizeString(announcement.scope_type).toLowerCase();
-  if (scope === "national") return true;
-  if (scope === "region") return String(announcement.region_id ?? "") === String(profile.regionId ?? "");
-  if (scope === "district") return String(announcement.district_id ?? "") === String(profile.districtId ?? "");
-  if (scope === "branch") return String(announcement.branch_id ?? "") === String(profile.branchId ?? "");
-  return false;
-}
-
 async function upsertDeviceToken(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
   const body = getRequestBody(req);
@@ -2160,9 +2137,13 @@ async function upsertDeviceToken(req, log) {
 }
 
 async function getAnnouncementOptions(req, log) {
-  const profile = await getAnnouncementProfile(await verifyFirebaseRequest(req, log));
-  if (!isAnnouncementLeader(profile) && !canSendBranchAnnouncement(profile)) {
-    throw announcementError("Your profile must have a branch assigned before sending announcements.", 403);
+  const profile = await getAnnouncementProfile(
+    await verifyFirebaseRequest(req, log),
+    { includeBranchName: false }
+  );
+  if (!isAnnouncementLeader(profile) &&
+      ![profile.regionId, profile.districtId, profile.branchId].some(id => id !== null && id > 0)) {
+    throw announcementError("Your profile is missing valid organizational information.", 403);
   }
   log(`[CCT_ANNOUNCEMENT_OPTIONS] uid=${profile.uid} role=${profile.role || "none"} branchId=${profile.branchId ?? "none"}`);
   return {
@@ -2327,7 +2308,7 @@ async function getPrayerActionSummary(req, log, prayerId) {
 
 async function createChurchAnnouncement(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
-  const profile = await getAnnouncementProfile(firebaseUser);
+  const profile = await getAnnouncementProfile(firebaseUser, { includeBranchName: false });
   const body = getRequestBody(req);
   const title = normalizeString(body.title);
   const message = normalizeString(body.message);
@@ -2480,7 +2461,7 @@ async function createChurchAnnouncement(req, log) {
 
 async function listChurchNotifications(req, log) {
   const firebaseUser = await verifyFirebaseRequest(req, log);
-  const profile = await getAnnouncementProfile(firebaseUser);
+  const profile = await getAnnouncementProfile(firebaseUser, { includeBranchName: false });
   const since = parseRequestDate(getQueryValue(req, "since"));
   log(
     `[ANNOUNCEMENT_FETCH_REQUEST] database=${DEFAULT_DATABASE_ID} ` +

@@ -20,89 +20,28 @@ public sealed class ChurchAnnouncementService
     public async Task<ChurchAnnouncementOptions> GetOptionsAsync(CancellationToken ct = default)
     {
         await EnsureCurrentUserAsync();
-        var user = MauiProgram.CurrentUser
-            ?? throw new InvalidOperationException("Please sign in and complete your church profile first.");
+        if (MauiProgram.CurrentUser is null)
+        {
+            if (!_auth.HasAuthenticatedFirebaseUser)
+                throw new InvalidOperationException("Please sign in to load announcement audiences.");
 
-        try
-        {
-            var options = await SendAsync<ChurchAnnouncementOptions>(
-                HttpMethod.Get, "api/church-announcements/options", null, ct);
-            if (options?.Targets is { Count: > 0 })
-                return RestrictTargetsForUser(options, user);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            System.Diagnostics.Debug.WriteLine($"Announcement audience sync unavailable; using profile: {ex.Message}");
+            throw new InvalidOperationException(
+                "Your authenticated account does not have a valid church profile.");
         }
 
-        return BuildProfileOptions(user);
-    }
-
-    private static ChurchAnnouncementOptions RestrictTargetsForUser(
-        ChurchAnnouncementOptions options, CurrentUser user)
-    {
-        if (IsLeader(user))
-            return options;
-
-        return options with
-        {
-            Targets = options.Targets
-                .Where(target =>
-                    target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase) &&
-                    user.BranchId == target.Id)
-                .ToArray()
-        };
-    }
-
-    private static ChurchAnnouncementOptions BuildProfileOptions(CurrentUser user)
-    {
-        var targets = new List<ChurchAnnouncementTarget>();
-        var leader = IsLeader(user);
-
-        if (user.BranchId is int branchId)
-            targets.Add(new("Branch", branchId, user.Branch ?? $"My branch ({branchId})", user.RegionId, user.DistrictId));
-        if (leader && user.DistrictId is int districtId)
-            targets.Add(new("District", districtId, user.District ?? $"District {districtId}", user.RegionId, districtId));
-        if (leader && user.RegionId is int regionId)
-            targets.Add(new("Region", regionId, user.Region ?? $"Region {regionId}", regionId, null));
-        if (leader)
-            targets.Add(new("National", null, "National", null, null));
-
-        return new ChurchAnnouncementOptions(
-            user.LeadershipLevel,
-            user.Organization,
-            targets);
-    }
-
-    private static bool IsLeader(CurrentUser user)
-    {
-        var values = new[] { user.Role, user.LeadershipLevel, user.LeadershipDuty }
-            .Where(value => !string.IsNullOrWhiteSpace(value));
-        return values.Any(value =>
-        {
-            var normalized = value.Trim().Replace(" ", string.Empty)
-                .Replace("-", string.Empty).Replace("_", string.Empty);
-            return normalized.Equals("Leader", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Pastor", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Priest", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Chairman", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("National", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Regional", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("District", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Branch", StringComparison.OrdinalIgnoreCase);
-        });
+        var options = await SendAsync<ChurchAnnouncementOptions>(
+            HttpMethod.Get, "api/church-announcements/options", null, ct);
+        if (options is null)
+            throw new InvalidOperationException("The announcement service returned no audience data.");
+        if (options.Targets is not { Count: > 0 })
+            throw new InvalidOperationException(
+                "Your profile is missing valid branch, district, or region information.");
+        return options;
     }
 
     public async Task<IReadOnlyList<ChurchNotification>> GetNotificationsAsync(CancellationToken ct = default)
     {
         await EnsureCurrentUserAsync();
-        var cached = await AnnouncementCache.GetVisibleAsync();
-        if (cached.Count > 0)
-        {
-            _ = SynchronizeNotificationsAsync();
-            return cached;
-        }
-
         return await SynchronizeNotificationsAsync(ct);
     }
 
@@ -128,24 +67,13 @@ public sealed class ChurchAnnouncementService
         System.Diagnostics.Debug.WriteLine(
             $"[ANNOUNCEMENT_FETCH_START] timestamp={DateTimeOffset.UtcNow:O} " +
             "database=cct-uscf-db table=announcements");
-        try
-        {
-            var remote = await SendAsync<List<ChurchNotification>>(
-                HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
-            await AnnouncementCache.MergeAsync(remote);
-            var synchronized = await AnnouncementCache.GetVisibleAsync();
-            AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
-            System.Diagnostics.Debug.WriteLine(
-                $"[ANNOUNCEMENT_FETCH_RESULT] rows={remote.Count} visible={synchronized.Count}");
-            return synchronized;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
-        {
-            var offline = await AnnouncementCache.GetVisibleAsync();
-            System.Diagnostics.Debug.WriteLine(
-                $"[ANNOUNCEMENT_CACHE_FALLBACK] rows={offline.Count} reason={ex.GetType().Name}");
-            return offline;
-        }
+        var remote = await SendAsync<List<ChurchNotification>>(
+            HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
+        var visible = await AnnouncementCache.ReplaceVisibleAsync(remote);
+        AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
+        System.Diagnostics.Debug.WriteLine(
+            $"[ANNOUNCEMENT_FETCH_RESULT] rows={remote.Count}");
+        return visible;
     }
 
     public async Task<int> GetUnreadCountAsync(CancellationToken ct = default)
@@ -161,9 +89,11 @@ public sealed class ChurchAnnouncementService
             targetLevel = target.Level,
             regionId = target.RegionId,
             districtId = target.DistrictId,
-            branchId = target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase) ? (int?)target.Id : null
-            ,imageUrl
-            ,attachmentUrl
+            branchId = target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase)
+                ? (int?)target.Id
+                : null,
+            imageUrl,
+            attachmentUrl
         };
         var result = await SendAsync<AnnouncementCreateResponse>(
             HttpMethod.Post, "api/church-announcements", payload, ct);
@@ -192,6 +122,7 @@ public sealed class ChurchAnnouncementService
         await AnnouncementCache.MarkDeletedAsync(id);
         AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
     }
+
 
     public async Task RegisterTokenAsync(string token, CancellationToken ct = default)
     {
@@ -224,12 +155,19 @@ public sealed class ChurchAnnouncementService
         {
             response = await _http.SendAsync(request, ct);
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
             var diagnostic = AnnouncementDiagnostic.FromException(
                 ex, method, new Uri(_http.BaseAddress!, path));
             LogDiagnostic($"[{prefix}_ERROR]", diagnostic);
-            throw new InvalidOperationException(diagnostic.ToDisplayMessage(), ex);
+            throw new HttpRequestException(diagnostic.ToDisplayMessage(), ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            var diagnostic = AnnouncementDiagnostic.FromException(
+                ex, method, new Uri(_http.BaseAddress!, path));
+            LogDiagnostic($"[{prefix}_ERROR]", diagnostic);
+            throw new HttpRequestException(diagnostic.ToDisplayMessage(), ex);
         }
 
         using (response)
@@ -298,6 +236,7 @@ public sealed class ChurchAnnouncementService
     private sealed record ApiError(string? Error, string? Message, int? Code);
 
     private sealed record AnnouncementCreateResponse(bool Success, string? AnnouncementId);
+
 
     private static void LogDiagnostic(string prefix, AnnouncementDiagnostic diagnostic) =>
         System.Diagnostics.Debug.WriteLine($"{prefix} {diagnostic.ToLogMessage()}");
@@ -410,10 +349,24 @@ internal static class AnnouncementCache
         return notifications;
     }
 
-    public static async Task MergeAsync(IEnumerable<ChurchNotification> notifications)
+    public static async Task<List<ChurchNotification>> ReplaceVisibleAsync(
+        IEnumerable<ChurchNotification> notifications)
     {
         await InitializeAsync();
-        foreach (var notification in notifications)
+        var received = notifications.ToList();
+        var receivedIds = received
+            .Select(notification => notification.AnnouncementId.ToString())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ownerPrefix = OwnerKey + ":";
+        var existingRows = await Database.Table<CachedChurchNotification>().ToListAsync();
+        foreach (var stale in existingRows.Where(row =>
+                     row.Id.StartsWith(ownerPrefix, StringComparison.Ordinal) &&
+                     !receivedIds.Contains(row.AnnouncementId)))
+        {
+            await Database.DeleteAsync(stale);
+        }
+
+        foreach (var notification in received)
         {
             var existing = await FindByAnnouncementIdAsync(notification.AnnouncementId);
             var id = existing?.Id ?? CacheKey(notification.AnnouncementId);
@@ -437,6 +390,8 @@ internal static class AnnouncementCache
                 IsDeletedByUser = existing?.IsDeletedByUser == true
             });
         }
+
+        return await GetVisibleAsync();
     }
 
     public static async Task MarkReadAsync(Guid id)

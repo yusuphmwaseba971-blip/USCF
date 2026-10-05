@@ -42,15 +42,6 @@ public partial class AnnouncementActivityPage : ContentPage
 
     private async Task LoadAsync()
     {
-        var cached = await _service.GetCachedNotificationsAsync();
-        if (cached.Count > 0)
-        {
-            ApplyNotifications(cached);
-            _ = _service.GetNotificationsAsync();
-            await OpenRequestedAnnouncementAsync();
-            return;
-        }
-
         await LoadFromNetworkAsync();
     }
 
@@ -59,18 +50,22 @@ public partial class AnnouncementActivityPage : ContentPage
         RefreshHost.IsRefreshing = true;
         LoadingIndicator.IsVisible = LoadingIndicator.IsRunning = true;
         ErrorLabel.IsVisible = false;
+        NotificationsView.IsVisible = false;
         try
         {
             _all = await _service.GetNotificationsAsync();
             ApplyNotifications(_all);
+            NotificationsView.IsVisible = true;
             await OpenRequestedAnnouncementAsync();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[ANNOUNCEMENT_CENTER_ERROR] {ex}");
-            ErrorLabel.Text = "Couldn't load announcements. Please check your connection and try again.";
+            ErrorLabel.Text = "Unable to load announcements. Please try again.";
             ErrorLabel.IsVisible = true;
             NotificationsView.ItemsSource = null;
+            _all = [];
+            UpdateCounts();
         }
         finally
         {

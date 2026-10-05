@@ -39,15 +39,38 @@ public partial class ChurchAnnouncementPage : ContentPage
             AudiencePicker.SelectedIndex = _targets.Count > 0 ? 0 : -1;
             SendButton.IsEnabled = _targets.Count > 0;
             StatusLabel.Text = _targets.Count == 0
-                ? "Assign a branch in your church profile before sending."
+                ? "Your profile is missing valid organizational information. Please update your church profile."
                 : "Choose an audience, write your message, and publish.";
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = "Unable to load announcement audiences.";
+            StatusLabel.Text = GetAudienceLoadError(ex);
             System.Diagnostics.Debug.WriteLine($"[ANNOUNCEMENT_COMPOSER_LOAD_ERROR] {ex}");
             SendButton.IsEnabled = false;
         }
+    }
+
+    private static string GetAudienceLoadError(Exception exception)
+    {
+        var message = exception.Message;
+        if (message.Contains("status=401", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("sign in", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("authenticated firebase user", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Your sign-in session is unavailable. Please sign in again.";
+        }
+
+        if (message.Contains("status=403", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("branch assigned", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("organizational information", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("church profile", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Your profile is missing valid organizational information. Please update your church profile.";
+        }
+
+        return exception is HttpRequestException or TaskCanceledException
+            ? "The announcement service could not be reached. Check your connection and try again."
+            : "Unable to load announcement audiences. Please try again.";
     }
 
     private async void OnAttachmentClicked(object? sender, EventArgs e)

@@ -75,7 +75,7 @@
                     </CollectionView.ItemTemplate>
                     <CollectionView.EmptyView>
                         <VerticalStackLayout Padding="20,45" Spacing="8" HorizontalOptions="Center">
-                            <Label Text="No announcements in this category" TextColor="{AppThemeBinding Light=#173C2C, Dark=#F1F7F2}" FontAttributes="Bold" FontSize="18" HorizontalTextAlignment="Center" />
+                            <Label Text="No announcements available." TextColor="{AppThemeBinding Light=#173C2C, Dark=#F1F7F2}" FontAttributes="Bold" FontSize="18" HorizontalTextAlignment="Center" />
                             <Label Text="Official updates for your area will appear here." TextColor="#78857B" HorizontalTextAlignment="Center" />
                         </VerticalStackLayout>
                     </CollectionView.EmptyView>
