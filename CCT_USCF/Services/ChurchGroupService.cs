@@ -153,6 +153,25 @@ public sealed class ChurchGroupService
         await EnsureSuccessAsync(response);
     }
 
+    public async Task<ChurchGroupMembersResult> GetGroupMembersAsync(
+        string groupId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            throw new ArgumentException("A group id is required.", nameof(groupId));
+
+        using var request = await CreateRequestAsync(
+            HttpMethod.Get,
+            $"api/community/groups/{Uri.EscapeDataString(groupId.Trim())}/members",
+            cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response);
+        var members = await response.Content.ReadFromJsonAsync(
+            ChurchGroupJsonContext.Default.ChurchGroupMembersResult,
+            cancellationToken);
+        return members ?? throw new InvalidOperationException("The group service returned an empty member list.");
+    }
+
     public async Task JoinGroupAsync(
         string groupId,
         CancellationToken cancellationToken = default)
@@ -233,9 +252,26 @@ public sealed class ChurchGroupService
         string ScopeType);
 }
 
+public sealed class ChurchGroupMembersResult
+{
+    public int MemberCount { get; set; }
+    public List<ChurchGroupMember> Members { get; set; } = new();
+}
+
+public sealed class ChurchGroupMember
+{
+    public string UserUid { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string LeadershipLevel { get; set; } = string.Empty;
+}
+
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(ChurchGroupService.GroupListResponse))]
 [JsonSerializable(typeof(ChurchGroupService.CreateGroupRequest))]
+[JsonSerializable(typeof(ChurchGroupMembersResult))]
 [JsonSerializable(typeof(ChurchGroup))]
 [JsonSerializable(typeof(List<ChurchGroup>))]
 internal partial class ChurchGroupJsonContext : JsonSerializerContext

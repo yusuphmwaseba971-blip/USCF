@@ -289,14 +289,15 @@
                         StrokeShape="RoundRectangle 16"
                         Padding="12,0"
                         MinimumHeightRequest="46">
-                        <Entry
+                        <Editor
                             x:Name="MessageEntry"
                             Placeholder="Share something with the group..."
                             BackgroundColor="Transparent"
                             TextColor="{AppThemeBinding Light={StaticResource ChatText}, Dark={StaticResource White}}"
                             PlaceholderColor="{StaticResource ChatMuted}"
-                            ReturnType="Send"
-                            Completed="OnMessageEntryCompleted" />
+                            AutoSize="TextChanges"
+                            MinimumHeightRequest="46"
+                            MaximumHeightRequest="120" />
                     </Border>
 
                     <Button

@@ -1,12 +1,23 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import {
+  createBranchMemberProfile,
+  notifyFirstBranchMemberSafely
+} from "./branch-member-registration.js";
 import {
   buildGroupMessageQueries,
   getTrustedRegistrationCutoff
 } from "./group-message-visibility.js";
+import {
+  groupMatchesProfileScope,
+  getGroupScopeId,
+  isDistrictOrRegionalMainGroup,
+  matchesMainGroupScope,
+  mergeChurchGroupRows
+} from "./church-group-visibility.js";
 import {
   announcementTargets,
   announcementVisibleToProfile
@@ -2136,6 +2147,164 @@ async function upsertDeviceToken(req, log) {
   return { success: true };
 }
 
+async function createRegisteredMemberProfile(req, log) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const body = getRequestBody(req);
+  const submittedProfile = body.profile && typeof body.profile === "object"
+    ? body.profile
+    : body;
+  const fullName = normalizeString(submittedProfile.fullName || submittedProfile.full_name);
+  const username = normalizeString(submittedProfile.username);
+  const role = normalizeString(submittedProfile.role) || "Member";
+  const branchValue = parseOptionalInt(submittedProfile.branchId ?? submittedProfile.branch_id);
+  const branchId = branchValue !== null && branchValue > 0 ? branchValue : null;
+
+  if (!fullName || !username) {
+    throw announcementError("Full name and username are required.", 400);
+  }
+
+  let branchSnapshot = null;
+  if (branchId !== null) {
+    branchSnapshot = await resolveBranchDocument(branchId);
+    if (!branchSnapshot) {
+      throw announcementError("The selected branch could not be found.", 400);
+    }
+  }
+
+  const eventId = branchId === null
+    ? null
+    : createHash("sha256")
+      .update(`first_branch_member:${branchId}:${firebaseUser.uid}`)
+      .digest("hex");
+  const profileCollection = firebaseDb.collection(
+    process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
+  );
+  const profileReference = profileCollection.doc(firebaseUser.uid);
+  const memberQueries = branchId === null
+    ? []
+    : [
+        ["branchId", branchId],
+        ["branch_id", branchId],
+        ["branchId", String(branchId)],
+        ["branch_id", String(branchId)]
+      ].map(([field, value]) =>
+        profileCollection.where(field, "==", value).limit(1)
+      );
+
+  const profile = {
+    uid: firebaseUser.uid,
+    fullName,
+    username,
+    email: normalizeString(firebaseUser.email || submittedProfile.email),
+    phoneNumber: submittedProfile.phoneNumber ?? null,
+    role,
+    leadershipLevel: normalizeString(submittedProfile.leadershipLevel || ""),
+    leadershipDuty: normalizeString(submittedProfile.leadershipDuty || ""),
+    existingRole: normalizeString(submittedProfile.existingRole || ""),
+    organization: normalizeString(submittedProfile.organization || ""),
+    regionId: parseOptionalInt(submittedProfile.regionId ?? submittedProfile.region_id) ?? 0,
+    districtId: parseOptionalInt(submittedProfile.districtId ?? submittedProfile.district_id) ?? 0,
+    branchId: branchId ?? 0,
+    createdAt: new Date().toISOString()
+  };
+
+  const registration = await createBranchMemberProfile({
+    firestore: firebaseDb,
+    branchReference: branchSnapshot?.ref ?? null,
+    profileReference,
+    memberQueries,
+    profile,
+    eventId,
+    registrationSequence: FieldValue.increment(1)
+  });
+
+  if (registration.firstMemberOfBranch) {
+    const branchName = normalizeString(
+      branchSnapshot?.data()?.Name ||
+      branchSnapshot?.data()?.name ||
+      branchSnapshot?.data()?.branchName ||
+      branchSnapshot?.data()?.institution
+    ) || `Branch ${branchId}`;
+
+    await notifyFirstBranchMemberSafely(
+      registration,
+      async () => {
+        const tokenPage = await appwriteTableRowRequest(
+          CHURCH_DEVICE_TOKENS_COLLECTION_ID,
+          "GET",
+          "",
+          undefined,
+          [{ method: "limit", values: [500] }]
+        );
+        const tokens = [...new Set(
+          (tokenPage.rows || tokenPage.documents || [])
+            .map(token => normalizeString(token.token))
+            .filter(Boolean)
+        )];
+        if (!tokens.length) {
+          log(`[CCT_BRANCH_FIRST_MEMBER_FCM] no registered device tokens branchId=${branchId}`);
+          return;
+        }
+
+        const title = "New Branch Member";
+        const message = `${branchName} has received its first registered member.`;
+        const delivery = await firebaseMessaging.sendEachForMulticast({
+          tokens,
+          notification: { title, body: message },
+          android: { notification: { tag: eventId } },
+          apns: { headers: { "apns-collapse-id": eventId } },
+          data: {
+            notification_type: "first_branch_member",
+            event_id: eventId,
+            branch_id: String(branchId),
+            branch_name: branchName,
+            title,
+            message
+          }
+        });
+        log(
+          `[CCT_BRANCH_FIRST_MEMBER_FCM] branchId=${branchId} ` +
+          `success=${delivery.successCount} failed=${delivery.failureCount}`
+        );
+        if (delivery.failureCount > 0) {
+          throw new Error(`FCM delivery failed for ${delivery.failureCount} device(s).`);
+        }
+      },
+      message => log(`[CCT_BRANCH_FIRST_MEMBER_FCM] failed branchId=${branchId}: ${message}`)
+    );
+  }
+
+  log(
+    `[CCT_MEMBER_PROFILE] uid=${firebaseUser.uid} branchId=${branchId ?? "none"} ` +
+    `created=${registration.created} firstBranchMember=${registration.firstMemberOfBranch}`
+  );
+  return {
+    success: true,
+    created: registration.created,
+    firstMemberOfBranch: registration.firstMemberOfBranch
+  };
+}
+
+async function resolveBranchDocument(branchId) {
+  const branches = firebaseDb.collection(
+    process.env.FIREBASE_BRANCHES_COLLECTION || "branches"
+  );
+  const candidates = [
+    ["Id", branchId],
+    ["id", branchId],
+    ["branchId", branchId],
+    ["Id", String(branchId)],
+    ["id", String(branchId)],
+    ["branchId", String(branchId)]
+  ];
+  for (const [field, value] of candidates) {
+    const snapshot = await branches.where(field, "==", value).limit(1).get();
+    if (!snapshot.empty) return snapshot.docs[0];
+  }
+  const byDocumentId = await branches.doc(String(branchId)).get();
+  return byDocumentId.exists ? byDocumentId : null;
+}
+
 async function getAnnouncementOptions(req, log) {
   const profile = await getAnnouncementProfile(
     await verifyFirebaseRequest(req, log),
@@ -2620,15 +2789,7 @@ function canCreateScope(profile, scopeType) {
 }
 
 function groupBelongsToProfile(group, profile) {
-  if (group.is_active === false) return false;
-  const scope = normalizeScopeType(group.scope_type);
-  if (scope === "NATIONAL") return true;
-  if (scope === "REGIONAL") return profile.regionId !== null &&
-    String(group.region_id ?? "") === String(profile.regionId);
-  if (scope === "DISTRICT") return profile.districtId !== null &&
-    String(group.district_id ?? "") === String(profile.districtId);
-  return profile.branchId !== null &&
-    String(group.branch_id ?? "") === String(profile.branchId);
+  return groupMatchesProfileScope(group, profile);
 }
 
 function canManageGroup(group, profile) {
@@ -2656,8 +2817,12 @@ async function canManageSpecificGroup(group, profile) {
       { method: "limit", values: [1] }
     ]
   );
-  const role = normalizeString(membership.rows?.[0]?.role).toLowerCase();
-  return ["owner", "administrator", "admin", "leader"].includes(role);
+  const role = normalizeString(membership.rows?.[0]?.role)
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return ["owner", "administrator", "admin", "leader", "group leader"].includes(role);
 }
 
 async function isGroupMember(groupId, uid) {
@@ -2792,8 +2957,8 @@ function mapGroupDocument(document, profile, memberCount = 0, canAccess = true) 
     groupType: isBranchPrayer ? "PRAYER" : (data.group_type || "CUSTOM"),
     scopeType: data.scope_type || "BRANCH",
     parentGroupId: data.parent_group_id || "",
-    regionId: parseOptionalInt(data.region_id),
-    districtId: parseOptionalInt(data.district_id),
+    regionId: getGroupScopeId(data, "REGIONAL"),
+    districtId: getGroupScopeId(data, "DISTRICT"),
     branchId: parseOptionalInt(data.branch_id),
     createdByUid: data.created_by_uid || "",
     createdAt: data.created_at || null,
@@ -2955,26 +3120,136 @@ async function listChurchGroups(req, log) {
     undefined,
     [{ method: "limit", values: [500] }]
   );
-  const groups = [];
-  const allRows = [
-    ...standardGroups,
-    ...(rows.rows || []).filter(row =>
-      row.is_standard !== true &&
-      normalizeString(row.group_type).toUpperCase() !== "STANDARD")
-  ];
-  for (const row of allRows) {
-    if ((requestedScope && normalizeScopeType(row.scope_type) !== requestedScope) ||
-        !groupBelongsToProfile(row, profile)) continue;
+  const allRows = mergeChurchGroupRows(
+    standardGroups,
+    rows.rows || []
+  );
+  const visibleRows = allRows.filter(row =>
+    normalizeScopeType(row.scope_type) === requestedScope &&
+    groupBelongsToProfile(row, profile)
+  );
+  const groups = await Promise.all(visibleRows.map(async row => {
     const groupId = row.group_id || row.$id;
     const canAccess = groupBelongsToProfile(row, profile);
-    const canManage = await canManageSpecificGroup(row, profile);
-    const memberCount = await getActiveGroupMemberCount(groupId);
-    groups.push({
+    const [canManage, memberCount] = await Promise.all([
+      canManageSpecificGroup(row, profile),
+      isDistrictOrRegionalMainGroup(row)
+        ? getScopedMainGroupMemberCount(row)
+        : getActiveGroupMemberCount(groupId)
+    ]);
+    return {
       ...mapGroupDocument(row, profile, memberCount, canAccess),
       canManage
-    });
-  }
+    };
+  }));
   return { groups };
+}
+
+async function listChurchGroupMembers(req, log, groupId) {
+  const firebaseUser = await verifyFirebaseRequest(req, log);
+  const profile = await getAnnouncementProfile(firebaseUser);
+  const group = await authorizeGroupAccess(groupId, profile);
+  if (isDistrictOrRegionalMainGroup(group)) {
+    const members = await getScopedMainGroupMembers(group);
+    return {
+      groupId: group.group_id,
+      memberCount: members.length,
+      members
+    };
+  }
+
+  const result = await appwriteTableRowRequest(
+    GROUP_MEMBERS_TABLE_ID,
+    "GET",
+    "",
+    undefined,
+    [
+      { method: "equal", attribute: "group_id", values: [group.group_id] },
+      { method: "equal", attribute: "is_active", values: [true] },
+      { method: "limit", values: [100] }
+    ]
+  );
+  const rows = result.rows || [];
+  const members = rows
+    .map(row => ({
+      userUid: normalizeString(row.user_uid),
+      role: normalizeString(row.role) || "Member"
+    }))
+    .filter(member => member.userUid);
+  const profileCollection = firebaseDb.collection(
+    process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
+  );
+  const membersWithProfiles = await Promise.all(members.map(async member => {
+    const snapshot = await profileCollection.doc(member.userUid).get();
+    const profile = snapshot.exists ? snapshot.data() : {};
+    return {
+      ...member,
+      username: normalizeString(profile.username),
+      fullName: normalizeString(profile.fullName || profile.full_name),
+      email: normalizeString(profile.email),
+      leadershipLevel: normalizeString(profile.leadershipLevel || profile.leadership_level)
+    };
+  }));
+  const total = Number(result.total);
+  return {
+    groupId: group.group_id,
+    memberCount: Number.isFinite(total) ? total : members.length,
+    members: membersWithProfiles
+  };
+}
+
+async function getScopedMainGroupMembers(group) {
+  const scope = normalizeScopeType(group.scope_type);
+  const scopeId = getGroupScopeId(group, scope);
+  if (scopeId === null) {
+    throw announcementError(
+      `The ${scope.toLowerCase()} main group has no valid scope identifier.`,
+      500
+    );
+  }
+
+  const profileCollection = firebaseDb.collection(
+    process.env.FIREBASE_USER_PROFILES_COLLECTION || "users"
+  );
+  const fields = scope === "DISTRICT"
+    ? ["districtId", "district_id"]
+    : ["regionId", "region_id"];
+  const values = [scopeId, String(scopeId)];
+  const snapshots = await Promise.all(fields.flatMap(field =>
+    values.map(value =>
+      profileCollection.where(field, "==", value).get()
+    )
+  ));
+
+  const membersByUid = new Map();
+  for (const snapshot of snapshots) {
+    for (const document of snapshot.docs) {
+      const data = document.data() || {};
+      if (!matchesMainGroupScope(group, data)) {
+        continue;
+      }
+
+      const userUid = normalizeString(data.uid || data.user_uid || document.id);
+      if (!userUid || membersByUid.has(userUid)) {
+        continue;
+      }
+
+      membersByUid.set(userUid, {
+        userUid,
+        role: "Member",
+        username: normalizeString(data.username),
+        fullName: normalizeString(data.fullName || data.full_name),
+        email: normalizeString(data.email),
+        leadershipLevel: normalizeString(data.leadershipLevel || data.leadership_level)
+      });
+    }
+  }
+
+  return [...membersByUid.values()];
+}
+
+async function getScopedMainGroupMemberCount(group) {
+  return (await getScopedMainGroupMembers(group)).length;
 }
 
 async function createChurchGroup(req, log) {
@@ -4395,6 +4670,13 @@ export default async ({
       return jsonResponse(res, await upsertDeviceToken(req, log), 200);
     }
 
+    if (route === "/api/member-registration/profile" ||
+        route === "api/member-registration/profile") {
+      if (req.method !== "POST") throw announcementError("Method not allowed.", 405);
+      currentStage = "POST member profile registration";
+      return jsonResponse(res, await createRegisteredMemberProfile(req, log), 200);
+    }
+
     if (route === "/api/church-announcements/notifications" ||
         route === "api/church-announcements/notifications") {
       if (req.method !== "GET") throw announcementError("Method not allowed.", 405);
@@ -4515,6 +4797,23 @@ export default async ({
         return jsonResponse(res, await createChurchGroup(req, log), 201);
       }
       return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
+    }
+
+    const groupMembersRoute = route.match(/^\/?api\/community\/groups\/([^/]+)\/members$/);
+    if (groupMembersRoute) {
+      if (req.method !== "GET") {
+        return jsonResponse(res, { success: false, error: "Method not allowed." }, 405);
+      }
+      currentStage = "GET community group members";
+      return jsonResponse(
+        res,
+        await listChurchGroupMembers(
+          req,
+          log,
+          decodeURIComponent(groupMembersRoute[1])
+        ),
+        200
+      );
     }
 
     const groupMutation = route.match(/^\/?api\/community\/groups\/([^/]+)$/);

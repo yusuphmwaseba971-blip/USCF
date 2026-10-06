@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CCT_USCF.Models;
 using SQLite;
 
@@ -10,7 +11,7 @@ public sealed class BibleService
     public const string KjvId = "KJV";
     public const string NenoId = "NENO";
 
-    private sealed record StoredState(
+    internal sealed record StoredState(
         string Language,
         string Book,
         int Chapter,
@@ -27,7 +28,6 @@ public sealed class BibleService
     private StoredState _state = new(KjvId, "Genesis", 1, 1, 22, "CCT-USCF",
         new(), new(StringComparer.OrdinalIgnoreCase), new());
     private bool _initialized;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string AppDatabasePath = Path.Combine(FileSystem.AppDataDirectory, "bible.sqlite");
     private string StatePath => Path.Combine(FileSystem.AppDataDirectory, "bible-state.json");
 
@@ -222,7 +222,62 @@ public sealed class BibleService
 
         try
         {
-            var loaded = await JsonSerializer.DeserializeAsync<StoredState>(File.OpenRead(StatePath), JsonOptions).ConfigureAwait(false);
+            await using var stateFile = File.OpenRead(StatePath);
+            StoredState? loaded = null;
+            try
+            {
+                // Prefer source-generated context when available under trimming.
+                loaded = await JsonSerializer.DeserializeAsync(stateFile, BibleJsonContext.Default.StoredState).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is NotSupportedException || ex is JsonException || ex is InvalidOperationException)
+            {
+                // Fallback: parse with JsonDocument which doesn't require reflection.
+                try
+                {
+                    stateFile.Seek(0, SeekOrigin.Begin);
+                    using var reader = new StreamReader(stateFile);
+                    var text = await reader.ReadToEndAsync().ConfigureAwait(false);
+                    using var doc = JsonDocument.Parse(text);
+                    var root = doc.RootElement;
+
+                    string language = root.TryGetProperty("Language", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString()! : KjvId;
+                    string book = root.TryGetProperty("Book", out var b) && b.ValueKind == JsonValueKind.String ? b.GetString()! : "Genesis";
+                    int chapter = root.TryGetProperty("Chapter", out var ch) && ch.ValueKind == JsonValueKind.Number ? ch.GetInt32() : 1;
+                    int verse = root.TryGetProperty("Verse", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 1;
+                    double fontSize = root.TryGetProperty("FontSize", out var fs) && fs.ValueKind == JsonValueKind.Number ? fs.GetDouble() : 22.0;
+                    string background = root.TryGetProperty("Background", out var bg) && bg.ValueKind == JsonValueKind.String ? bg.GetString()! : "CCT-USCF";
+
+                    var bookmarks = new List<string>();
+                    if (root.TryGetProperty("Bookmarks", out var bm) && bm.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in bm.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.String)
+                                bookmarks.Add(item.GetString()!);
+                        }
+                    }
+
+                    var highlights = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (root.TryGetProperty("Highlights", out var hl) && hl.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in hl.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.String)
+                                highlights[prop.Name] = prop.Value.GetString()!;
+                        }
+                    }
+
+                    var notes = new List<BibleNote>();
+                    // Notes are optional and may be complex; ignore detailed reconstruction for resilience.
+
+                    loaded = new StoredState(language, book, chapter, verse, fontSize, background, bookmarks, highlights, notes);
+                }
+                catch
+                {
+                    // If fallback parsing fails, give up silently and use default state.
+                }
+            }
+
             if (loaded is not null)
             {
                 var language = loaded.Language.Equals("English", StringComparison.OrdinalIgnoreCase)
@@ -240,7 +295,7 @@ public sealed class BibleService
     }
 
     private async Task SaveStateAsync() =>
-        await File.WriteAllTextAsync(StatePath, JsonSerializer.Serialize(_state, JsonOptions)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(StatePath, JsonSerializer.Serialize(_state, BibleJsonContext.Default.StoredState)).ConfigureAwait(false);
 
     public string Language => _state.Language;
     public string Book => _state.Book;
@@ -368,3 +423,11 @@ public sealed record BibleBook(int Number, string Name, string ShortName, string
 public sealed record BibleVerse(int Number, string Text);
 public sealed record BibleSearchResult(string Book, int Chapter, int Verse, string Text);
 public sealed record BibleNote(string Id, string Language, string Book, int Chapter, int Verse, string Text, DateTime CreatedUtc, DateTime ModifiedUtc);
+
+[JsonSourceGenerationOptions(
+    PropertyNameCaseInsensitive = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(BibleService.StoredState))]
+internal partial class BibleJsonContext : JsonSerializerContext
+{
+}

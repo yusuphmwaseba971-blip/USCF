@@ -142,9 +142,22 @@ public sealed class NotificationService
     private void OnNotificationReceived(object? sender, FCMNotificationReceivedEventArgs e)
     {
         var notification = e.Notification;
+        var notificationType = Read(notification, "notification_type", "type");
         Debug.WriteLine(
-            $"[FCM] Notification received type={Read(notification, "notification_type", "type")} " +
+            $"[FCM] Notification received type={notificationType} " +
             $"contentId={Read(notification, "content_id", "messageId", "announcementId", "postId")}");
+
+        if (string.Equals(notificationType, "first_branch_member", StringComparison.OrdinalIgnoreCase))
+        {
+            var eventId = Read(notification, "event_id");
+            if (!string.IsNullOrWhiteSpace(eventId) && !_handledEvents.TryAdd(eventId, 0))
+            {
+                Debug.WriteLine($"[FCM] Duplicate first-branch-member event ignored id={eventId}");
+                return;
+            }
+
+            _ = ShowFirstBranchMemberNotificationAsync(notification);
+        }
     }
 
     private void OnNotificationTapped(object? sender, FCMNotificationTappedEventArgs e)
@@ -158,6 +171,27 @@ public sealed class NotificationService
 
     private static void OnMessagingError(object? sender, FCMErrorEventArgs e) =>
         Debug.WriteLine($"[FCM] Messaging error: {e.Message}");
+
+    private static async Task ShowFirstBranchMemberNotificationAsync(FCMNotification notification)
+    {
+        var title = Read(notification, "title");
+        var message = Read(notification, "message", "body");
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(message))
+            return;
+
+        try
+        {
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                if (Shell.Current is not null)
+                    await Shell.Current.DisplayAlertAsync(title, message, "OK");
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[FCM] First-branch-member foreground display failed: {ex.Message}");
+        }
+    }
 
     private static void RouteData(IDictionary<string, string>? data)
     {

@@ -1,0 +1,8 @@
+/Pages/BiblePage.xaml @yusuphmwaseba971-blip
+/Pages/BiblePage.xaml.cs @yusuphmwaseba971-blip
+/Services/BibleService.cs @yusuphmwaseba971-blip
+/Resources/Raw/bible.sqlite @yusuphmwaseba971-blip
+/bible-freeze.sha256 @yusuphmwaseba971-blip
+/scripts/verify-bible-freeze.py @yusuphmwaseba971-blip
+/.github/workflows/bible-freeze.yml @yusuphmwaseba971-blip
+/.github/CODEOWNERS @yusuphmwaseba971-blip

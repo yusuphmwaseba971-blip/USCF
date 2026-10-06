@@ -429,11 +429,22 @@ public class AuthService
             CreatedAt = DateTime.UtcNow.ToString("O")
         };
 
-        await _firestore.GetCollection("users").GetDocument(firebaseUser.Uid).SetDataAsync(profile);
+        await SaveRegisteredProfileAsync(profile);
         var currentUser = await LoadCurrentUserAsync()
             ?? throw new InvalidOperationException("The Google profile could not be loaded after saving.");
         MauiProgram.SetCurrentUser(currentUser);
         return currentUser;
+    }
+
+    private static async Task SaveRegisteredProfileAsync(FirestoreUserProfileDocument profile)
+    {
+        var registrationService =
+            MauiProgram.Services.GetService(typeof(ChurchAnnouncementService))
+                as ChurchAnnouncementService
+            ?? throw new InvalidOperationException(
+                "The member registration service is unavailable.");
+
+        await registrationService.CreateMemberProfileAsync(profile);
     }
 
     // =========================================================
@@ -632,10 +643,7 @@ public class AuthService
 
             try
             {
-                await _firestore
-                    .GetCollection("users")
-                    .GetDocument(firebaseUid)
-                    .SetDataAsync(profileDocument);
+                await SaveRegisteredProfileAsync(profileDocument);
 
                 var savedDocument = await _firestore
                     .GetCollection("users")

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using CCT_USCF.Models;
 using SQLite;
 
@@ -30,7 +31,8 @@ public sealed class ChurchAnnouncementService
         }
 
         var options = await SendAsync<ChurchAnnouncementOptions>(
-            HttpMethod.Get, "api/church-announcements/options", null, ct);
+            HttpMethod.Get, "api/church-announcements/options", null, ct,
+            ChurchAnnouncementJsonContext.Default.ChurchAnnouncementOptions);
         if (options is null)
             throw new InvalidOperationException("The announcement service returned no audience data.");
         if (options.Targets is not { Count: > 0 })
@@ -68,7 +70,8 @@ public sealed class ChurchAnnouncementService
             $"[ANNOUNCEMENT_FETCH_START] timestamp={DateTimeOffset.UtcNow:O} " +
             "database=cct-uscf-db table=announcements");
         var remote = await SendAsync<List<ChurchNotification>>(
-            HttpMethod.Get, "api/church-announcements/notifications", null, ct) ?? [];
+            HttpMethod.Get, "api/church-announcements/notifications", null, ct,
+            ChurchAnnouncementJsonContext.Default.ListChurchNotification) ?? [];
         var visible = await AnnouncementCache.ReplaceVisibleAsync(remote);
         AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
         System.Diagnostics.Debug.WriteLine(
@@ -82,21 +85,20 @@ public sealed class ChurchAnnouncementService
     public async Task<string> CreateAsync(string title, string message, ChurchAnnouncementTarget target,
         string? imageUrl = null, string? attachmentUrl = null, CancellationToken ct = default)
     {
-        var payload = new
-        {
+        var payload = new CreateChurchAnnouncementPayload(
             title,
             message,
-            targetLevel = target.Level,
-            regionId = target.RegionId,
-            districtId = target.DistrictId,
-            branchId = target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase)
-                ? (int?)target.Id
+            target.Level,
+            target.RegionId,
+            target.DistrictId,
+            target.Level.Equals("Branch", StringComparison.OrdinalIgnoreCase)
+                ? target.Id
                 : null,
             imageUrl,
-            attachmentUrl
-        };
+            attachmentUrl);
         var result = await SendAsync<AnnouncementCreateResponse>(
-            HttpMethod.Post, "api/church-announcements", payload, ct);
+            HttpMethod.Post, "api/church-announcements", payload, ct,
+            ChurchAnnouncementJsonContext.Default.AnnouncementCreateResponse);
         if (result?.Success != true || string.IsNullOrWhiteSpace(result.AnnouncementId))
             throw new InvalidOperationException(
                 "The announcement service did not confirm storage with success=true and an announcement ID.");
@@ -123,6 +125,19 @@ public sealed class ChurchAnnouncementService
         AnnouncementsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public async Task CreateMemberProfileAsync(object profile, CancellationToken ct = default)
+    {
+        var result = await SendAsync<MemberProfileRegistrationResponse>(
+            HttpMethod.Post,
+            "api/member-registration/profile",
+            new { profile },
+            ct);
+        if (result?.Success != true)
+        {
+            throw new InvalidOperationException(
+                "The registration service did not confirm saving the member profile.");
+        }
+    }
 
     public async Task RegisterTokenAsync(string token, CancellationToken ct = default)
     {
@@ -137,12 +152,26 @@ public sealed class ChurchAnnouncementService
         }, ct);
     }
 
-    private async Task<T?> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
+    private async Task<T?> SendAsync<T>(
+        HttpMethod method,
+        string path,
+        object? body,
+        CancellationToken ct,
+        JsonTypeInfo<T>? responseTypeInfo = null)
     {
         await FirebaseInit.Initialized;
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _auth.GetCurrentFirebaseIdTokenAsync());
-        if (body is not null) request.Content = JsonContent.Create(body, options: JsonOptions);
+        if (body is CreateChurchAnnouncementPayload announcementPayload)
+        {
+            request.Content = JsonContent.Create(
+                announcementPayload,
+                ChurchAnnouncementJsonContext.Default.CreateChurchAnnouncementPayload);
+        }
+        else if (body is not null)
+        {
+            request.Content = JsonContent.Create(body, options: JsonOptions);
+        }
         var isFetch = path.StartsWith("api/church-announcements/notifications", StringComparison.Ordinal);
         var prefix = isFetch ? "ANNOUNCEMENT_FETCH" : "ANNOUNCEMENT_SEND";
         System.Diagnostics.Debug.WriteLine(
@@ -184,7 +213,9 @@ public sealed class ChurchAnnouncementService
 
                 try
                 {
-                    return JsonSerializer.Deserialize<T>(responseBody, JsonOptions);
+                    return responseTypeInfo is null
+                        ? JsonSerializer.Deserialize<T>(responseBody, JsonOptions)
+                        : JsonSerializer.Deserialize(responseBody, responseTypeInfo);
                 }
                 catch (JsonException ex)
                 {
@@ -235,8 +266,10 @@ public sealed class ChurchAnnouncementService
 
     private sealed record ApiError(string? Error, string? Message, int? Code);
 
-    private sealed record AnnouncementCreateResponse(bool Success, string? AnnouncementId);
-
+    private sealed record MemberProfileRegistrationResponse(
+        bool Success,
+        bool Created,
+        bool FirstMemberOfBranch);
 
     private static void LogDiagnostic(string prefix, AnnouncementDiagnostic diagnostic) =>
         System.Diagnostics.Debug.WriteLine($"{prefix} {diagnostic.ToLogMessage()}");
